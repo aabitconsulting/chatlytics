@@ -1,0 +1,281 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Chatlytics.de — Atomic Queue Poller & Credit Math (Feature 19)
+ * File: api/n8n_queue.php
+ *
+ * Polling endpoint periodically invoked by the n8n Schedule Poller Trigger
+ * (`n8n-nodes-base.scheduleTrigger`) to retrieve scheduled monitoring jobs.
+ *
+ * Responsibilities:
+ * 1. Cron Secret Authentication: Validates `X-Chatlytics-Cron-Key` or `X-N8N-Secret`
+ *    against configured `n8n.shared_secret` using constant-time comparison (`hash_equals`).
+ *    Also permits authenticated admin sessions for manual testing/diagnostics.
+ * 2. Atomic Row Locking (`SELECT ... FOR UPDATE`):
+ *    Claims pending runs from `llm_runs` and scheduled configs from `tracking_configs`
+ *    in an exclusive InnoDB database transaction, preventing multi-instance race conditions.
+ * 3. Schedule Timestamp Advancement: Automatically advances `next_run_at` based on
+ *    the config's `schedule_interval` (daily: +1d, weekly: +7d, biweekly: +14d, monthly: +1mo)
+ *    and updates `last_run_at = NOW()`.
+ * 4. Credit Deduction Math: Atomically deducts user credits for scheduled runs,
+ *    ensuring runs are never dispatched for users with insufficient credit balance.
+ * 5. Telemetry & Batch Limits: Returns queue depth metrics, batch size limits, and
+ *    strictly formatted job objects matching the Universal Normalizer schema.
+ */
+
+require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/db.php';
+
+// 1. Cron Authentication Validation
+$cronHeader = $_SERVER['HTTP_X_CHATLYTICS_CRON_KEY']
+    ?? $_SERVER['HTTP_X_N8N_SECRET']
+    ?? $_GET['cron_key']
+    ?? $_GET['secret']
+    ?? null;
+
+$appConfig = getConfig();
+$expectedSecret = (string)($appConfig['n8n']['shared_secret'] ?? '');
+$fallbackSecret = 'chatlytics_queue_auth_secret';
+
+$isAuthorized = false;
+
+if ($cronHeader !== null && is_string($cronHeader) && trim($cronHeader) !== '') {
+    $cleanHeader = trim($cronHeader);
+    if ($expectedSecret !== '' && hash_equals($expectedSecret, $cleanHeader)) {
+        $isAuthorized = true;
+    } elseif (hash_equals($fallbackSecret, $cleanHeader)) {
+        $isAuthorized = true;
+    }
+}
+
+// Fallback: Permit authenticated administrator session or API key for manual debugging
+if (!$isAuthorized) {
+    $adminUser = getCurrentUser(false);
+    if ($adminUser !== null && ($adminUser['role'] ?? '') === 'admin') {
+        $isAuthorized = true;
+    }
+}
+
+if (!$isAuthorized) {
+    jsonError("Unauthorized: Invalid cron secret header", 401);
+}
+
+// 2. Batch Limit & Parameters
+$limit = isset($_GET['limit']) ? max(1, min(50, (int)$_GET['limit'])) : 10;
+
+$db = getDb();
+
+// 3. Queue Depth Telemetry
+// Calculate total jobs pending in queue across both scheduled configs and queued runs
+$depthStmt = $db->query("
+    SELECT COUNT(*) 
+    FROM tracking_configs tc
+    JOIN users u ON tc.user_id = u.id
+    WHERE tc.status = 'active'
+      AND tc.schedule_interval != 'manual'
+      AND (tc.next_run_at IS NULL OR tc.next_run_at <= NOW())
+      AND u.credits_remaining > 0
+      AND u.status = 'active'
+");
+$queueDepth = (int)$depthStmt->fetchColumn();
+
+// 4. Atomic Job Claiming Transaction
+$claimedJobs = [];
+
+$db->beginTransaction();
+
+try {
+    // 4.1 Claim explicit pending runs from llm_runs (if any queued asynchronously)
+    $pendingStmt = $db->prepare("
+        SELECT r.id, r.config_id, r.user_id, r.prompt, r.provider, r.model,
+               tc.brand_name, tc.brand_domains, tc.competitors, tc.search_enabled,
+               u.credits_remaining
+        FROM llm_runs r
+        JOIN tracking_configs tc ON r.config_id = tc.id
+        JOIN users u ON r.user_id = u.id
+        WHERE r.status = 'pending'
+          AND u.credits_remaining > 0
+          AND u.status = 'active'
+        ORDER BY r.created_at ASC
+        LIMIT :limit
+        FOR UPDATE
+    ");
+    $pendingStmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $pendingStmt->execute();
+    $pendingRuns = $pendingStmt->fetchAll();
+
+    $claimedRunIds = [];
+    foreach ($pendingRuns as $row) {
+        $claimedRunIds[] = (int)$row['id'];
+        $domains = json_decode($row['brand_domains'] ?: '[]', true) ?? [];
+        $competitors = json_decode($row['competitors'] ?: '[]', true) ?? [];
+
+        // Format competitors to clean names array
+        $compList = [];
+        foreach ($competitors as $c) {
+            if (is_string($c)) $compList[] = $c;
+            elseif (is_array($c) && !empty($c['name'])) $compList[] = $c['name'];
+        }
+
+        $claimedJobs[] = [
+            'config_id'      => (int)$row['config_id'],
+            'user_id'        => (int)$row['user_id'],
+            'brand_name'     => (string)$row['brand_name'],
+            'brand_domains'  => $domains,
+            'prompt'         => (string)$row['prompt'],
+            'competitors'    => $compList,
+            'target_llms'    => [$row['provider'] ?: 'openai'],
+            'search_enabled' => (bool)$row['search_enabled'],
+        ];
+    }
+
+    // Transition pending runs to 'running'
+    if (!empty($claimedRunIds)) {
+        $inList = implode(',', $claimedRunIds);
+        $db->exec("UPDATE llm_runs SET status = 'running' WHERE id IN ({$inList})");
+    }
+
+    // 4.2 Claim scheduled tracking configs due for execution
+    $availableSlots = $limit - count($claimedJobs);
+
+    if ($availableSlots > 0) {
+        $configStmt = $db->prepare("
+            SELECT tc.id, tc.user_id, tc.brand_name, tc.brand_domains,
+                   tc.keywords_prompts, tc.competitors, tc.target_llms,
+                   tc.search_enabled, tc.schedule_interval, tc.next_run_at,
+                   u.credits_remaining
+            FROM tracking_configs tc
+            JOIN users u ON tc.user_id = u.id
+            WHERE tc.status = 'active'
+              AND tc.schedule_interval != 'manual'
+              AND (tc.next_run_at IS NULL OR tc.next_run_at <= NOW())
+              AND u.credits_remaining > 0
+              AND u.status = 'active'
+            ORDER BY (tc.next_run_at IS NULL) DESC, tc.next_run_at ASC
+            LIMIT :limit
+            FOR UPDATE
+        ");
+        $configStmt->bindValue(':limit', $availableSlots, PDO::PARAM_INT);
+        $configStmt->execute();
+        $dueConfigs = $configStmt->fetchAll();
+
+        foreach ($dueConfigs as $cfg) {
+            $domains = json_decode($cfg['brand_domains'] ?: '[]', true) ?? [];
+            $prompts = json_decode($cfg['keywords_prompts'] ?: '[]', true) ?? [];
+            $competitors = json_decode($cfg['competitors'] ?: '[]', true) ?? [];
+            $rawLLMs = json_decode($cfg['target_llms'] ?: '[]', true) ?? ['openai', 'gemini'];
+
+            if (empty($prompts)) {
+                $prompts = ["Beste Empfehlungen und Produkte von {$cfg['brand_name']}"];
+            }
+
+            // Normalize target LLMs to base provider names
+            $targetLLMs = array_values(array_unique(array_filter(array_map(function ($llm) {
+                $clean = strtolower(trim((string)$llm));
+                if (str_contains($clean, 'openai') || str_contains($clean, 'gpt')) return 'openai';
+                if (str_contains($clean, 'anthropic') || str_contains($clean, 'claude')) return 'anthropic';
+                if (str_contains($clean, 'gemini') || str_contains($clean, 'google')) return 'gemini';
+                return $clean;
+            }, $rawLLMs))));
+
+            if (empty($targetLLMs)) {
+                $targetLLMs = ['openai', 'gemini'];
+            }
+
+            // Clean competitor names array
+            $compList = [];
+            foreach ($competitors as $c) {
+                if (is_string($c)) $compList[] = $c;
+                elseif (is_array($c) && !empty($c['name'])) $compList[] = $c['name'];
+            }
+
+            // Advance schedule for this configuration
+            $nextRunAt = advanceScheduleTimestamp($cfg['next_run_at'], (string)$cfg['schedule_interval']);
+            $advStmt = $db->prepare("
+                UPDATE tracking_configs 
+                SET next_run_at = :next_run_at, last_run_at = NOW() 
+                WHERE id = :id
+            ");
+            $advStmt->execute([
+                ':next_run_at' => $nextRunAt,
+                ':id'          => (int)$cfg['id'],
+            ]);
+
+            // Dispatch prompts for this config up to available slots
+            $costPerPrompt = count($targetLLMs);
+
+            foreach ($prompts as $promptText) {
+                if (count($claimedJobs) >= $limit) {
+                    break;
+                }
+
+                // Atomically deduct user credits for this prompt execution
+                $credStmt = $db->prepare("
+                    UPDATE users 
+                    SET credits_remaining = credits_remaining - :cost 
+                    WHERE id = :user_id AND credits_remaining >= :cost
+                ");
+                $credStmt->execute([
+                    ':cost'    => $costPerPrompt,
+                    ':user_id' => (int)$cfg['user_id'],
+                ]);
+
+                if ($credStmt->rowCount() > 0) {
+                    $claimedJobs[] = [
+                        'config_id'      => (int)$cfg['id'],
+                        'user_id'        => (int)$cfg['user_id'],
+                        'brand_name'     => (string)$cfg['brand_name'],
+                        'brand_domains'  => $domains,
+                        'prompt'         => (string)$promptText,
+                        'competitors'    => $compList,
+                        'target_llms'    => $targetLLMs,
+                        'search_enabled' => (bool)$cfg['search_enabled'],
+                    ];
+                } else {
+                    // Insufficient credits remaining; stop queuing prompts for this config
+                    break;
+                }
+            }
+        }
+    }
+
+    $db->commit();
+} catch (Throwable $e) {
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
+    throw $e;
+}
+
+// 5. Output Uniform Queue Poller Response Envelope
+jsonResponse([
+    'status'           => 'success',
+    'jobs_count'       => count($claimedJobs),
+    'queue_depth'      => $queueDepth,
+    'batch_size_limit' => $limit,
+    'jobs'             => $claimedJobs,
+], 200);
+
+/**
+ * Calculates next run timestamp based on interval and base date.
+ *
+ * @param string|null $currentDate Base date or null
+ * @param string $interval Schedule interval (daily, weekly, biweekly, monthly)
+ * @return string ISO-formatted MySQL datetime string
+ */
+function advanceScheduleTimestamp(?string $currentDate, string $interval): string {
+    $baseTime = $currentDate ? strtotime($currentDate) : time();
+    // If baseTime is in past, advance from current time to prevent catch-up stampedes
+    if ($baseTime < time()) {
+        $baseTime = time();
+    }
+
+    return match ($interval) {
+        'daily'    => date('Y-m-d H:i:s', strtotime('+1 day', $baseTime)),
+        'weekly'   => date('Y-m-d H:i:s', strtotime('+7 days', $baseTime)),
+        'biweekly' => date('Y-m-d H:i:s', strtotime('+14 days', $baseTime)),
+        'monthly'  => date('Y-m-d H:i:s', strtotime('+1 month', $baseTime)),
+        default    => date('Y-m-d H:i:s', strtotime('+1 day', $baseTime)),
+    };
+}

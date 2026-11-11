@@ -1,0 +1,640 @@
+{
+  "name": "Chatlytics Universal Worker",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatlytics-run",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9c1d0f2a-7e3b-4c5d-8a1f-0b2c3d4e5f60",
+      "name": "Universal API Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        560
+      ],
+      "webhookId": "9c1d0f2a-7e3b-4c5d-8a1f-0b2c3d4e5f60"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "8b0c9e1f-6d2a-3b4c-7f0e-9a1b2c3d4e5f",
+      "name": "Interactive Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "7a9b8c0d-5e1f-2a3b-6e9d-8f0a1b2c3d4e",
+      "name": "Schedule Poller Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.CHATLYTICS_API_BASE_URL || 'http://localhost:8000' }}/api/n8n_queue.php?action=poll",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chatlytics-Cron-Key",
+              "value": "={{ $env.CHATLYTICS_QUEUE_SECRET || 'chatlytics_queue_auth_secret' }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "6f8a7b9c-4d0e-1f2a-5d8c-7e9f0a1b2c3d",
+      "name": "Poll Backend Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond_async_mode",
+              "leftValue": "={{ ($json.body?.response_mode === \"async\" || $json.response_mode === \"async\" || $json.body?.is_async === true || $json.body?.is_async === \"true\" || $json.is_async === true || $json.is_async === \"true\") ? \"async\" : ($json.body?.response_mode || $json.response_mode || \"sync\") }}",
+              "rightValue": "async",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "5e7f6a8b-3c9d-0e1f-4c7b-6d8e9f0a1b2c",
+      "name": "Check Async Mode",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  \"status\": \"queued\",\n  \"run_id\": $json.body?.run_id || $json.run_id || (\"run_\" + Date.now() + \"_\" + Math.random().toString(36).substring(2, 9)),\n  \"timestamp\": new Date().toISOString(),\n  \"message\": \"Dispatched to worker pipeline\"\n}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4d6e5f7a-2b8c-9d0e-3b6a-5c7d8e9f0a1b",
+      "name": "Fast Async Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        480
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst normalizedItems = [];\n\nfunction parseShorthand(text) {\n  const result = {\n    prompt: '',\n    brand_name: '',\n    brand_domains: [],\n    competitors: [],\n    target_llms: ['openai', 'gemini'],\n    search_enabled: true\n  };\n  if (!text || typeof text !== 'string') return result;\n\n  const lines = text.split(/[\\n|]/);\n  for (const line of lines) {\n    const colonIdx = line.indexOf(':');\n    if (colonIdx === -1) {\n      if (!result.prompt && line.trim()) result.prompt = line.trim();\n      continue;\n    }\n    const key = line.slice(0, colonIdx).trim().toUpperCase();\n    const val = line.slice(colonIdx + 1).trim();\n    if (key === 'PROMPT') {\n      result.prompt = val;\n    } else if (key === 'BRAND') {\n      result.brand_name = val;\n    } else if (key === 'DOMAINS') {\n      result.brand_domains = val.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);\n    } else if (key === 'COMPETITORS') {\n      result.competitors = val.split(',').map(c => {\n        const match = c.match(/^(.*?)(?:\\s*\\((.*?)\\))?$/);\n        return {\n          name: match ? match[1].trim() : c.trim(),\n          domain: match && match[2] ? match[2].trim().toLowerCase() : ''\n        };\n      }).filter(c => c.name);\n    } else if (key === 'LLMS') {\n      result.target_llms = val.split(',').map(l => l.trim().toLowerCase()).filter(Boolean);\n    } else if (key === 'SEARCH') {\n      result.search_enabled = val.toLowerCase() === 'true' || val === '1';\n    }\n  }\n  return result;\n}\n\nfunction expandTargetLLMs(input, triggerSource) {\n  if (!input || typeof input !== 'object') return [];\n  const prompt = (input.prompt || '').trim();\n  const brandName = (input.brand_name || '').trim();\n  const brandDomains = Array.isArray(input.brand_domains) ? input.brand_domains.filter(Boolean) : [];\n  const competitors = Array.isArray(input.competitors) ? input.competitors.filter(Boolean) : [];\n  const searchEnabled = input.search_enabled !== undefined ? Boolean(input.search_enabled) : true;\n  const targetLLMs = Array.isArray(input.target_llms) && input.target_llms.length > 0 ? input.target_llms.filter(Boolean) : ['openai', 'gemini'];\n  const responseMode = input.response_mode || ((input.is_async === true || input.is_async === 'true') ? 'async' : (triggerSource === 'chat' ? 'sync' : (triggerSource === 'webhook' ? 'sync' : 'async')));\n  const configId = input.config_id || null;\n  const userId = input.user_id || null;\n  const runId = input.run_id || ('run_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9));\n\n  return targetLLMs.map(provider => {\n    let model = 'gpt-4o';\n    if (provider === 'anthropic') model = 'claude-3-5-sonnet-20241022';\n    if (provider === 'gemini') model = 'gemini-1.5-flash';\n\n    return {\n      json: {\n        run_id: runId,\n        config_id: configId,\n        user_id: userId,\n        trigger_source: triggerSource,\n        response_mode: responseMode,\n        prompt,\n        brand_name: brandName,\n        brand_domains: brandDomains,\n        competitors: competitors.map(c => {\n          if (typeof c === 'string') return { name: c.trim(), domain: '' };\n          if (c && typeof c === 'object') return { name: (c.name || c.competitor_name || '').trim(), domain: (c.domain || c.competitor_domain || '').trim().toLowerCase() };\n          return null;\n        }).filter(c => c && c.name),\n        provider,\n        selected_provider: provider,\n        model,\n        search_enabled: searchEnabled,\n        locale: input.locale || 'de-DE',\n        created_at: new Date().toISOString()\n      }\n    };\n  });\n}\n\nfor (const item of items) {\n  let raw = item && item.json ? item.json : {};\n  if (!raw || typeof raw !== 'object') raw = {};\n  let triggerSource = 'webhook';\n  let inputData = {};\n\n  if (raw.chatInput !== undefined) {\n    triggerSource = 'chat';\n    const text = String(raw.chatInput).trim();\n    if (text.startsWith('{') && text.endsWith('}')) {\n      try {\n        inputData = JSON.parse(text);\n      } catch (e) {\n        inputData = parseShorthand(text);\n      }\n    } else {\n      inputData = parseShorthand(text);\n    }\n  } else if (raw.jobs && Array.isArray(raw.jobs)) {\n    triggerSource = 'schedule_queue';\n    for (const job of (raw.jobs || []).filter(Boolean)) {\n      if (job && typeof job === 'object') {\n        normalizedItems.push(...expandTargetLLMs(job, triggerSource));\n      }\n    }\n    continue;\n  } else if (raw.status === 'error' || raw.error) {\n    continue;\n  } else {\n    inputData = (raw.body && typeof raw.body === 'object') ? raw.body : raw;\n    triggerSource = 'webhook';\n  }\n\n  normalizedItems.push(...expandTargetLLMs(inputData, triggerSource));\n}\n\nreturn normalizedItems;"
+      },
+      "id": "3c5d4e6f-1a7b-8c9d-2a5f-4b6c7d8e9f0a",
+      "name": "Universal Normalizer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.selected_provider || $json.provider }}",
+                    "rightValue": "openai",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.selected_provider || $json.provider }}",
+                    "rightValue": "anthropic",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.selected_provider || $json.provider }}",
+                    "rightValue": "gemini",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "2b4c3d5e-0f6a-7b8c-1f4e-3a5b6c7d8e9f",
+      "name": "Provider Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1140,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.openAiApi?.apiKey || $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.model || 'gpt-4o',\n  messages: [\n    {\n      role: 'system',\n      content: 'Du bist ein präziser, neutraler Recherche- und Empfehlungs-Assistent für den deutschen Markt. Nenne konkrete Anbieter, Marken, Produktserien und offizielle Webseiten/URLs.'\n    },\n    {\n      role: 'user',\n      content: $json.prompt\n    }\n  ],\n  temperature: 0.2\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "1a3b2c4d-9e5f-6a7b-0e3d-2f4a5b6c7d8e",
+      "name": "Call OpenAI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.anthropicApi?.apiKey || $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.model || 'claude-3-5-sonnet-20241022',\n  max_tokens: 2048,\n  system: 'Du bist ein präziser, neutraler Recherche- und Empfehlungs-Assistent für den deutschen Markt. Nenne konkrete Anbieter, Marken, Produktserien und offizielle Webseiten/URLs.',\n  messages: [\n    {\n      role: 'user',\n      content: $json.prompt\n    }\n  ]\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "0f2a1b3c-8d4e-5f6a-9d2c-1e3f4a5b6c7d",
+      "name": "Call Anthropic Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/{{ $json.model || 'gemini-1.5-flash' }}:generateContent?key={{ $credentials.googlePalmApi?.apiKey || $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  contents: [\n    {\n      parts: [\n        {\n          text: $json.prompt\n        }\n      ]\n    }\n  ],\n  tools: $json.search_enabled ? [ { googleSearch: {} } ] : []\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "9e1f0a2b-7c3d-4e5f-8c1b-0d2e3f4a5b6c",
+      "name": "Call Google Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfunction extractDomainFromUrl(urlOrDomain) {\n  if (!urlOrDomain || typeof urlOrDomain !== 'string') return '';\n  let clean = urlOrDomain.trim();\n  try {\n    clean = decodeURIComponent(clean);\n  } catch (_) {\n    clean = clean.replace(/%2f/gi, '/').replace(/%3a/gi, ':').replace(/%40/gi, '@');\n  }\n  clean = clean.toLowerCase().replace(/^https?:\\/\\//i, '');\n  const atIdx = clean.indexOf('@');\n  const firstSlash = clean.indexOf('/');\n  if (atIdx !== -1 && (firstSlash === -1 || atIdx < firstSlash)) {\n    clean = clean.slice(atIdx + 1);\n  }\n  clean = clean.replace(/^www\\./i, '');\n  for (const sep of ['/', ':', '?', '#']) {\n    const idx = clean.indexOf(sep);\n    if (idx !== -1) clean = clean.slice(0, idx);\n  }\n  return clean.trim();\n}\n\nfunction matchesDomain(candidateDomain, registeredDomains) {\n  if (!candidateDomain || !registeredDomains) return false;\n  const regList = Array.isArray(registeredDomains) ? registeredDomains : [registeredDomains];\n  const cleanCand = extractDomainFromUrl(String(candidateDomain));\n  if (!cleanCand) return false;\n  return regList.some(reg => {\n    const cleanReg = extractDomainFromUrl(String(reg));\n    return cleanReg && (cleanCand === cleanReg || cleanCand.endsWith('.' + cleanReg));\n  });\n}\n\nfunction extractResponseText(data) {\n  if (!data || typeof data !== 'object') return '';\n  if (data.choices && Array.isArray(data.choices) && data.choices[0]?.message?.content) {\n    return data.choices[0].message.content;\n  }\n  if (data.content && Array.isArray(data.content) && data.content[0]?.text) {\n    return data.content[0].text;\n  }\n  if (data.candidates && Array.isArray(data.candidates) && data.candidates[0]?.content?.parts) {\n    return data.candidates[0].content.parts.map(p => p.text || '').join('');\n  }\n  if (data.raw_response_text) return String(data.raw_response_text);\n  if (data.raw_response) return String(data.raw_response);\n  if (data.text) return String(data.text);\n  if (data.error && data.error.message) return 'ERROR: ' + data.error.message;\n  return '';\n}\n\nfunction extractCitations(data, rawText, brandDomains, competitorList) {\n  const citations = [];\n  const seenUrls = new Set();\n  const safeCompList = (Array.isArray(competitorList) ? competitorList : []).filter(Boolean);\n\n  // 1. Gemini Grounding Metadata Chunks\n  const geminiChunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks;\n  if (Array.isArray(geminiChunks)) {\n    for (const chunk of geminiChunks) {\n      if (chunk && chunk.web && chunk.web.uri) {\n        const url = String(chunk.web.uri).trim();\n        if (url && !seenUrls.has(url)) {\n          seenUrls.add(url);\n          const domain = extractDomainFromUrl(url);\n          const title = chunk.web.title ? String(chunk.web.title).trim() : 'Untitled';\n          citations.push({\n            citation_url: url,\n            citation_domain: domain,\n            domain: domain,\n            citation_title: title,\n            title: title,\n            source_type: 'grounding_metadata'\n          });\n        }\n      }\n    }\n  }\n\n  // 2. Markdown Links in Text\n  if (rawText && typeof rawText === 'string') {\n    const mdRegex = /\\[(.*?)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g;\n    let match;\n    while ((match = mdRegex.exec(rawText)) !== null) {\n      const title = match[1] ? match[1].trim() : 'Untitled';\n      const url = match[2] ? match[2].trim() : '';\n      if (url && !seenUrls.has(url)) {\n        seenUrls.add(url);\n        const domain = extractDomainFromUrl(url);\n        citations.push({\n          citation_url: url,\n          citation_domain: domain,\n          domain: domain,\n          citation_title: title || 'Untitled',\n          title: title || 'Untitled',\n          source_type: 'markdown_link'\n        });\n      }\n    }\n\n    // 3. Bare URLs (strip markdown links first to avoid splitting userinfo URLs)\n    const textWithoutMd = rawText.replace(/\\[(.*?)\\]\\(https?:\\/\\/[^\\s)]+\\)/g, ' ');\n    const bareRegex = /https?:\\/\\/(?:[a-zA-Z0-9_.-]+(?::[a-zA-Z0-9_.-]+)?@)?[a-zA-Z0-9.-]+(?::\\d+)?(?:\\/[^\\s)]*)?/g;\n    const bareMatches = textWithoutMd.match(bareRegex) || [];\n    for (const rawUrl of bareMatches) {\n      const url = rawUrl.replace(/[.,;:!\\])]+$/, '');\n      if (url && !seenUrls.has(url)) {\n        seenUrls.add(url);\n        const domain = extractDomainFromUrl(url);\n        citations.push({\n          citation_url: url,\n          citation_domain: domain,\n          domain: domain,\n          citation_title: 'Untitled',\n          title: 'Untitled',\n          source_type: 'bare_url'\n        });\n      }\n    }\n  }\n\n  return citations.map((c, idx) => {\n    const isBrand = matchesDomain(c.citation_domain, brandDomains);\n    const isComp = safeCompList.some(comp => {\n      const cDomain = (comp && typeof comp === 'object') ? (comp.domain || comp.competitor_domain || '') : (typeof comp === 'string' ? comp : '');\n      return cDomain && matchesDomain(c.citation_domain, cDomain);\n    });\n    return {\n      citation_index: idx + 1,\n      citation_url: c.citation_url,\n      citation_domain: c.citation_domain,\n      domain: c.citation_domain,\n      citation_title: c.citation_title,\n      title: c.citation_title,\n      is_brand_domain: isBrand,\n      is_competitor_domain: isComp,\n      source_type: c.source_type\n    };\n  });\n}\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  let meta = item.json;\n\n  try {\n    if (typeof $ === 'function') {\n      const normalizerNode = $('Universal Normalizer');\n      if (normalizerNode) {\n        meta = (normalizerNode.itemMatching && normalizerNode.itemMatching(i)?.json)\n          || (normalizerNode.item && normalizerNode.item.json)\n          || (normalizerNode.first && normalizerNode.first()?.json)\n          || item.json;\n      }\n    }\n  } catch (_) {}\n\n  const rawText = extractResponseText(item.json);\n  const brandDomains = meta.brand_domains || item.json.brand_domains || [];\n  const competitors = meta.competitors || item.json.competitors || [];\n  const extractedCitations = extractCitations(item.json, rawText, brandDomains, competitors);\n\n  results.push({\n    json: {\n      ...meta,\n      ...item.json,\n      raw_response: rawText,\n      raw_response_text: rawText,\n      text: rawText,\n      citations: extractedCitations,\n      competitors: (Array.isArray(competitors) ? competitors : []).filter(Boolean).map(c => typeof c === 'string' ? { name: c, domain: '' } : c)\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "8d0e9f1a-6b2c-3d4e-7b0a-9c1d2e3f4a5b",
+      "name": "Secondary Extractor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Chatlytics.de — Deterministic Unicode Metric & Classification Engine\n * File: n8n/lib/metrics_engine.js\n * \n * Pure, deterministic JavaScript for execution in n8n 2.44.5 Code Nodes (V8 isolate)\n * and Node.js (CommonJS / ES) unit tests. Zero external dependencies.\n */\n\n/**\n * Escapes special regex characters in a string.\n * \n * @param {string} str\n * @returns {string}\n */\nfunction escapeRegex(str) {\n  if (!str) return '';\n  return String(str).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n}\n\n/**\n * Normalizes text to Unicode NFC and extracts whitespace-separated words.\n * Returns empty array for empty or whitespace-only strings (no ['']).\n * \n * @param {string} text\n * @returns {string[]}\n */\nfunction getWords(text) {\n  if (text === null || text === undefined || typeof text !== 'string') {\n    return [];\n  }\n  const trimmed = text.normalize('NFC').trim();\n  if (trimmed.length === 0) return [];\n  return trimmed.split(/\\s+/);\n}\n\n/**\n * Counts total words in text.\n * \n * @param {string} text\n * @returns {number}\n */\nfunction countWords(text) {\n  return getWords(text).length;\n}\n\n/**\n * Counts total UTF-16 characters in normalized NFC text.\n * \n * @param {string} text\n * @returns {number}\n */\nfunction countChars(text) {\n  if (text === null || text === undefined) return 0;\n  const str = typeof text === 'string' ? text : String(text);\n  return str.normalize('NFC').length;\n}\n\n/**\n * Performs German Unicode lowercase normalization and transliteration (DIN 5007-2).\n * Maps umlauts to ASCII digraphs and sharp S to double-s.\n * \n * @param {string} str\n * @returns {string}\n */\nfunction normalizeGermanText(str) {\n  if (!str) return '';\n  return String(str)\n    .normalize('NFC')\n    .toLocaleLowerCase('de-DE')\n    .replace(/ä/g, 'ae')\n    .replace(/ö/g, 'oe')\n    .replace(/ü/g, 'ue')\n    .replace(/ß/g, 'ss')\n    .replace(/\\u1E9E/g, 'ss');\n}\n\n/**\n * Normalizes a URL or domain string into a clean root/hostname string.\n * Strips protocols, www prefixes, ports, and sub-paths.\n * \n * @param {string} urlOrDomain\n * @returns {string}\n */\nfunction extractDomainFromUrl(urlOrDomain) {\n  if (!urlOrDomain || typeof urlOrDomain !== 'string') return '';\n  let clean = urlOrDomain.trim();\n\n  // Decode percent-encoded components (%2F -> '/', %3A -> ':', etc.)\n  try {\n    clean = decodeURIComponent(clean);\n  } catch (_) {\n    // Resilient fallback for malformed URI byte sequences\n    clean = clean\n      .replace(/%2f/gi, '/')\n      .replace(/%3a/gi, ':')\n      .replace(/%40/gi, '@')\n      .replace(/%3f/gi, '?')\n      .replace(/%23/gi, '#');\n  }\n\n  clean = clean.toLowerCase();\n  clean = clean.replace(/^https?:\\/\\//i, '');\n\n  // Strip userinfo (e.g. user:pass@host)\n  const atIdx = clean.indexOf('@');\n  const firstSlash = clean.indexOf('/');\n  if (atIdx !== -1 && (firstSlash === -1 || atIdx < firstSlash)) {\n    clean = clean.slice(atIdx + 1);\n  }\n\n  clean = clean.replace(/^www\\./i, '');\n\n  const slashIdx = clean.indexOf('/');\n  if (slashIdx !== -1) clean = clean.slice(0, slashIdx);\n\n  const colonIdx = clean.indexOf(':');\n  if (colonIdx !== -1) clean = clean.slice(0, colonIdx);\n\n  const queryIdx = clean.indexOf('?');\n  if (queryIdx !== -1) clean = clean.slice(0, queryIdx);\n\n  const hashIdx = clean.indexOf('#');\n  if (hashIdx !== -1) clean = clean.slice(0, hashIdx);\n\n  return clean.trim();\n}\n\n/**\n * Checks whether a candidate domain matches any registered domain (including subdomains).\n * \n * @param {string} candidateDomain\n * @param {string[]|string} registeredDomains\n * @returns {boolean}\n */\nfunction matchesDomain(candidateDomain, registeredDomains) {\n  if (!candidateDomain || !registeredDomains) return false;\n  const regList = Array.isArray(registeredDomains) ? registeredDomains : [registeredDomains];\n  if (regList.length === 0) return false;\n\n  const cleanCandidate = extractDomainFromUrl(String(candidateDomain));\n  if (!cleanCandidate) return false;\n\n  return regList.some(reg => {\n    if (!reg) return false;\n    const cleanReg = extractDomainFromUrl(String(reg));\n    if (!cleanReg) return false;\n    return cleanCandidate === cleanReg || cleanCandidate.endsWith('.' + cleanReg);\n  });\n}\n\n/**\n * Compiles a Unicode-aware regular expression with German transliteration alternations\n * and Unicode letter/number lookaround boundaries.\n * \n * This prevents whole-text index shifting and accurately matches German umlauts,\n * capital sharp S (ẞ / U+1E9E), standard sharp S (ß), and ASCII digraphs (ae, oe, ue, ss).\n * \n * @param {string} entityName\n * @returns {RegExp|null}\n */\nfunction buildGermanRegex(entityName) {\n  if (!entityName || typeof entityName !== 'string') return null;\n  const norm = entityName.normalize('NFC').trim();\n  if (!norm) return null;\n\n  const wordTokens = norm.split(/\\s+/);\n  const wordPatterns = wordTokens.map(w => {\n    const tokenized = w\n      .replace(/ae|ä/gi, '@@AE@@')\n      .replace(/oe|ö/gi, '@@OE@@')\n      .replace(/ue|ü/gi, '@@UE@@')\n      .replace(/ss|ß|\\u1E9E/gi, '@@SS@@');\n\n    const escaped = escapeRegex(tokenized);\n    return escaped\n      .replace(/@@AE@@/g, '(?:[äÄ]|ae)')\n      .replace(/@@OE@@/g, '(?:[öÖ]|oe)')\n      .replace(/@@UE@@/g, '(?:[üÜ]|ue)')\n      .replace(/@@SS@@/g, '(?:[ß\\u1E9E]|ss)');\n  });\n\n  const fullPattern = wordPatterns.join('\\\\s+');\n  return new RegExp(`(?<![\\\\p{L}\\\\p{N}])${fullPattern}(?![\\\\p{L}\\\\p{N}])`, 'iu');\n}\n\n/**\n * Locates an entity within text using tiered resolution:\n * Tier 1: German Unicode transliteration regex with lookaround boundaries.\n * Tier 2: Domain text fallback if registered domains are provided.\n * \n * @param {string} text\n * @param {string} entityName\n * @param {string[]} [domains=[]]\n * @returns {{ found: boolean, charIndex: number|null, wordIndex: number|null, matchType: string, matchedText: string|null }}\n */\nfunction findBrandUnicode(text, entityName, domains = []) {\n  if (text === null || text === undefined || !entityName) {\n    return { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n  }\n\n  const rawText = typeof text === 'string' ? text : String(text);\n  const normText = rawText.normalize('NFC');\n  const target = typeof entityName === 'string' ? entityName.normalize('NFC').trim() : String(entityName).trim();\n  if (!target) {\n    return { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n  }\n\n  const regex = buildGermanRegex(target);\n  if (regex) {\n    const match = regex.exec(normText);\n    if (match) {\n      const charIndex = match.index;\n      const prefix = normText.slice(0, charIndex);\n      const endsWithWhitespace = /\\s$/.test(prefix);\n      const wordIndex = (!prefix || endsWithWhitespace)\n        ? getWords(prefix).length + 1\n        : Math.max(1, getWords(prefix).length);\n      const matchedText = match[0];\n      const isExact = matchedText.normalize('NFC').toLocaleLowerCase('de-DE') === target.toLocaleLowerCase('de-DE');\n      return {\n        found: true,\n        charIndex,\n        wordIndex,\n        matchType: isExact ? 'unicode_exact' : 'german_transliterated',\n        matchedText\n      };\n    }\n  }\n\n  // Tier 2: Domain mention fallback in text\n  const domList = Array.isArray(domains) ? domains : (domains ? [domains] : []);\n  for (const d of domList) {\n    if (!d) continue;\n    const cleanDom = extractDomainFromUrl(String(d));\n    if (!cleanDom) continue;\n    const domRegex = new RegExp(`(?<![\\\\p{L}\\\\p{N}])${escapeRegex(cleanDom)}(?![\\\\p{L}\\\\p{N}])`, 'iu');\n    const dm = domRegex.exec(normText);\n    if (dm) {\n      const charIndex = dm.index;\n      const prefix = normText.slice(0, charIndex);\n      const endsWithWhitespace = /\\s$/.test(prefix);\n      const wordIndex = (!prefix || endsWithWhitespace)\n        ? getWords(prefix).length + 1\n        : Math.max(1, getWords(prefix).length);\n      return {\n        found: true,\n        charIndex,\n        wordIndex,\n        matchType: 'domain_mention',\n        matchedText: dm[0]\n      };\n    }\n  }\n\n  return { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n}\n\n/**\n * Classifies evaluation results into strict 4-state MECE categories.\n * \n * Supports both positional invocation:\n *   classifyMECE(brandMentioned, competitorsMentioned, brandEarliness, minCompetitorEarliness, brandSentiment)\n * and single options object:\n *   classifyMECE({ brandMentioned, competitorsMentioned, brandEarliness, minCompetitorEarliness, brandSentiment })\n * \n * @param {boolean|object} arg1\n * @param {boolean} [argCompetitorsMentioned]\n * @param {number|null} [argBrandEarliness]\n * @param {number|null} [argMinCompetitorEarliness]\n * @param {string} [argBrandSentiment='neutral']\n * @returns {'1_DIRECT_WIN'|'2_BRAND_HALO'|'3_COMPETITOR_TAKEOVER'|'4_GENERIC'}\n */\nfunction classifyMECE(arg1, argCompetitorsMentioned, argBrandEarliness, argMinCompetitorEarliness, argBrandSentiment) {\n  let brandMentioned = false;\n  let competitorsMentioned = false;\n  let brandEarliness = null;\n  let minCompetitorEarliness = null;\n  let brandSentiment = 'neutral';\n\n  if (arg1 && typeof arg1 === 'object') {\n    brandMentioned = Boolean(arg1.brandMentioned || arg1.brand_mentioned);\n    competitorsMentioned = Boolean(arg1.competitorsMentioned || arg1.competitorFound || arg1.competitors_mentioned);\n    brandEarliness = arg1.brandEarliness !== undefined ? arg1.brandEarliness : (arg1.brand_earliness !== undefined ? arg1.brand_earliness : null);\n    minCompetitorEarliness = arg1.minCompetitorEarliness !== undefined ? arg1.minCompetitorEarliness : (arg1.min_competitor_earliness !== undefined ? arg1.min_competitor_earliness : null);\n    brandSentiment = arg1.brandSentiment || arg1.brand_sentiment || 'neutral';\n  } else {\n    brandMentioned = Boolean(arg1);\n    competitorsMentioned = Boolean(argCompetitorsMentioned);\n    brandEarliness = argBrandEarliness !== undefined ? argBrandEarliness : null;\n    minCompetitorEarliness = argMinCompetitorEarliness !== undefined ? argMinCompetitorEarliness : null;\n    brandSentiment = argBrandSentiment || 'neutral';\n  }\n\n  const isNegative = String(brandSentiment).toLowerCase() === 'negative';\n\n  // Branch 1: Neither brand nor competitor present\n  if (!brandMentioned && !competitorsMentioned) {\n    return '4_GENERIC';\n  }\n\n  // Branch 2: Competitor present, brand omitted\n  if (!brandMentioned && competitorsMentioned) {\n    return '3_COMPETITOR_TAKEOVER';\n  }\n\n  // Branch 3: Brand present, no competitors present\n  if (brandMentioned && !competitorsMentioned) {\n    if (isNegative) return '4_GENERIC';\n    return '1_DIRECT_WIN';\n  }\n\n  // Branch 4: Both brand and at least one competitor present\n  if (isNegative) {\n    return '3_COMPETITOR_TAKEOVER';\n  }\n\n  if (\n    brandEarliness !== null &&\n    minCompetitorEarliness !== null &&\n    brandEarliness <= minCompetitorEarliness\n  ) {\n    return '1_DIRECT_WIN';\n  }\n\n  return '2_BRAND_HALO';\n}\n\n/**\n * Diagnoses Generative Engine Optimization (GEO) 4-Quadrant state.\n * \n * States:\n * - 1_CITATION_HIJACK: Brand mentioned in text but not cited, while citations exist; or brand cited but competitor recommended.\n * - 2_PARAMETRIC_BLINDSPOT: Brand domain cited but brand omitted from text; or competitor recommended with zero citations.\n * - 3_BRAND_HALO_TRAP: Brand mentioned in secondary halo position behind competitor without citation dominance.\n * - 4_BURIED_WINNER: Brand recommended #1, but buried late (>50% relative position or word earliness > 50).\n * - NONE: Clean direct win with early mention and citation authority, or generic overview.\n * \n * @param {object} params\n * @returns {'1_CITATION_HIJACK'|'2_PARAMETRIC_BLINDSPOT'|'3_BRAND_HALO_TRAP'|'4_BURIED_WINNER'|'NONE'}\n */\nfunction evaluateGeoQuadrant({\n  brandMentioned,\n  brandInText,\n  brandRecommended,\n  competitorRecommended,\n  competitorInText,\n  brandDomainCited,\n  brandCited,\n  competitorCited,\n  competitorDomainCited,\n  citationsCount,\n  hasCitations,\n  relativePositionPct,\n  brandRelativePos,\n  wordEarliness,\n  brandEarlinessWord,\n  minCompetitorPos,\n  meceCategory\n} = {}) {\n  const isBrandMentioned = Boolean(brandMentioned ?? brandInText);\n  const isBrandRecommended = Boolean(brandRecommended || meceCategory === '1_DIRECT_WIN');\n  const isCompetitorRecommended = Boolean(competitorRecommended || meceCategory === '3_COMPETITOR_TAKEOVER');\n  const isBrandCited = Boolean(brandDomainCited ?? brandCited);\n  const totalCitations = typeof citationsCount === 'number' ? citationsCount : (hasCitations ? 1 : 0);\n  const anyCitations = totalCitations > 0;\n  const relPos = relativePositionPct !== undefined ? relativePositionPct : (brandRelativePos !== undefined ? brandRelativePos : null);\n  const wordEarly = wordEarliness !== undefined ? wordEarliness : (brandEarlinessWord !== undefined ? brandEarlinessWord : null);\n\n  // Quadrant 4: Buried Winner (Brand won, but appears in bottom half / late)\n  if (isBrandRecommended && ((relPos !== null && relPos > 50.0) || (wordEarly !== null && wordEarly > 50))) {\n    return '4_BURIED_WINNER';\n  }\n\n  // Quadrant 1: Citation Hijack\n  // Case A: Brand domain cited in grounding, but competitor is recommended in text\n  if (isBrandCited && isCompetitorRecommended && !isBrandRecommended) {\n    return '1_CITATION_HIJACK';\n  }\n\n  // Quadrant 3: Brand Halo Trap\n  // Brand trapped behind competitor in halo position (2_BRAND_HALO)\n  // Evaluated BEFORE Citation Hijack Case B and Parametric Blindspot Case B so that Brand Halo\n  // evaluates consistently regardless of whether grounding citations exist.\n  if (isBrandMentioned && (meceCategory === '2_BRAND_HALO' || (minCompetitorPos !== null && relPos !== null && relPos > minCompetitorPos))) {\n    return '3_BRAND_HALO_TRAP';\n  }\n\n  // Quadrant 1: Citation Hijack\n  // Case B: Brand mentioned in text, but brand domain not cited while external citations exist\n  if (isBrandMentioned && !isBrandCited && anyCitations) {\n    return '1_CITATION_HIJACK';\n  }\n\n  // Quadrant 2: Parametric Blindspot\n  // Case A: Brand domain cited in grounding, but brand completely omitted from synthesized text\n  if (isBrandCited && !isBrandMentioned) {\n    return '2_PARAMETRIC_BLINDSPOT';\n  }\n\n  // Case B: Competitor recommended without any grounding citations when brand is omitted from text\n  if (isCompetitorRecommended && !isBrandMentioned && !anyCitations) {\n    return '2_PARAMETRIC_BLINDSPOT';\n  }\n\n  return 'NONE';\n}\n\n/**\n * Master calculation engine: processes LLM response text, brand config,\n * competitors, and grounding citations to produce standardized metrics.\n * \n * Supports both positional parameters:\n *   calculateMetrics(text, brandName, brandDomains, competitors, citations, options)\n * and single options object:\n *   calculateMetrics({ text, brandName, brandDomains, competitors, citations, options })\n * \n * @param {string|object} arg1 - Raw text or options object\n * @param {string} [argBrandName]\n * @param {string[]} [argBrandDomains]\n * @param {Array<string|object>} [argCompetitors]\n * @param {Array<string|object>} [argCitations]\n * @param {object} [argOptions]\n * @returns {object} Standardized Chatlytics metrics payload\n */\nfunction calculateMetrics(arg1, argBrandName, argBrandDomains, argCompetitors, argCitations, argOptions) {\n  let text = '';\n  let brandName = '';\n  let brandDomains = [];\n  let competitors = [];\n  let citations = [];\n  let runOptions = {};\n\n  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1)) {\n    text = arg1.text || arg1.raw_response || arg1.response_text || '';\n    brandName = arg1.brandName || arg1.brand_name || '';\n    brandDomains = arg1.brandDomains || arg1.brand_domains || [];\n    competitors = arg1.competitors || [];\n    citations = arg1.citations || [];\n    runOptions = arg1.options || {};\n  } else {\n    text = arg1 != null ? (typeof arg1 === 'string' ? arg1 : String(arg1)) : '';\n    brandName = argBrandName || '';\n    brandDomains = argBrandDomains || [];\n    competitors = argCompetitors || [];\n    citations = argCitations || [];\n    runOptions = argOptions || {};\n  }\n\n  const rawText = text != null ? (typeof text === 'string' ? text : String(text)) : '';\n  const normText = rawText.normalize('NFC');\n  const totalChars = normText.length;\n  const words = getWords(normText);\n  const totalWords = words.length;\n\n  const targetBrand = brandName != null && typeof brandName === 'string' ? brandName.normalize('NFC').trim() : (brandName ? String(brandName).trim() : '');\n\n  const normBrandDomains = (Array.isArray(brandDomains) ? brandDomains : (brandDomains ? [brandDomains] : []))\n    .map(d => extractDomainFromUrl(String(d)))\n    .filter(d => d.length > 0);\n\n  // Normalize competitors\n  const normCompetitors = (Array.isArray(competitors) ? competitors : []).map(c => {\n    if (typeof c === 'string') {\n      return { name: c.trim(), domains: [] };\n    }\n    if (c && typeof c === 'object') {\n      const name = (c.name || c.competitor_name || '').trim();\n      const doms = [];\n      if (c.domain || c.competitor_domain) doms.push(extractDomainFromUrl(c.domain || c.competitor_domain));\n      if (Array.isArray(c.domains)) doms.push(...c.domains.map(extractDomainFromUrl));\n      return { name, domains: doms.filter(d => d.length > 0) };\n    }\n    return { name: '', domains: [] };\n  }).filter(c => c.name.length > 0);\n\n  // Normalize citations (with null guard and percent-decoding resilience)\n  let brandDomainCited = false;\n  let competitorDomainCited = false;\n\n  const rawCitationsList = Array.isArray(citations) ? citations : (citations && typeof citations === 'object' ? [citations] : []);\n  const safeCitations = rawCitationsList.filter(cit => cit !== null && cit !== undefined && (typeof cit === 'string' || typeof cit === 'object'));\n\n  const normCitations = safeCitations.map((cit, idx) => {\n    const isString = typeof cit === 'string';\n    const isObj = cit !== null && typeof cit === 'object';\n    const rawUrl = isString ? cit : (isObj ? (cit.citation_url || cit.url || '') : '');\n    let rawDomain = isString\n      ? extractDomainFromUrl(cit)\n      : (isObj ? (cit.citation_domain || cit.domain || extractDomainFromUrl(rawUrl)) : extractDomainFromUrl(rawUrl));\n    rawDomain = extractDomainFromUrl(rawDomain);\n    const title = (isObj && (cit.citation_title || cit.title)) ? String(cit.citation_title || cit.title) : '';\n\n    let isBrand = false;\n    if (isObj && typeof cit.is_brand_domain === 'boolean') {\n      isBrand = cit.is_brand_domain;\n    } else {\n      isBrand = matchesDomain(rawDomain, normBrandDomains);\n    }\n    if (isBrand) brandDomainCited = true;\n\n    let isComp = false;\n    if (isObj && typeof cit.is_competitor_domain === 'boolean') {\n      isComp = cit.is_competitor_domain;\n    } else {\n      isComp = normCompetitors.some(c => matchesDomain(rawDomain, c.domains));\n    }\n    if (isComp) competitorDomainCited = true;\n\n    return {\n      citation_index: idx + 1,\n      url: rawUrl,\n      citation_url: rawUrl,\n      domain: rawDomain,\n      citation_domain: rawDomain,\n      title: title,\n      citation_title: title,\n      is_brand_domain: isBrand,\n      is_competitor_domain: isComp\n    };\n  });\n\n  const hasCitations = normCitations.length > 0;\n\n  // Evaluate brand match\n  let brandMatch = { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n  if (targetBrand.length > 0 && totalChars > 0) {\n    brandMatch = findBrandUnicode(normText, targetBrand, normBrandDomains);\n  }\n\n  const brandMentioned = brandMatch.found;\n  const brandCharEarliness = brandMatch.charIndex;\n  const brandWordEarliness = brandMatch.wordIndex;\n\n  let brandRelPosPct = null;\n  if (brandMentioned && brandCharEarliness !== null && totalChars > 0) {\n    brandRelPosPct = Math.round((brandCharEarliness / totalChars) * 10000) / 100;\n  }\n\n  // Evaluate competitor matches\n  let minCompetitorEarliness = null;\n  let anyCompFound = false;\n\n  const evaluatedCompetitors = normCompetitors.map(comp => {\n    let compMatch = { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n    if (totalChars > 0) {\n      compMatch = findBrandUnicode(normText, comp.name, comp.domains);\n    }\n    let compRelPosPct = null;\n\n    if (compMatch.found && compMatch.charIndex !== null) {\n      anyCompFound = true;\n      if (minCompetitorEarliness === null || compMatch.charIndex < minCompetitorEarliness) {\n        minCompetitorEarliness = compMatch.charIndex;\n      }\n      compRelPosPct = totalChars > 0 ? Math.round((compMatch.charIndex / totalChars) * 10000) / 100 : 0.0;\n    }\n\n    return {\n      competitor_name: comp.name,\n      competitor_domain: comp.domains[0] || null,\n      mentioned: compMatch.found,\n      char_earliness: compMatch.charIndex,\n      word_earliness: compMatch.wordIndex,\n      relative_position_pct: compRelPosPct,\n      relative_pos: compRelPosPct,\n      match_type: compMatch.matchType,\n      recommended: false\n    };\n  });\n\n  const meceCategory = classifyMECE({\n    brandMentioned,\n    competitorsMentioned: anyCompFound,\n    brandEarliness: brandCharEarliness,\n    minCompetitorEarliness,\n    brandSentiment: runOptions.brandSentiment || 'neutral'\n  });\n\n  const brandRecommended = meceCategory === '1_DIRECT_WIN';\n  const competitorRecommended = meceCategory === '3_COMPETITOR_TAKEOVER' || meceCategory === '2_BRAND_HALO';\n\n  // Mark leading competitor(s) recommended if competitor takeover/halo applies\n  if (competitorRecommended && anyCompFound && minCompetitorEarliness !== null) {\n    for (const comp of evaluatedCompetitors) {\n      if (comp.mentioned && comp.char_earliness === minCompetitorEarliness) {\n        comp.recommended = true;\n      }\n    }\n  }\n\n  const geoQuadrant = evaluateGeoQuadrant({\n    brandMentioned,\n    brandRecommended,\n    competitorRecommended,\n    brandDomainCited,\n    competitorCited: competitorDomainCited,\n    citationsCount: normCitations.length,\n    hasCitations,\n    relativePositionPct: brandRelPosPct,\n    wordEarliness: brandWordEarliness,\n    meceCategory\n  });\n\n  return {\n    // Lengths\n    total_chars: totalChars,\n    character_count: totalChars,\n    total_words: totalWords,\n    word_count: totalWords,\n\n    // Brand Metrics\n    brand_name: targetBrand,\n    brand_mentioned: brandMentioned,\n    brand_recommended: brandRecommended,\n    char_earliness: brandCharEarliness,\n    brand_earliness_char: brandCharEarliness,\n    word_earliness: brandWordEarliness,\n    brand_earliness_word: brandWordEarliness,\n    relative_position_pct: brandRelPosPct,\n    brand_relative_pos: brandRelPosPct,\n    brand_match_type: brandMatch.matchType,\n\n    // MECE & GEO\n    mece_category: meceCategory,\n    geo_quadrant: geoQuadrant,\n\n    // Citations\n    has_citations: hasCitations,\n    brand_domain_cited: brandDomainCited,\n    brand_cited: brandDomainCited,\n    competitor_cited: competitorDomainCited,\n\n    // Detailed diagnostics breakdown\n    diagnostics: {\n      primary_quadrant: geoQuadrant,\n      is_citation_hijack: geoQuadrant === '1_CITATION_HIJACK',\n      is_parametric_blindspot: geoQuadrant === '2_PARAMETRIC_BLINDSPOT',\n      is_brand_halo_trap: geoQuadrant === '3_BRAND_HALO_TRAP',\n      is_buried_winner: geoQuadrant === '4_BURIED_WINNER'\n    },\n\n    // Collections\n    competitors: evaluatedCompetitors,\n    citations: normCitations\n  };\n}\n\n// Universal module export pattern\n\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const d = item.json;\n  const text = d.raw_response_text || d.raw_response || d.response_text || d.text || '';\n  const metrics = calculateMetrics(text, d.brand_name || '', d.brand_domains || [], d.competitors || [], d.citations || []);\n\n  const totalChars = metrics.character_count;\n  const totalWords = metrics.word_count;\n  const brandMentioned = metrics.brand_mentioned ? 1 : 0;\n  const charEarliness = metrics.brand_earliness_char;\n  const wordEarliness = metrics.brand_earliness_word;\n  const relPosPct = metrics.brand_relative_pos;\n  const brandDomainCited = metrics.brand_domain_cited ? 1 : 0;\n  const competitorCited = metrics.competitor_cited ? 1 : 0;\n  const meceCategory = metrics.mece_category;\n  const geoQuadrant = metrics.geo_quadrant;\n  const brandRecommended = meceCategory === '1_DIRECT_WIN';\n\n  results.push({\n    json: {\n      ...d,\n      ...metrics,\n      config_id: d.config_id || 101,\n      user_id: d.user_id || 5,\n      prompt: d.prompt || '',\n      prompt_text: d.prompt || '',\n      provider: d.provider || d.selected_provider || 'openai',\n      model: d.model || 'gpt-4o',\n      model_name: d.model || 'gpt-4o',\n      brand_name: d.brand_name || metrics.brand_name || '',\n      brand_mentioned: brandMentioned,\n      brand_recommended: brandRecommended,\n      brand_prominence_rank: brandRecommended ? 1 : (brandMentioned ? 2 : null),\n      char_earliness: charEarliness,\n      brand_earliness_char: charEarliness,\n      word_earliness: wordEarliness,\n      brand_earliness_word: wordEarliness,\n      relative_position_pct: relPosPct,\n      brand_relative_pos: relPosPct,\n      total_chars: totalChars,\n      character_count: totalChars,\n      total_words: totalWords,\n      word_count: totalWords,\n      mece_category: meceCategory,\n      geo_quadrant: geoQuadrant,\n      has_citations: (metrics.citations || []).length > 0 ? 1 : 0,\n      brand_domain_cited: brandDomainCited,\n      brand_cited: brandDomainCited,\n      competitor_cited: competitorCited,\n      raw_response_text: text,\n      raw_response: text,\n      run_duration_ms: d.run_duration_ms || 1150,\n      competitors: (metrics.competitors || []).map(c => ({\n        competitor_name: c.competitor_name || c.name || '',\n        competitor_domain: c.competitor_domain || c.domain || null,\n        mentioned: c.mentioned ? 1 : 0,\n        is_mentioned: c.mentioned ? 1 : 0,\n        is_cited: c.is_cited ? 1 : 0,\n        char_earliness: c.char_earliness !== undefined ? c.char_earliness : null,\n        earliness_char: c.char_earliness !== undefined ? c.char_earliness : null,\n        word_earliness: c.word_earliness !== undefined ? c.word_earliness : null,\n        earliness_word: c.word_earliness !== undefined ? c.word_earliness : null,\n        relative_position_pct: c.relative_position_pct !== undefined ? c.relative_position_pct : null,\n        relative_pos: c.relative_position_pct !== undefined ? c.relative_position_pct : null\n      })),\n      citations: metrics.citations || []\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "id": "7c9d8e0f-5a1b-2c3d-6a9f-8b0c1d2e3f4a",
+      "name": "Metric & MECE Calculator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATLYTICS_API_BASE_URL || 'http://localhost:8000' }}/api/ingest.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Chatlytics-Ingest-Key",
+              "value": "={{ $env.CHATLYTICS_INGEST_KEY || 'chatlytics_dev_secret_key_2026' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  config_id: $json.config_id || 101,\n  user_id: $json.user_id || 5,\n  prompt: $json.prompt,\n  prompt_text: $json.prompt_text || $json.prompt,\n  provider: $json.provider,\n  model: $json.model,\n  model_name: $json.model_name || $json.model,\n  brand_name: $json.brand_name,\n  brand_mentioned: $json.brand_mentioned,\n  brand_recommended: $json.brand_recommended,\n  brand_prominence_rank: $json.brand_prominence_rank,\n  char_earliness: $json.char_earliness,\n  word_earliness: $json.word_earliness,\n  relative_position_pct: $json.relative_position_pct,\n  total_chars: $json.total_chars,\n  total_words: $json.total_words,\n  mece_category: $json.mece_category,\n  geo_quadrant: $json.geo_quadrant,\n  has_citations: $json.has_citations,\n  brand_cited: $json.brand_cited,\n  competitor_cited: $json.competitor_cited,\n  raw_response_text: $json.raw_response_text || $json.raw_response,\n  raw_response: $json.raw_response || $json.raw_response_text,\n  run_duration_ms: $json.run_duration_ms,\n  competitors: $json.competitors || [],\n  citations: $json.citations || []\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "6b8c7d9e-4f0a-1b2c-5f8e-7a9b0c1d2e3f",
+      "name": "Dispatch Ingest API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        200
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst output = [];\n\nfor (const item of items) {\n  const d = item.json;\n\n  let meceBadge = '⚪';\n  if (d.mece_category === '1_DIRECT_WIN') meceBadge = '🏆 (Direct Win)';\n  else if (d.mece_category === '2_BRAND_HALO') meceBadge = '🟣 (Brand Halo)';\n  else if (d.mece_category === '3_COMPETITOR_TAKEOVER') meceBadge = '🔴 (Competitor Takeover)';\n  else if (d.mece_category === '4_GENERIC') meceBadge = '⚪ (Generic / Neutral)';\n\n  let geoBadge = 'Clean Visibility';\n  if (d.geo_quadrant === '1_CITATION_HIJACK') geoBadge = '⚠️ 1_CITATION_HIJACK (Brand in text, competitor cited)';\n  else if (d.geo_quadrant === '2_PARAMETRIC_BLINDSPOT') geoBadge = '⚠️ 2_PARAMETRIC_BLINDSPOT (Domain cited, brand omitted)';\n  else if (d.geo_quadrant === '3_BRAND_HALO_TRAP') geoBadge = '⚠️ 3_BRAND_HALO_TRAP (Trapped behind competitor)';\n  else if (d.geo_quadrant === '4_BURIED_WINNER') geoBadge = '⚠️ 4_BURIED_WINNER (Won, but buried >50% deep)';\n\n  const brandDomains = Array.isArray(d.brand_domains) ? d.brand_domains.join(', ') : (d.brand_domains || 'N/A');\n  const earlinessStr = d.brand_mentioned === 1 \n    ? `Wort #${d.word_earliness || d.brand_earliness_word} (${d.relative_position_pct || d.brand_relative_pos}% im Text, Zeichen #${d.char_earliness || d.brand_earliness_char})`\n    : 'Nicht im Antworttext genannt';\n\n  const citationStr = d.brand_domain_cited === 1 || d.brand_cited === 1\n    ? '✅ Offizielle Domain zitiert'\n    : (d.has_citations === 1 ? '❌ Nur Fremddomains zitiert' : 'Keine Quellenlinks');\n\n  const compMentions = (d.competitors || []).filter(c => c.mentioned === 1 || c.is_mentioned === 1);\n  const compStr = compMentions.length > 0\n    ? compMentions.map(c => `${c.competitor_name || c.name} (Wort #${c.word_earliness || c.earliness_word})`).join(', ')\n    : 'Keine getrackten Wettbewerber gefunden';\n\n  const markdown = [\n    '### 📊 Chatlytics AI Visibility Audit',\n    '| Metric | Value |',\n    '|---|---|',\n    `| **Query** | *${d.prompt || ''}* |`,\n    `| **Brand** | **${d.brand_name || ''}** |`,\n    `| **Getrackte Marke** | **${d.brand_name || ''}** (${brandDomains}) |`,\n    `| **Provider** | ${d.provider || ''} |`,\n    `| **Modell / Provider** | ${d.provider || ''} (${d.model || ''}) |`,\n    `| **MECE Status** | ${d.mece_category} ${meceBadge} |`,\n    `| **MECE-Status** | ${d.mece_category} ${meceBadge} |`,\n    `| **GEO Diagnostic** | ${d.geo_quadrant} |`,\n    `| **GEO-Diagnostik** | ${d.geo_quadrant} — ${geoBadge} |`,\n    `| **Brand Earliness** | ${earlinessStr} |`,\n    `| **Grounding Citation** | ${citationStr} |`,\n    `| **Wettbewerber** | ${compStr} |`,\n    '',\n    `*Antwortlänge: ${d.total_words || 0} Wörter (${d.total_chars || 0} Zeichen) • Ausführungszeit: ${d.run_duration_ms || 0}ms*`\n  ].join('\\n');\n\n  output.push({\n    json: {\n      ...d,\n      output: markdown,\n      text: markdown,\n      response: markdown,\n      message: markdown\n    }\n  });\n}\n\nreturn output;"
+      },
+      "id": "5a7b6c8d-3e9f-0a1b-4e7d-6f8a9b0c1d2e",
+      "name": "Format Chat Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4f6a5b7c-2d8e-9f0a-3d6c-5e7f8a9b0c1d",
+      "name": "Respond Webhook Sync",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2080,
+        560
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Schedule Poller Trigger": {
+      "main": [
+        [
+          {
+            "node": "Poll Backend Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Backend Queue": {
+      "main": [
+        [
+          {
+            "node": "Universal Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interactive Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Universal Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Universal API Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Async Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Async Mode": {
+      "main": [
+        [
+          {
+            "node": "Fast Async Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Universal Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fast Async Response": {
+      "main": [
+        [
+          {
+            "node": "Universal Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Universal Normalizer": {
+      "main": [
+        [
+          {
+            "node": "Provider Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider Router": {
+      "main": [
+        [
+          {
+            "node": "Call OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Anthropic Claude",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Google Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Anthropic Claude": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Google Gemini": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secondary Extractor": {
+      "main": [
+        [
+          {
+            "node": "Metric & MECE Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Metric & MECE Calculator": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Ingest API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Chat Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond Webhook Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "f78d91c2-3e4b-4a59-b1d8-0e8c45a76e99",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "chatlytics-worker-01"
+  },
+  "id": "chatlytics_universal_worker",
+  "tags": [
+    {
+      "name": "chatlytics"
+    },
+    {
+      "name": "ai-visibility"
+    },
+    {
+      "name": "som"
+    }
+  ],
+  "pinData": {}
+}
