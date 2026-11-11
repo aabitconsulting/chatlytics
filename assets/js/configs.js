@@ -1,0 +1,277 @@
+/**
+ * assets/js/configs.js
+ * Feature 29: Modular Client-Side JavaScript Suite — Tracking Configuration Manager
+ *
+ * Handles:
+ * - Sanitizing brand and competitor domain inputs (RFC URL parsing & protocol stripping)
+ * - CRUD operations via apiClient
+ * - Config modal controller for creating and updating prompt-brand configurations
+ */
+
+import { apiClient } from './api-client.js';
+
+/**
+ * Sanitizes comma-separated domain string into clean hostname array.
+ * Strictly adheres to tests/tier1_features/f29_client_js_modules.test.js:
+ *   const sanitizeDomains = (rawStr) => {
+ *     return rawStr
+ *       .split(',')
+ *       .map(d => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
+ *       .filter(Boolean);
+ *   };
+ * 
+ * @param {string} rawStr
+ * @returns {string[]}
+ */
+export function sanitizeDomains(rawStr) {
+  if (!rawStr || typeof rawStr !== 'string') return [];
+  return rawStr
+    .split(',')
+    .map(d => {
+      let clean = d.trim().toLowerCase();
+      clean = clean.replace(/^[a-zA-Z0-9+.-]+:\/\/?/, '').replace(/^[a-zA-Z0-9+.-]+:/, '').replace(/[\/?#].*$/, '');
+      return clean.trim();
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Parses newline-separated prompt input into clean array of prompt strings.
+ * 
+ * @param {string} rawStr
+ * @returns {string[]}
+ */
+export function parsePrompts(rawStr) {
+  if (!rawStr || typeof rawStr !== 'string') return [];
+  return rawStr
+    .split('\n')
+    .map(p => p.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Parses comma-separated or multiline competitor input into competitor objects.
+ * Format: "Workday (workday.com), SAP (sap.com)" or simple "Workday, SAP"
+ * 
+ * @param {string} rawStr
+ * @returns {Array<{ name: string, domains: string[] }>}
+ */
+export function parseCompetitors(rawStr) {
+  if (!rawStr || typeof rawStr !== 'string') return [];
+  const lines = rawStr.includes('\n') ? rawStr.split('\n') : rawStr.split(',');
+  const results = [];
+
+  for (const item of lines) {
+    const trimmed = item.trim();
+    if (!trimmed) continue;
+
+    // Check for "Name (domain.com)" pattern
+    const match = trimmed.match(/^([^()]+)(?:\(([^()]+)\))?$/);
+    if (match) {
+      const name = match[1].trim();
+      const rawDomain = match[2] ? match[2].trim() : '';
+      const domains = rawDomain ? sanitizeDomains(rawDomain) : [];
+      if (name) {
+        results.push({ name, domains });
+      }
+    } else {
+      results.push({ name: trimmed, domains: [] });
+    }
+  }
+
+  return results;
+}
+
+export class ConfigManager {
+  constructor() {
+    this.configs = [];
+    this.selectedConfigId = null;
+  }
+
+  async loadConfigs() {
+    try {
+      const res = await apiClient.getConfigs();
+      this.configs = Array.isArray(res.configs) ? res.configs : (Array.isArray(res) ? res : []);
+      return this.configs;
+    } catch (err) {
+      console.error('Error loading configs:', err);
+      return [];
+    }
+  }
+
+  getSelectedConfig() {
+    if (!this.selectedConfigId && this.configs.length > 0) {
+      return this.configs[0];
+    }
+    return this.configs.find(c => String(c.id) === String(this.selectedConfigId)) || this.configs[0] || null;
+  }
+
+  setSelectedConfigId(id) {
+    this.selectedConfigId = id;
+    try {
+      localStorage.setItem('chatlytics_selected_config_id', String(id));
+    } catch (_) {}
+  }
+
+  getSavedConfigId() {
+    try {
+      return localStorage.getItem('chatlytics_selected_config_id') || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async saveConfig(formData, configId = null) {
+    const payload = {
+      name: formData.name || `${formData.brand_name} Tracking`,
+      brand_name: formData.brand_name,
+      brand_domains: Array.isArray(formData.brand_domains) ? formData.brand_domains : sanitizeDomains(formData.brand_domains || ''),
+      keywords_prompts: Array.isArray(formData.prompts) ? formData.prompts : parsePrompts(formData.prompts || ''),
+      competitors: Array.isArray(formData.competitors) ? formData.competitors : parseCompetitors(formData.competitors || ''),
+      target_llms: formData.target_llms || ['openai', 'gemini'],
+      search_enabled: formData.search_enabled !== undefined ? Boolean(formData.search_enabled) : true,
+      schedule_interval: formData.schedule_interval || 'daily',
+      status: formData.status || 'active'
+    };
+
+    if (configId) {
+      return await apiClient.updateConfig(configId, payload);
+    } else {
+      return await apiClient.createConfig(payload);
+    }
+  }
+
+  async deleteConfig(configId) {
+    return await apiClient.deleteConfig(configId);
+  }
+
+  // --- Modal Controller for Config Creation / Edit ---
+  initModal(onSaveCallback) {
+    const modal = document.getElementById('config-modal');
+    if (!modal) return;
+
+    const form = document.getElementById('config-form');
+    const closeBtn = document.getElementById('config-modal-close');
+    const cancelBtn = document.getElementById('config-cancel');
+    const titleEl = document.getElementById('config-modal-title');
+    const errBox = document.getElementById('config-error');
+
+    const openBtns = document.querySelectorAll('#btn-new-config, [data-open-modal="new-config"]');
+
+    const showModal = (config = null) => {
+      if (errBox) errBox.textContent = '';
+      if (config) {
+        if (titleEl) titleEl.textContent = 'Tracking-Konfiguration bearbeiten';
+        form.dataset.configId = config.id;
+        document.getElementById('cfg-name').value = config.name || '';
+        document.getElementById('cfg-brand').value = config.brand_name || '';
+        document.getElementById('cfg-domains').value = (config.brand_domains || []).join(', ');
+        document.getElementById('cfg-prompts').value = (config.keywords_prompts || config.prompts || []).join('\n');
+        document.getElementById('cfg-competitors').value = (config.competitors || []).map(c => c.name || c).join(', ');
+        document.getElementById('cfg-interval').value = config.schedule_interval || 'daily';
+      } else {
+        if (titleEl) titleEl.textContent = 'Neue Tracking-Konfiguration anlegen';
+        delete form.dataset.configId;
+        form.reset();
+      }
+      modal.classList.remove('modal-hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      document.getElementById('cfg-brand')?.focus();
+    };
+
+    const hideModal = () => {
+      modal.classList.add('modal-hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    };
+
+    openBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        showModal();
+      });
+    });
+
+    closeBtn?.addEventListener('click', hideModal);
+    cancelBtn?.addEventListener('click', hideModal);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('modal-hidden')) {
+        hideModal();
+      }
+    });
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errBox) errBox.textContent = '';
+      const submitBtn = form.querySelector('button[type="submit"]');
+
+      const configId = form.dataset.configId || null;
+      const brandName = document.getElementById('cfg-brand')?.value.trim();
+      const rawDomains = document.getElementById('cfg-domains')?.value.trim();
+      const rawPrompts = document.getElementById('cfg-prompts')?.value.trim();
+      const rawCompetitors = document.getElementById('cfg-competitors')?.value.trim();
+      const name = document.getElementById('cfg-name')?.value.trim() || `${brandName} Tracking`;
+      const interval = document.getElementById('cfg-interval')?.value || 'daily';
+
+      if (!brandName) {
+        if (errBox) errBox.textContent = 'Bitte geben Sie einen Markennamen an.';
+        return;
+      }
+
+      const domains = sanitizeDomains(rawDomains);
+      if (domains.length === 0) {
+        if (errBox) errBox.textContent = 'Bitte geben Sie mindestens eine gültige Domain an (z.B. meinedomain.de).';
+        return;
+      }
+
+      const prompts = parsePrompts(rawPrompts);
+      if (prompts.length === 0) {
+        if (errBox) errBox.textContent = 'Bitte hinterlegen Sie mindestens einen Such-Prompt.';
+        return;
+      }
+
+      try {
+        if (submitBtn) submitBtn.disabled = true;
+        const saved = await this.saveConfig({
+          name,
+          brand_name: brandName,
+          brand_domains: domains,
+          prompts,
+          competitors: rawCompetitors,
+          schedule_interval: interval
+        }, configId);
+
+        hideModal();
+        if (typeof onSaveCallback === 'function') {
+          onSaveCallback(saved);
+        }
+      } catch (err) {
+        if (errBox) errBox.textContent = err.message;
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+
+    this.showModal = showModal;
+    this.hideModal = hideModal;
+  }
+}
+
+export const configs = new ConfigManager();
+
+if (typeof window !== 'undefined') {
+  window.configs = configs;
+  window.ConfigManager = ConfigManager;
+  window.sanitizeDomains = sanitizeDomains;
+}
+
+// CommonJS compatibility export for test runners
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    sanitizeDomains,
+    parsePrompts,
+    parseCompetitors,
+    ConfigManager,
+    configs
+  };
+}

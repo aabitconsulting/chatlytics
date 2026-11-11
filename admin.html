@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="admin.meta_title">Chatlytics.de — Owner Cockpit & Systemverwaltung</title>
+  <meta name="description" content="Chatlytics Owner Cockpit: Benutzerverwaltung, Guthabenanpassung, Magic Audit Links und Demodaten-Seeder.">
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body class="admin-body">
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <div class="navbar-brand">
+        <a href="index.html" class="logo">
+          <span class="logo-mark" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+              <rect x="2" y="2" width="12" height="12"/>
+              <path d="M2 8h12M8 2v12"/>
+            </svg>
+          </span>
+          <span class="logo-text">Chatlytics<span class="logo-tld">.de</span></span>
+        </a>
+        <span class="badge badge-admin" data-i18n="admin.badge_owner">Owner Cockpit</span>
+      </div>
+
+      <nav class="navbar-nav">
+        <a href="dashboard.html" class="nav-link" data-i18n="nav.dashboard">Dashboard</a>
+        <a href="admin.html" class="nav-link active" data-i18n="nav.admin">Administration</a>
+      </nav>
+
+      <div class="navbar-actions">
+        <!-- Language Switcher -->
+        <div class="lang-switch">
+          <button id="btn-lang-de" class="btn-lang active" data-lang="de">DE</button>
+          <span class="lang-divider">/</span>
+          <button id="btn-lang-en" class="btn-lang" data-lang="en">EN</button>
+        </div>
+
+        <!-- Current User Profile & Logout -->
+        <div class="user-profile-menu">
+          <span id="nav-user-email" class="user-email-text">admin@chatlytics.de</span>
+          <button id="btn-logout" class="btn btn-sm btn-outline" data-i18n="auth.logout">Abmelden</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container admin-main">
+    <!-- Page Header & Action Bar -->
+    <section class="admin-header-section">
+      <div class="admin-header-text">
+        <h1 data-i18n="admin.page_title">Owner Cockpit & Systemverwaltung</h1>
+        <p class="admin-subtitle" data-i18n="admin.page_subtitle">
+          Zentrale Verwaltung von Mandanten, Guthaben, Magic Audit Links und Demodaten.
+        </p>
+      </div>
+      <div class="admin-header-actions">
+        <button id="btn-seed-demo" class="btn btn-primary btn-seed-demo">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+            <polygon points="9,1 3,9 8,9 7,15 13,7 8,7"/>
+          </svg>
+          <span id="btn-seed-demo-text" data-i18n="admin.btn_seed_demo">1-Click Demodaten generieren</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Platform KPI Overview Cards -->
+    <section class="kpi-grid admin-kpi-grid" aria-label="Plattform Kennzahlen">
+      <div class="kpi-card" id="card-kpi-users">
+        <div class="kpi-label" data-i18n="admin.kpi_users_label">Registrierte Benutzer</div>
+        <div class="kpi-value" id="kpi-total-users">—</div>
+        <div class="kpi-subtext" data-i18n="admin.kpi_users_sub">Aktive Mandantenkonten</div>
+      </div>
+
+      <div class="kpi-card" id="card-kpi-configs">
+        <div class="kpi-label" data-i18n="admin.kpi_configs_label">Tracking-Konfigurationen</div>
+        <div class="kpi-value" id="kpi-total-configs">—</div>
+        <div class="kpi-subtext" data-i18n="admin.kpi_configs_sub">Überwachte Prompt-Keywords</div>
+      </div>
+
+      <div class="kpi-card" id="card-kpi-runs">
+        <div class="kpi-label" data-i18n="admin.kpi_runs_label">Ausgeführte Runs</div>
+        <div class="kpi-value" id="kpi-total-runs">—</div>
+        <div class="kpi-subtext" data-i18n="admin.kpi_runs_sub">LLM-Audits gesamt</div>
+      </div>
+
+      <div class="kpi-card" id="card-kpi-credits">
+        <div class="kpi-label" data-i18n="admin.kpi_credits_label">Verfügbare Credits</div>
+        <div class="kpi-value" id="kpi-total-credits">—</div>
+        <div class="kpi-subtext" data-i18n="admin.kpi_credits_sub">Im Umlauf befindlich</div>
+      </div>
+    </section>
+
+    <!-- User Directory Table Section -->
+    <section class="admin-table-section">
+      <div class="section-toolbar">
+        <div class="toolbar-title-group">
+          <h2 data-i18n="admin.table_title">Benutzerverzeichnis</h2>
+          <span id="user-count-badge" class="badge badge-secondary">0 Benutzer</span>
+        </div>
+
+        <div class="toolbar-search-group">
+          <label for="input-user-search" class="visually-hidden" data-i18n="admin.search_label">Benutzer suchen</label>
+          <div class="search-input-wrapper">
+            <span class="search-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+                <circle cx="7" cy="7" r="4.5"/>
+                <path d="M10.5 10.5L14 14"/>
+              </svg>
+            </span>
+            <input 
+              type="search" 
+              id="input-user-search" 
+              class="form-input search-input" 
+              placeholder="Suche nach E-Mail oder Unternehmen..."
+              data-i18n-placeholder="admin.search_placeholder"
+              autocomplete="off"
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- Users Table Wrapper (Responsive) -->
+      <div class="table-responsive" id="users-table-container">
+        <table class="table users-table" id="users-table">
+          <thead>
+            <tr>
+              <th scope="col" style="width: 60px;">ID</th>
+              <th scope="col" data-i18n="admin.col_email">E-Mail</th>
+              <th scope="col" data-i18n="admin.col_company">Unternehmen</th>
+              <th scope="col" data-i18n="admin.col_tier">Tarif</th>
+              <th scope="col" data-i18n="admin.col_credits">Credits</th>
+              <th scope="col" data-i18n="admin.col_runs">Runs</th>
+              <th scope="col" data-i18n="admin.col_status">Status</th>
+              <th scope="col" data-i18n="admin.col_created">Registriert</th>
+              <th scope="col" class="text-right" data-i18n="admin.col_actions">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <!-- Dynamically populated via assets/js/admin.js -->
+          </tbody>
+        </table>
+
+        <!-- Empty State Container (Displayed when 0 users match) -->
+        <div id="users-empty-state" class="empty-state" style="display: none;">
+          <div class="empty-state-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <circle cx="9" cy="8" r="4"/>
+              <path d="M2 20c0-3.5 3.5-6 7-6s7 2.5 7 6M17 8a3 3 0 010 6M22 20c0-2.5-2-4.5-4.5-5"/>
+            </svg>
+          </div>
+          <h3 class="empty-state-title" data-i18n="admin.empty_title">Keine Benutzerkonten gefunden</h3>
+          <p class="empty-state-desc" data-i18n="admin.empty_desc">
+            Es wurden keine Benutzerkonten gefunden. Passen Sie die Suche an oder generieren Sie realistische Demodaten.
+          </p>
+          <button id="btn-empty-seed-demo" class="btn btn-secondary">
+            <span data-i18n="admin.btn_seed_demo">1-Click Demodaten generieren</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Pagination Controls -->
+      <nav class="pagination-bar" id="users-pagination" aria-label="Benutzer Pagination">
+        <button id="btn-page-prev" class="btn btn-sm btn-outline" disabled data-i18n="pagination.prev">← Zurück</button>
+        <span id="page-indicator" class="page-indicator">Seite 1 von 1</span>
+        <button id="btn-page-next" class="btn btn-sm btn-outline" disabled data-i18n="pagination.next">Weiter →</button>
+      </nav>
+    </section>
+  </main>
+
+  <!-- Credit Adjustment Modal Dialog -->
+  <div id="credit-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="credit-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="credit-modal-title" class="modal-title" data-i18n="admin.modal_credit_title">Credits anpassen</h3>
+        <button type="button" class="btn-close" id="btn-credit-modal-close" aria-label="Schließen">✕</button>
+      </div>
+      <form id="form-adjust-credits" class="modal-body">
+        <input type="hidden" id="credit-user-id" value="">
+        <div class="form-info-row">
+          <span class="info-label" data-i18n="admin.modal_user_label">Benutzer:</span>
+          <strong id="credit-user-email" class="info-value">—</strong>
+        </div>
+        <div class="form-info-row">
+          <span class="info-label" data-i18n="admin.modal_current_credits">Aktuelles Guthaben:</span>
+          <span id="credit-current-balance" class="badge badge-primary">0</span>
+        </div>
+
+        <div class="form-group">
+          <label for="input-credit-delta" class="form-label" data-i18n="admin.modal_delta_label">Guthaben-Änderung (Delta +/-):</label>
+          <input 
+            type="number" 
+            id="input-credit-delta" 
+            name="delta" 
+            class="form-input" 
+            placeholder="z. B. +50 oder -20" 
+            required 
+            step="1"
+          >
+          <small class="form-hint" data-i18n="admin.modal_delta_hint">
+            Positive Werte addieren Credits, negative Werte ziehen Credits ab (minimaler Endwert: 0).
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label for="input-credit-reason" class="form-label" data-i18n="admin.modal_reason_label">Begründung (optional):</label>
+          <input 
+            type="text" 
+            id="input-credit-reason" 
+            name="reason" 
+            class="form-input" 
+            placeholder="z. B. Testguthaben, Kulanz, Upgrade" 
+            maxlength="255"
+          >
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btn-credit-cancel" class="btn btn-outline" data-i18n="common.cancel">Abbrechen</button>
+          <button type="submit" id="btn-credit-submit" class="btn btn-primary" data-i18n="admin.modal_credit_save">Credits speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Magic Audit Link Generator Modal Dialog -->
+  <div id="magic-audit-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="magic-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="magic-modal-title" class="modal-title" data-i18n="admin.modal_magic_title">Magic Audit Link</h3>
+        <button type="button" class="btn-close" id="btn-magic-modal-close" aria-label="Schließen">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-description" data-i18n="admin.modal_magic_desc">
+          Dieser sichere Link gewährt schreibgeschützten Zugriff auf das Client-Dashboard dieses Kontos ohne Anmeldedaten:
+        </p>
+        <div class="share-url-container">
+          <input type="text" id="input-magic-url" class="form-input magic-url-input" readonly>
+          <button id="btn-copy-magic-url" class="btn btn-secondary">
+            <span id="btn-copy-magic-text" data-i18n="admin.modal_magic_copy">Kopieren</span>
+          </button>
+        </div>
+        <div class="magic-link-test-row">
+          <a id="link-magic-preview" href="#" target="_blank" rel="noopener noreferrer" class="link-preview" data-i18n="admin.modal_magic_open">
+            In neuem Tab öffnen ↗
+          </a>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-magic-close" class="btn btn-outline" data-i18n="common.close">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Modular Scripts -->
+  <script src="assets/js/i18n.js"></script>
+  <script src="assets/js/api-client.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/admin.js"></script>
+</body>
+</html>

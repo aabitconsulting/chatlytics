@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chatlytics.de — Client Analytics Dashboard</title>
+  <meta name="description" content="AI Visibility, Share-of-Model und 4-Quadrant GEO Action Panel für Ihre B2B Marke.">
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body class="dashboard-body">
+
+  <!-- Magic Audit Persistent Read-Only Preview Banner (Feature 27) -->
+  <div id="magic-audit-banner" class="magic-audit-banner" style="display: none;">
+    <span class="banner-icon" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
+        <circle cx="8" cy="8" r="2"/>
+      </svg>
+    </span>
+    <span class="banner-text" data-i18n="audit.banner">
+      Sie betrachten ein geteiltes Chatlytics Magic Audit (Schreibgeschützt).
+    </span>
+  </div>
+
+  <!-- Dashboard Navigation Header (Swiss Command Bar) -->
+  <header class="dashboard-header navbar">
+    <div class="container-fluid navbar-inner">
+      <div class="header-left">
+        <a href="index.html" class="logo">
+          <span class="logo-mark" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+              <rect x="2" y="2" width="12" height="12"/>
+              <path d="M2 8h12M8 2v12"/>
+            </svg>
+          </span>
+          <span class="logo-text">Chatlytics<strong>.de</strong></span>
+        </a>
+
+        <!-- Config Switcher Dropdown -->
+        <div class="config-selector-wrapper">
+          <label for="config-select" class="sr-only">Tracking-Konfiguration</label>
+          <select id="config-select" class="form-control form-select">
+            <option value="">Alle Konfigurationen</option>
+          </select>
+          <button id="btn-new-config" class="btn btn-outline btn-sm" data-i18n="dashboard.new_config">
+            + Neue Konfiguration
+          </button>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <!-- Period Filter Segmented Controls (Feature 26.2) -->
+        <div id="period-filter" class="segmented-control" role="group" aria-label="Zeitraumfilter">
+          <button type="button" class="segment-btn" data-period="7d">7d</button>
+          <button type="button" class="segment-btn" data-period="14d">14d</button>
+          <button type="button" class="segment-btn active" data-period="30d">30d</button>
+          <button type="button" class="segment-btn" data-period="90d">90d</button>
+          <button type="button" class="segment-btn" data-period="all">All</button>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Instant Run Trigger Button (Feature 26.5) -->
+        <button id="btn-trigger-run" class="btn btn-primary btn-sm btn-trigger-run">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+            <polygon points="2,1 11,6 2,11"/>
+          </svg>
+          <span data-i18n="dashboard.trigger_run">Run ausführen</span>
+        </button>
+
+        <!-- Credit Balance Badge -->
+        <div class="credits-badge" id="user-credits-badge" title="Verbleibende Audit-Runs">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+            <polygon points="9,1 3,9 8,9 7,15 13,7 8,7"/>
+          </svg>
+          <span id="header-credits-val" class="font-mono">40</span>
+          <span class="credits-label">Credits</span>
+        </div>
+
+        <!-- Share Magic Audit Link Button -->
+        <button id="btn-share-audit" class="btn btn-secondary btn-sm" title="Magic Audit Link kopieren">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <path d="M6.5 9.5l3-3M5 11a2.5 2.5 0 010-3.5l2-2M11 5a2.5 2.5 0 010 3.5l-2 2"/>
+          </svg>
+          <span data-i18n="dashboard.share">Teilen</span>
+        </button>
+
+        <!-- Language Switcher -->
+        <button id="btn-lang-toggle" class="btn btn-secondary btn-sm" aria-label="Sprache wechseln">
+          <span id="current-lang-label">EN</span>
+        </button>
+
+        <!-- User Menu / Nav Links -->
+        <nav class="user-nav" aria-label="Account Navigation">
+          <a href="#billing" id="billing-nav" class="nav-item" data-i18n="nav.billing">Abrechnung</a>
+          <a href="#settings" id="profile-settings" class="nav-item" data-i18n="nav.settings">Einstellungen</a>
+          <a href="admin.html" id="admin-nav" class="nav-item hidden" data-i18n="nav.admin">Admin</a>
+          <button id="btn-logout" class="btn btn-ghost btn-sm text-muted" data-i18n="nav.logout">Abmelden</button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="dashboard-main container-fluid">
+
+    <!-- Top 6-Card KPI Bar (Feature 26.3 & Combination 3.7) -->
+    <section class="kpi-section" aria-label="Key Performance Indicators">
+      <div class="kpi-grid">
+        <!-- 1. Share-of-Model (SoM %) -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title" data-i18n="kpi.som">Share-of-Model (SoM)</span>
+            <span id="kpi-som-delta" class="delta-badge delta-neutral">—</span>
+          </div>
+          <div class="kpi-value-row">
+            <span id="kpi-som" class="kpi-value font-mono">0.0 %</span>
+          </div>
+          <div class="kpi-subtext" data-i18n="kpi.som_sub">Anteil der Nennungen an allen LLM-Runs</div>
+        </div>
+
+        <!-- 2. Visibility Index (%) -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title" data-i18n="kpi.visibility">Visibility Index</span>
+            <span id="kpi-visibility-delta" class="delta-badge delta-neutral">—</span>
+          </div>
+          <div class="kpi-value-row">
+            <span id="kpi-visibility" class="kpi-value font-mono">0.0 %</span>
+          </div>
+          <div class="kpi-subtext" data-i18n="kpi.visibility_sub">Markennennung oder Quellenzitat vorhanden</div>
+        </div>
+
+        <!-- 3. Average Earliness (%) -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title" data-i18n="kpi.earliness">Average Earliness</span>
+            <span id="kpi-earliness-delta" class="delta-badge delta-neutral">—</span>
+          </div>
+          <div class="kpi-value-row">
+            <span id="kpi-earliness" class="kpi-value font-mono">0.0 %</span>
+          </div>
+          <div class="kpi-subtext" data-i18n="kpi.earliness_sub">Durchschnittliche relative Position im Text</div>
+        </div>
+
+        <!-- 4. Total Runs Count -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title" data-i18n="kpi.total_runs">Total Runs</span>
+            <span id="kpi-runs-delta" class="delta-badge delta-neutral">—</span>
+          </div>
+          <div class="kpi-value-row">
+            <span id="kpi-runs" class="kpi-value font-mono">0</span>
+          </div>
+          <div class="kpi-subtext" data-i18n="kpi.runs_sub">Durchgeführte Multi-Model Evaluierungen</div>
+        </div>
+
+        <!-- 5. Citation Share (%) -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title" data-i18n="kpi.citation_share">Citations Share</span>
+          </div>
+          <div class="kpi-value-row">
+            <span id="kpi-citations" class="kpi-value font-mono">0.0 %</span>
+          </div>
+          <div class="kpi-subtext" data-i18n="kpi.citation_share_sub">Eigene Domain in Grounding-Quellen</div>
+        </div>
+
+        <!-- 6. Credits Remaining -->
+        <div class="kpi-card card">
+          <div class="kpi-header">
+            <span class="kpi-title" data-i18n="kpi.credits">Credits Remaining</span>
+          </div>
+          <div class="kpi-value-row">
+            <span id="kpi-credits" class="kpi-value font-mono">0</span>
+          </div>
+          <div class="kpi-subtext" data-i18n="kpi.credits_sub">Guthaben für Live- und Queue-Audits</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Empty State (Boundary 4.2) -->
+    <div id="empty-state" class="card empty-state-card" style="display: none;">
+      <div class="empty-state-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M3 3v18h18M7 16v-5M12 16V7M17 16v-3"/>
+        </svg>
+      </div>
+      <h3 class="empty-state-title" data-i18n="dashboard.empty_title">Keine Analysedaten im gewählten Zeitraum</h3>
+      <p class="empty-state-desc" data-i18n="dashboard.empty_desc">
+        Für die ausgewählte Konfiguration liegen im Zeitraum noch keine abgeschlossenen Audit-Läufe vor. Starten Sie jetzt Ihre erste Analyse!
+      </p>
+      <button class="btn btn-primary" id="btn-empty-trigger">
+        Ersten Audit-Run starten
+      </button>
+    </div>
+
+    <!-- Analytics Dashboard Data Grid -->
+    <div id="dashboard-data-grid" class="dashboard-grid">
+
+      <!-- Left Column: MECE Trend & Competitor Leaderboard -->
+      <div class="grid-col grid-col-main">
+
+        <!-- MECE Category Trend Visualizer (Feature 26) -->
+        <section class="card mece-trend-card">
+          <div class="card-header">
+            <h3 class="card-title" data-i18n="dashboard.mece_trend">MECE-Kategorieverteilung</h3>
+            <span class="card-hint" data-i18n="dashboard.mece_sum_hint">100% lückenlos und überschneidungsfrei</span>
+          </div>
+          <div class="card-body">
+            <!-- Progress Bar Stack -->
+            <div id="mece-bar" class="mece-progress-bar">
+              <div id="mece-bar-win" class="mece-bar-segment mece-bar-direct-win" style="width: 0%;" title="Direct Win"></div>
+              <div id="mece-bar-halo" class="mece-bar-segment mece-bar-brand-halo" style="width: 0%;" title="Brand Halo"></div>
+              <div id="mece-bar-takeover" class="mece-bar-segment mece-bar-competitor-takeover" style="width: 0%;" title="Competitor Takeover"></div>
+              <div id="mece-bar-generic" class="mece-bar-segment mece-bar-generic" style="width: 0%;" title="Generic"></div>
+            </div>
+
+            <!-- MECE Breakdown Metrics Grid -->
+            <div class="mece-legend-grid">
+              <div class="legend-item">
+                <span class="badge mece-direct-win">1_DIRECT_WIN</span>
+                <div class="legend-metric">
+                  <span id="mece-count-win" class="font-mono">0</span>
+                  <span id="mece-pct-win" class="text-muted text-xs font-mono">(0.0%)</span>
+                </div>
+              </div>
+              <div class="legend-item">
+                <span class="badge mece-brand-halo">2_BRAND_HALO</span>
+                <div class="legend-metric">
+                  <span id="mece-count-halo" class="font-mono">0</span>
+                  <span id="mece-pct-halo" class="text-muted text-xs font-mono">(0.0%)</span>
+                </div>
+              </div>
+              <div class="legend-item">
+                <span class="badge mece-competitor-takeover">3_COMPETITOR_TAKEOVER</span>
+                <div class="legend-metric">
+                  <span id="mece-count-takeover" class="font-mono">0</span>
+                  <span id="mece-pct-takeover" class="text-muted text-xs font-mono">(0.0%)</span>
+                </div>
+              </div>
+              <div class="legend-item">
+                <span class="badge mece-generic">4_GENERIC</span>
+                <div class="legend-metric">
+                  <span id="mece-count-generic" class="font-mono">0</span>
+                  <span id="mece-pct-generic" class="text-muted text-xs font-mono">(0.0%)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Competitor Leaderboard Table (Feature 26) -->
+        <section class="card competitor-card">
+          <div class="card-header">
+            <h3 class="card-title" data-i18n="dashboard.competitors">Wettbewerber-Leaderboard</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table" id="competitor-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">#</th>
+                  <th data-i18n="table.competitor">Wettbewerber</th>
+                  <th data-i18n="table.domain">Domain</th>
+                  <th class="text-right" data-i18n="table.visibility_pct">Sichtbarkeit</th>
+                  <th class="text-right" data-i18n="table.mentions">Nennungen</th>
+                  <th class="text-right" data-i18n="table.recommendations">Empfehlungen</th>
+                  <th class="text-right" data-i18n="table.avg_pos">Ø Position</th>
+                </tr>
+              </thead>
+              <tbody id="competitors-tbody">
+                <tr><td colspan="7" class="text-center text-muted">Lade Wettbewerbsdaten...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Grounding Citations Table (Feature 26) -->
+        <section class="card citations-card">
+          <div class="card-header">
+            <h3 class="card-title" data-i18n="dashboard.citations">Grounding-Zitierungen &amp; Quellen</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table" id="citations-table">
+              <thead>
+                <tr>
+                  <th data-i18n="table.source_domain">Quell-Domain</th>
+                  <th class="text-center" data-i18n="table.domain_type">Typ</th>
+                  <th class="text-right" data-i18n="table.citation_count">Zitate</th>
+                </tr>
+              </thead>
+              <tbody id="citations-tbody">
+                <tr><td colspan="3" class="text-center text-muted">Lade Zitierungsdaten...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Right Column: 4-Quadrant GEO Action Panel -->
+      <div class="grid-col grid-col-side">
+
+        <!-- 4-Quadrant GEO Action Panel (Feature 26.4 & Combination 3.7) -->
+        <section id="geo-action-panel" class="card geo-action-panel">
+          <div class="card-header">
+            <div class="geo-header-title">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <circle cx="8" cy="8" r="6.5"/>
+                <polygon points="10.5,5.5 9,9 5.5,10.5 7,7" fill="currentColor"/>
+              </svg>
+              <h3 class="card-title" data-i18n="geo.title">4-Quadrant GEO Action Panel</h3>
+            </div>
+            <div class="geo-status-indicator">
+              <span id="geo-active-badge" class="badge geo-badge geo-none">NONE</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="geo-prescription-box">
+              <span class="prescription-label" data-i18n="geo.prescription_label">Empfohlene Handlungsanweisung:</span>
+              <p id="geo-prescription" class="prescription-text">
+                Keine kritischen GEO-Anomalien festgestellt. Sichtbarkeit stabil.
+              </p>
+            </div>
+
+            <!-- Interactive 2x2 SVG Coordinate Grid -->
+            <div class="geo-svg-container">
+              <div class="font-mono text-xs text-muted" style="margin-bottom: 6px;" data-i18n="geo.svg_title">
+                2x2 KORRELATIONS-KOORDINATENFELD
+              </div>
+              <svg id="geo-svg-matrix" class="geo-svg-matrix" viewBox="0 0 280 156" role="img" aria-label="2x2 GEO Diagnostic Matrix">
+                <!-- Q1: Citation Hijack -->
+                <rect id="geo-cell-hijack" class="geo-svg-cell" x="4" y="4" width="132" height="70"/>
+                <text x="12" y="24" fill="#92400E" font-family="monospace" font-weight="bold" font-size="9">01. CITATION HIJACK</text>
+                <text x="12" y="40" fill="#475569" font-family="monospace" font-size="8">Cited / Rival Leads</text>
+
+                <!-- Q2: Parametric Blindspot -->
+                <rect id="geo-cell-blindspot" class="geo-svg-cell" x="144" y="4" width="132" height="70"/>
+                <text x="152" y="24" fill="#991B1B" font-family="monospace" font-weight="bold" font-size="9">02. BLINDSPOT</text>
+                <text x="152" y="40" fill="#475569" font-family="monospace" font-size="8">Cited / Brand Omitted</text>
+
+                <!-- Q3: Brand Halo Trap -->
+                <rect id="geo-cell-trap" class="geo-svg-cell" x="4" y="82" width="132" height="70"/>
+                <text x="12" y="102" fill="#5B21B6" font-family="monospace" font-weight="bold" font-size="9">03. HALO TRAP</text>
+                <text x="12" y="118" fill="#475569" font-family="monospace" font-size="8">Secondary Position</text>
+
+                <!-- Q4: Buried Winner -->
+                <rect id="geo-cell-buried" class="geo-svg-cell" x="144" y="82" width="132" height="70"/>
+                <text x="152" y="102" fill="#1E40AF" font-family="monospace" font-weight="bold" font-size="9">04. BURIED WINNER</text>
+                <text x="152" y="118" fill="#475569" font-family="monospace" font-size="8">Late Offset (&gt;50%)</text>
+              </svg>
+            </div>
+
+            <div class="geo-quadrants-status">
+              <h4 class="geo-subhead" data-i18n="geo.matrix_title">Diagnose-Matrix:</h4>
+              <ul class="geo-quadrant-list">
+                <li id="geo-stat-hijack" class="geo-item">
+                  <div class="geo-item-header">
+                    <span class="geo-name">1. Citation Hijack</span>
+                    <span id="geo-count-hijack" class="geo-count font-mono">0</span>
+                  </div>
+                  <span class="geo-desc">Wettbewerber kapert Ihre Quellen.</span>
+                </li>
+                <li id="geo-stat-blindspot" class="geo-item">
+                  <div class="geo-item-header">
+                    <span class="geo-name">2. Parametric Blindspot</span>
+                    <span id="geo-count-blindspot" class="geo-count font-mono">0</span>
+                  </div>
+                  <span class="geo-desc">Domain zitiert, aber Marke im Text ausgelassen.</span>
+                </li>
+                <li id="geo-stat-trap" class="geo-item">
+                  <div class="geo-item-header">
+                    <span class="geo-name">3. Brand Halo Trap</span>
+                    <span id="geo-count-trap" class="geo-count font-mono">0</span>
+                  </div>
+                  <span class="geo-desc">Marke im Schatten des Wettbewerbers.</span>
+                </li>
+                <li id="geo-stat-buried" class="geo-item">
+                  <div class="geo-item-header">
+                    <span class="geo-name">4. Buried Winner</span>
+                    <span id="geo-count-buried" class="geo-count font-mono">0</span>
+                  </div>
+                  <span class="geo-desc">Gewinner, aber spät genannt (&gt;50%).</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Conversion CTA Banner for Unregistered Magic Audit Visitors (Feature 27.4) -->
+  <aside id="magic-audit-cta" class="magic-audit-cta-banner" style="display: none;">
+    <div class="container-fluid cta-inner">
+      <div class="cta-message">
+        <strong data-i18n="audit.cta_text">
+          Möchten Sie kontinuierliche KI-Sichtbarkeitsanalysen für Ihre eigene Marke durchführen?
+        </strong>
+      </div>
+      <div class="cta-actions">
+        <a href="index.html?auth=signup" class="btn btn-primary btn-sm" data-i18n="audit.cta_btn">
+          Jetzt kostenlos registrieren (40 Runs)
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Create / Edit Config Modal -->
+  <div id="config-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <h3 id="config-modal-title" class="modal-title">Neue Tracking-Konfiguration</h3>
+        <button id="config-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
+      </div>
+      <form id="config-form" class="modal-body">
+        <div id="config-error" class="alert alert-error" role="alert"></div>
+
+        <div class="form-group">
+          <label for="cfg-brand" class="form-label">Markenname *</label>
+          <input type="text" id="cfg-brand" class="form-control" placeholder="z.B. Personio" required>
+        </div>
+
+        <div class="form-group">
+          <label for="cfg-domains" class="form-label">Eigene Domains (kommagetrennt) *</label>
+          <input type="text" id="cfg-domains" class="form-control" placeholder="personio.de, personio.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="cfg-prompts" class="form-label">Prompts / Suchanfragen (eine pro Zeile) *</label>
+          <textarea id="cfg-prompts" class="form-control form-textarea" rows="4" placeholder="Welche HR-Software eignet sich für den Mittelstand?" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="cfg-competitors" class="form-label">Wettbewerber (kommagetrennt)</label>
+          <input type="text" id="cfg-competitors" class="form-control" placeholder="Workday (workday.com), SAP (sap.com)">
+        </div>
+
+        <div class="form-group">
+          <label for="cfg-name" class="form-label">Konfigurationsname</label>
+          <input type="text" id="cfg-name" class="form-control" placeholder="z.B. Personio HR DACH Tracking">
+        </div>
+
+        <div class="form-group">
+          <label for="cfg-interval" class="form-label">Audit-Intervall</label>
+          <select id="cfg-interval" class="form-control form-select">
+            <option value="daily" selected>Täglich (Daily)</option>
+            <option value="weekly">Wöchentlich (Weekly)</option>
+            <option value="manual">Nur Manuell (Manual)</option>
+          </select>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="config-cancel" class="btn btn-secondary">Abbrechen</button>
+          <button type="submit" class="btn btn-primary">Konfiguration speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Share Magic Audit Modal -->
+  <div id="share-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <h3 class="modal-title">Magic Audit Share-Link</h3>
+        <button id="share-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-sm text-muted" style="margin-bottom: 12px;">
+          Über diesen sicheren Token-Link können Stakeholder und Kunden Ihr Dashboard im schreibgeschützten Modus ohne Login einsehen.
+        </p>
+        <div class="form-group">
+          <input type="text" id="share-url-input" class="form-control font-mono" readonly>
+        </div>
+        <button id="btn-copy-share-url" class="btn btn-primary btn-block">Link in die Zwischenablage kopieren</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="assets/js/dashboard.js"></script>
+</body>
+</html>

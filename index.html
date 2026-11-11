@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chatlytics.de — AI Visibility &amp; Share-of-Model (SoM) Analytics</title>
+  <meta name="description" content="AI Visibility und Share-of-Model (SoM) Analytics für europäische B2B-Marken in ChatGPT, Claude und Google Gemini.">
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+  <!-- Header / Navigation (Swiss Technical Command Bar) -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <a href="index.html" class="logo">
+        <span class="logo-mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+            <rect x="2" y="2" width="12" height="12"/>
+            <path d="M2 8h12M8 2v12"/>
+          </svg>
+        </span>
+        <span class="logo-text">Chatlytics<strong>.de</strong></span>
+      </a>
+
+      <nav class="nav-links" aria-label="Primary Navigation">
+        <a href="#race" data-i18n="nav.race">3-Modell-Rennen</a>
+        <a href="#simulator" data-i18n="nav.simulator">MECE-Simulator</a>
+        <a href="#features" data-i18n="nav.features">Funktionen</a>
+        <a href="#pricing" data-i18n="nav.pricing">Preise</a>
+        <a href="#faq" data-i18n="nav.faq">FAQ</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button id="btn-lang-toggle" class="btn btn-secondary btn-sm" aria-label="Sprache wechseln / Switch Language">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5"/>
+            <path d="M1.5 8h13M8 1.5c2 2 2 11 0 13M8 1.5c-2 2-2 11 0 13"/>
+          </svg>
+          <span id="current-lang-label">EN</span>
+        </button>
+        <button id="btn-open-login" class="btn btn-secondary btn-sm" data-i18n="nav.login">Anmelden</button>
+        <button id="btn-open-signup" class="btn btn-primary btn-sm" data-i18n="nav.signup">Kostenlos starten</button>
+        <button id="btn-mobile-menu" class="btn-mobile-menu" aria-expanded="false" aria-controls="mobile-nav-drawer" aria-label="Menü öffnen">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+            <path d="M2 4.5h14M2 9h14M2 13.5h14"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Navigation Drawer (< 920px) -->
+    <nav id="mobile-nav-drawer" class="mobile-nav-drawer" aria-hidden="true" aria-label="Mobile Navigation">
+      <div class="mobile-drawer-links">
+        <a href="#race" data-i18n="nav.race">3-Modell-Rennen</a>
+        <a href="#simulator" data-i18n="nav.simulator">MECE-Simulator</a>
+        <a href="#features" data-i18n="nav.features">Funktionen</a>
+        <a href="#pricing" data-i18n="nav.pricing">Preise</a>
+        <a href="#faq" data-i18n="nav.faq">FAQ</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ACT 1: 3-Plane Dimensional Hero -->
+    <section id="hero-stage" class="hero-section">
+      <div class="container hero-layout">
+        <!-- Left Column: Swiss Asymmetric Copy & Primary Actions -->
+        <div class="hero-copy-col">
+          <div class="hero-badge">
+            <span class="badge-dot" aria-hidden="true"></span>
+            <span data-i18n="hero.badge">B2B Generative Engine Optimization (GEO) &amp; SoM</span>
+          </div>
+          <h1 class="hero-title" data-i18n="hero.title">
+            Chatlytics.de — AI Visibility &amp; Share-of-Model (SoM) Analytics für europäische B2B-Marken.
+          </h1>
+          <p class="hero-subtitle" data-i18n="hero.subtitle">
+            Messen und steuern Sie, wie ChatGPT, Claude und Google Gemini Ihre Marke und Wettbewerber wahrnehmen, zitieren und empfehlen. DSGVO-konform, deterministisch und auf Unternehmensebene analysiert.
+          </p>
+          <div class="hero-cta-group">
+            <button id="hero-btn-signup" class="btn btn-primary btn-lg" data-i18n="hero.cta_primary">
+              Kostenlos starten (40 Runs)
+            </button>
+            <a href="#simulator" class="btn btn-secondary btn-lg" data-i18n="hero.cta_secondary">
+              Live MECE Simulator testen
+            </a>
+          </div>
+          <div class="hero-trust-bar">
+            <span class="hero-trust-label" data-i18n="hero.trust_title">VERIFIZIERTE REFERENZ-ENTITÄTEN (DACH B2B):</span>
+            <div class="trust-logos">
+              <span class="trust-pill">Personio</span>
+              <span class="trust-pill">Celonis</span>
+              <span class="trust-pill">DeepL</span>
+              <span class="trust-pill">SAP Signavio</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: 3-Plane Dimensional Blueprint Stage -->
+        <div id="hero-dimensional-stage" class="hero-dimensional-stage" aria-label="Live Share-of-Model Telemetry Blueprint">
+          <!-- Plane 0: Background Coordinate Grid -->
+          <div class="hero-plane-bg" data-plane="bg" aria-hidden="true">
+            <div class="plane-ruler-top">
+              <span data-i18n="hero.plane_coord">KOORDINATEN-RASTER // UTF-8 CASE-FOLDING AKTIV</span>
+              <span>SCALE 000..240</span>
+            </div>
+            <div class="plane-ruler-bottom">
+              <span>LATENCY &lt;200MS</span>
+              <span>FRANKFURT DE-FRA1</span>
+            </div>
+          </div>
+
+          <!-- Plane 1: Subject Multi-LLM Synthesis Plate -->
+          <div class="hero-plane-subject" data-plane="subject">
+            <div class="plane-subject-header">
+              <span data-i18n="hero.index">SYS // 01 — DETERMINISTIC AI TELEMETRY</span>
+              <span class="badge mece-direct-win">1_DIRECT_WIN</span>
+            </div>
+
+            <div class="plane-prompt-box">
+              <span class="plane-prompt-tag" data-i18n="hero.plane_prompt_label">PROMPT_INPUT [DE_B2B]</span>
+              <div class="plane-prompt-text" data-i18n="hero.plane_prompt_val">
+                Welche HR-Software eignet sich am besten für den deutschen Mittelstand?
+              </div>
+            </div>
+
+            <div class="plane-synthesis-tape">
+              „Für den deutschen Mittelstand ist <mark class="token-mark token-brand">Personio</mark> die führende All-in-One HR-Software. Als internationale Alternative kommt <mark class="token-mark token-comp">Workday</mark> in Betracht.“
+            </div>
+
+            <!-- Deterministic SVG Earliness Caliper Diagram -->
+            <svg class="plane-caliper-svg" viewBox="0 0 420 56" role="img" aria-label="Character Earliness Caliper Ruler">
+              <line x1="8" y1="28" x2="412" y2="28" stroke="#475569" stroke-width="1.5"/>
+              <line x1="8" y1="18" x2="8" y2="38" stroke="#94A3B8" stroke-width="1.5"/>
+              <text x="8" y="13" fill="#94A3B8" font-family="monospace" font-size="9">IDX_000</text>
+
+              <!-- Brand Caliper Bracket (0 -> 34 chars) -->
+              <rect x="8" y="23" width="98" height="10" fill="#059669"/>
+              <line x1="106" y1="12" x2="106" y2="44" stroke="#10B981" stroke-width="2"/>
+              <text x="106" y="11" fill="#10B981" font-family="monospace" font-weight="bold" font-size="9">BRAND [034]</text>
+
+              <!-- Competitor Caliper Marker (105 chars) -->
+              <line x1="296" y1="12" x2="296" y2="44" stroke="#EF4444" stroke-width="2"/>
+              <text x="242" y="51" fill="#F87171" font-family="monospace" font-weight="bold" font-size="9">COMPETITOR [105]</text>
+            </svg>
+          </div>
+
+          <!-- Plane 2: Foreground Floating Callouts -->
+          <div class="hero-plane-fg" data-plane="fg">
+            <div class="fg-callout-card">
+              <span class="fg-callout-label" data-i18n="hero.plane_caliper_brand">MARKE ERKANNT // CHAR_IDX: 034</span>
+              <span class="fg-callout-val" data-i18n="hero.plane_delta">EARLINESS VORSPRUNG: +71 ZEICHEN</span>
+            </div>
+            <div class="fg-callout-card">
+              <span class="fg-callout-label" data-i18n="hero.plane_caliper_comp">1. WETTBEWERBER // CHAR_IDX: 105</span>
+              <span class="fg-callout-val font-mono">REL_POS: 26.15% VS. 80.77%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT 2: Signature Move & Engineered Peak — Scroll-Scrubbed 3-Model Race -->
+    <section id="race" class="section race-section">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-index" data-i18n="race.index">SYS // 02 — MULTI-MODEL TELEMETRY SCRUBBER</div>
+          <h2 class="section-title" data-i18n="race.title">
+            Ein Prompt. Drei KI-Modelle. Drei völlig verschiedene Realitäten.
+          </h2>
+          <p class="section-subtitle" data-i18n="race.subtitle">
+            Bewegen Sie das Mausrad oder den Playhead-Regler: Beobachten Sie Zeichen für Zeichen, wie dieselbe Marke in OpenAI gewinnt, in Claude in den Windschatten gerät und in Gemini trotz Domain-Zitat unsichtbar bleibt.
+          </p>
+        </div>
+
+        <!-- Scrubber Control Bar -->
+        <div class="race-control-bar">
+          <div class="race-prompt-banner">
+            <span class="race-prompt-tag" data-i18n="race.prompt_label">LIVE BENCHMARK PROMPT</span>
+            <span class="race-prompt-value" data-i18n="race.prompt_text">
+              „Welche HR-Software eignet sich am besten für den Mittelstand in Deutschland?“
+            </span>
+          </div>
+
+          <div class="race-scrubber-group">
+            <div class="race-scrubber-top">
+              <label for="race-scrubber" data-i18n="race.scrubber_label">TOKEN-STREAM PLAYHEAD</label>
+              <span id="race-scrubber-pct" class="font-mono">085%</span>
+            </div>
+            <input
+              type="range"
+              id="race-scrubber"
+              class="race-range-input"
+              min="0"
+              max="100"
+              value="85"
+              aria-label="Token Stream Playhead Scrubber"
+            >
+            <span class="text-xs text-muted" data-i18n="race.scrubber_hint">
+              Scrollen oder Regler ziehen zum Durchleuchten des Antwortstroms
+            </span>
+          </div>
+        </div>
+
+        <!-- Mobile Recomposed 3-Track Telemetry Header (< 900px) -->
+        <div class="race-mobile-tracks" role="tablist" aria-label="KI-Modell Auswahl">
+          <button type="button" class="race-track-tab active" data-race-tab="openai" role="tab" aria-selected="true">
+            <span class="race-track-name">01. OpenAI</span>
+            <div class="race-track-bar"><div id="race-mobile-fill-openai" class="race-track-fill" style="width: 85%;"></div></div>
+            <span class="badge mece-direct-win">WIN</span>
+          </button>
+          <button type="button" class="race-track-tab" data-race-tab="claude" role="tab" aria-selected="false">
+            <span class="race-track-name">02. Claude</span>
+            <div class="race-track-bar"><div id="race-mobile-fill-claude" class="race-track-fill" style="width: 85%;"></div></div>
+            <span class="badge mece-brand-halo">HALO</span>
+          </button>
+          <button type="button" class="race-track-tab" data-race-tab="gemini" role="tab" aria-selected="false">
+            <span class="race-track-name">03. Gemini</span>
+            <div class="race-track-bar"><div id="race-mobile-fill-gemini" class="race-track-fill" style="width: 85%;"></div></div>
+            <span class="badge mece-competitor-takeover">LOSS</span>
+          </button>
+        </div>
+
+        <!-- 3-Column Parallel Model Synthesis Grid -->
+        <div class="race-grid">
+          <!-- Column 1: OpenAI GPT-4o -->
+          <article class="race-card mobile-card-active" data-race-card="openai">
+            <div>
+              <div class="race-card-header">
+                <div>
+                  <div class="race-provider-title">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <circle cx="8" cy="8" r="6"/>
+                      <path d="M8 2v12M2 8h12"/>
+                    </svg>
+                    <span>OpenAI GPT-4o</span>
+                  </div>
+                  <span class="race-provider-sub" data-i18n="race.openai_role">Parametrische Synthese</span>
+                </div>
+                <span id="race-badge-openai" class="badge mece-direct-win">1_DIRECT_WIN</span>
+              </div>
+
+              <div id="race-stream-openai" class="race-stream-box">
+                Für den deutschen Mittelstand ist <mark class="token-mark token-brand">Personio</mark> die führende HR-Software mit durchgängiger Lohnabrechnung. Als internationale Option folgt <mark class="token-mark token-comp">Workday</mark>.
+              </div>
+            </div>
+
+            <div>
+              <div class="race-caliper-meter">
+                <div class="race-caliper-track">
+                  <div id="race-caliper-openai" class="race-caliper-fill" style="width: 85%;"></div>
+                </div>
+              </div>
+              <div class="race-telemetry-row">
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.char_offset">CHAR_IDX</span>
+                  <span id="race-chars-openai" class="race-metric-val">034</span>
+                </div>
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.rel_pos">REL_POS</span>
+                  <span id="race-rel-openai" class="race-metric-val">23.8%</span>
+                </div>
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.geo_diag">GEO_DIAGNOSE</span>
+                  <span class="race-metric-val">NONE (OPTIMAL)</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Column 2: Anthropic Claude -->
+          <article class="race-card" data-race-card="claude">
+            <div>
+              <div class="race-card-header">
+                <div>
+                  <div class="race-provider-title">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <polygon points="8,2 14,14 2,14"/>
+                    </svg>
+                    <span>Anthropic Claude 3.5</span>
+                  </div>
+                  <span class="race-provider-sub" data-i18n="race.claude_role">Konservative Enterprise-Gewichtung</span>
+                </div>
+                <span id="race-badge-claude" class="badge mece-brand-halo">2_BRAND_HALO</span>
+              </div>
+
+              <div id="race-stream-claude" class="race-stream-box">
+                Im Enterprise- und Mittelstandssegment gilt <mark class="token-mark token-comp">Workday</mark> als globaler Referenzstandard. Ergänzend wird im DACH-Raum häufig <mark class="token-mark token-brand">Personio</mark> implementiert.
+              </div>
+            </div>
+
+            <div>
+              <div class="race-caliper-meter">
+                <div class="race-caliper-track">
+                  <div id="race-caliper-claude" class="race-caliper-fill" style="width: 85%;"></div>
+                </div>
+              </div>
+              <div class="race-telemetry-row">
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.char_offset">CHAR_IDX</span>
+                  <span id="race-chars-claude" class="race-metric-val">118</span>
+                </div>
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.rel_pos">REL_POS</span>
+                  <span id="race-rel-claude" class="race-metric-val">81.4%</span>
+                </div>
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.geo_diag">GEO_DIAGNOSE</span>
+                  <span class="race-metric-val">3_BRAND_HALO_TRAP</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Column 3: Google Gemini + Search Grounding -->
+          <article class="race-card" data-race-card="gemini">
+            <div>
+              <div class="race-card-header">
+                <div>
+                  <div class="race-provider-title">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <rect x="2.5" y="2.5" width="11" height="11" transform="rotate(45 8 8)"/>
+                    </svg>
+                    <span>Google Gemini 1.5</span>
+                  </div>
+                  <span class="race-provider-sub" data-i18n="race.gemini_role">Google Search Grounding aktiv</span>
+                </div>
+                <span id="race-badge-gemini" class="badge mece-competitor-takeover">3_COMPETITOR_TAKEOVER</span>
+              </div>
+
+              <div id="race-stream-gemini" class="race-stream-box">
+                Moderne HR-Systeme automatisieren Recruiting und Zeiterfassung. Marktführer für wachsende Unternehmen sind vor allem <mark class="token-mark token-comp">Workday</mark> und SAP SuccessFactors.
+              </div>
+            </div>
+
+            <div>
+              <div class="race-caliper-meter">
+                <div class="race-caliper-track">
+                  <div id="race-caliper-gemini" class="race-caliper-fill" style="width: 85%;"></div>
+                </div>
+              </div>
+              <div class="race-telemetry-row">
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.char_offset">CHAR_IDX</span>
+                  <span id="race-chars-gemini" class="race-metric-val">OMIT</span>
+                </div>
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.rel_pos">REL_POS</span>
+                  <span id="race-rel-gemini" class="race-metric-val">— (0%)</span>
+                </div>
+                <div class="race-metric-cell">
+                  <span class="race-metric-label" data-i18n="race.geo_diag">GEO_DIAGNOSE</span>
+                  <span class="race-metric-val">2_PARAMETRIC_BLINDSPOT</span>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT 3: Interactive MECE Simulator Workbench -->
+    <section id="simulator" class="section simulator-section">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-index" data-i18n="simulator.index">SYS // 03 — INTERACTIVE MECE WORKBENCH</div>
+          <h2 class="section-title" data-i18n="simulator.title">Interaktiver MECE-Simulator</h2>
+          <p class="section-subtitle" data-i18n="simulator.subtitle">
+            Testen Sie die mathematisch strikte 4-Zustände-MECE-Klassifikation direkt im Browser.
+          </p>
+        </div>
+
+        <div class="simulator-container card">
+          <!-- Simulator Presets -->
+          <div class="simulator-presets">
+            <span class="preset-label" data-i18n="simulator.presets_label">Presets laden:</span>
+            <div class="preset-buttons">
+              <button id="preset-direct-win" class="btn btn-sm btn-outline" data-i18n="simulator.preset_1">
+                01. Direct Win (Personio)
+              </button>
+              <button id="preset-brand-halo" class="btn btn-sm btn-outline" data-i18n="simulator.preset_2">
+                02. Brand Halo (Celonis)
+              </button>
+              <button id="preset-takeover" class="btn btn-sm btn-outline" data-i18n="simulator.preset_3">
+                03. Takeover (Workday)
+              </button>
+              <button id="preset-generic" class="btn btn-sm btn-outline" data-i18n="simulator.preset_4">
+                04. Generic (Markt)
+              </button>
+            </div>
+          </div>
+
+          <!-- Simulator Inputs Grid -->
+          <div class="simulator-grid">
+            <div class="simulator-inputs">
+              <div class="form-group">
+                <label for="sim-brand" class="form-label" data-i18n="simulator.brand_label">Ihre Marke</label>
+                <input type="text" id="sim-brand" class="form-control font-mono" value="Personio" placeholder="z.B. Personio">
+              </div>
+              <div class="form-group">
+                <label for="sim-competitor" class="form-label" data-i18n="simulator.competitors_label">Wettbewerber (kommagetrennt)</label>
+                <input type="text" id="sim-competitor" class="form-control font-mono" value="Workday, SAP" placeholder="z.B. Workday, SAP">
+              </div>
+              <div class="form-group">
+                <label for="sim-text" class="form-label" data-i18n="simulator.text_label">KI-Antworttext (Synthese)</label>
+                <textarea id="sim-text" class="form-control form-textarea" rows="6" placeholder="Fügen Sie hier den generierten LLM-Antworttext ein...">Für den deutschen Mittelstand ist Personio die führende HR-Software. Als internationale Alternative kommt Workday in Betracht.</textarea>
+              </div>
+            </div>
+
+            <!-- Simulator Live Output & Caliper Ruler -->
+            <div class="simulator-output">
+              <div>
+                <div class="output-header">
+                  <span class="output-title" data-i18n="simulator.result_label">Klassifikationsergebnis:</span>
+                  <span id="sim-badge" class="badge mece-direct-win">1_DIRECT_WIN</span>
+                </div>
+
+                <div class="output-body">
+                  <h3 id="sim-result-title" class="result-state-title">Direct Win — Eindeutiger Spitzenreiter</h3>
+                  <p id="sim-result-desc" class="result-state-desc">
+                    Die Marke wird als erste Empfehlung genannt und schlägt alle Wettbewerber in der Nennungsreihenfolge (Earliness).
+                  </p>
+
+                  <!-- Live Visual Earliness Caliper Ruler -->
+                  <div class="sim-caliper-panel">
+                    <div class="sim-caliper-header">
+                      <span data-i18n="simulator.caliper_title">DETERMINISTISCHE EARLINESS-MESSLEISTE (0–100% TEXTSPANNE)</span>
+                      <span>0% .. 100%</span>
+                    </div>
+                    <div id="sim-caliper-ruler" class="sim-caliper-ruler" aria-hidden="true">
+                      <div id="sim-marker-brand" class="sim-marker sim-marker-brand" style="left: 26.15%;" title="Marke"></div>
+                      <div id="sim-marker-comp" class="sim-marker sim-marker-comp" style="left: 80.77%;" title="1. Wettbewerber"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sim-telemetry-grid">
+                <div class="telemetry-card">
+                  <span class="telemetry-label" data-i18n="simulator.char_earliness">Zeichen-Earliness:</span>
+                  <span id="sim-char-earliness" class="telemetry-value font-mono">34</span>
+                </div>
+                <div class="telemetry-card">
+                  <span class="telemetry-label" data-i18n="simulator.word_earliness">Wort-Earliness:</span>
+                  <span id="sim-word-earliness" class="telemetry-value font-mono">6</span>
+                </div>
+                <div class="telemetry-card">
+                  <span class="telemetry-label" data-i18n="simulator.rel_pos">Relative Position:</span>
+                  <span id="sim-rel-pos" class="telemetry-value font-mono">26.15 %</span>
+                </div>
+                <div class="telemetry-card">
+                  <span class="telemetry-label" data-i18n="simulator.comp_earliness">1. Wettbewerber:</span>
+                  <span id="sim-comp-earliness" class="telemetry-value font-mono">105</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT 4: 4-Quadrant GEO Diagnostic Architecture (#features) -->
+    <section id="features" class="section features-section">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-index" data-i18n="features.index">SYS // 04 — 4-QUADRANT GEO DIAGNOSTIC MATRIX</div>
+          <h2 class="section-title" data-i18n="features.title">
+            Warum klassisches SEO für Sprachmodelle blind ist.
+          </h2>
+          <p class="section-subtitle" data-i18n="features.subtitle">
+            Sprachmodelle kombinieren eingefrorenes parametrisches Trainingswissen mit Echtzeit-Suchzitierungen (RAG / Grounding). Unser 4-Quadranten-Motor isoliert exakt die Ursache Ihrer Sichtbarkeitsverluste.
+          </p>
+        </div>
+
+        <div class="geo-blueprint-layout">
+          <div class="geo-matrix-grid">
+            <article class="geo-quad-card">
+              <div>
+                <span class="badge geo-hijack">1_CITATION_HIJACK</span>
+                <h3 style="margin-top: 10px;" data-i18n="features.q1_title">Q1 // CITATION HIJACK</h3>
+              </div>
+              <p data-i18n="features.q1_desc">
+                Ihre Domain liefert die Fakten im RAG-Abruf, aber der Wettbewerber erntet die Empfehlung im Text.
+              </p>
+            </article>
+
+            <article class="geo-quad-card">
+              <div>
+                <span class="badge geo-blindspot">2_PARAMETRIC_BLINDSPOT</span>
+                <h3 style="margin-top: 10px;" data-i18n="features.q2_title">Q2 // PARAMETRIC BLINDSPOT</h3>
+              </div>
+              <p data-i18n="features.q2_desc">
+                Ihre URL wird als Quelle zitiert, doch das Modell lässt Ihren Markennamen in der Antwort komplett aus.
+              </p>
+            </article>
+
+            <article class="geo-quad-card">
+              <div>
+                <span class="badge geo-trap">3_BRAND_HALO_TRAP</span>
+                <h3 style="margin-top: 10px;" data-i18n="features.q3_title">Q3 // BRAND HALO TRAP</h3>
+              </div>
+              <p data-i18n="features.q3_desc">
+                Ihre Marke erscheint regelmäßig, aber immer nur auf Platz 2 oder 3 hinter dem Marktführer.
+              </p>
+            </article>
+
+            <article class="geo-quad-card">
+              <div>
+                <span class="badge geo-buried">4_BURIED_WINNER</span>
+                <h3 style="margin-top: 10px;" data-i18n="features.q4_title">Q4 // BURIED WINNER</h3>
+              </div>
+              <p data-i18n="features.q4_desc">
+                Ihre Marke gewinnt den Vergleich, wird aber erst in der unteren Texthälfte (&gt;50% Offset) genannt.
+              </p>
+            </article>
+          </div>
+
+          <!-- 2x2 Architectural SVG Coordinate Blueprint -->
+          <div class="geo-radar-box">
+            <div class="font-mono text-xs" style="color: #94A3B8; margin-bottom: 12px;" data-i18n="features.axis_y_high">
+              HOHE ZITIER-AUTORITÄT (GROUNDING)
+            </div>
+            <svg viewBox="0 0 360 240" style="width: 100%; height: auto; display: block;" role="img" aria-label="4-Quadrant GEO Diagnostic Coordinate System">
+              <rect x="20" y="10" width="155" height="100" fill="#1E293B" stroke="#475569" stroke-width="1.5"/>
+              <text x="32" y="36" fill="#F59E0B" font-family="monospace" font-size="10" font-weight="bold">Q1: CITATION HIJACK</text>
+              <text x="32" y="56" fill="#CBD5E1" font-family="monospace" font-size="9">Domain cited / Rival wins</text>
+
+              <rect x="185" y="10" width="155" height="100" fill="#1E293B" stroke="#475569" stroke-width="1.5"/>
+              <text x="197" y="36" fill="#EF4444" font-family="monospace" font-size="10" font-weight="bold">Q2: BLINDSPOT</text>
+              <text x="197" y="56" fill="#CBD5E1" font-family="monospace" font-size="9">Domain cited / Brand omitted</text>
+
+              <rect x="20" y="120" width="155" height="100" fill="#1E293B" stroke="#475569" stroke-width="1.5"/>
+              <text x="32" y="146" fill="#A78BFA" font-family="monospace" font-size="10" font-weight="bold">Q3: HALO TRAP</text>
+              <text x="32" y="166" fill="#CBD5E1" font-family="monospace" font-size="9">Ranked #2-#3 behind rival</text>
+
+              <rect x="185" y="120" width="155" height="100" fill="#1E293B" stroke="#475569" stroke-width="1.5"/>
+              <text x="197" y="146" fill="#60A5FA" font-family="monospace" font-size="10" font-weight="bold">Q4: BURIED WINNER</text>
+              <text x="197" y="166" fill="#CBD5E1" font-family="monospace" font-size="9">Direct Win at &gt;50% offset</text>
+
+              <!-- Crosshair Center -->
+              <circle cx="180" cy="115" r="5" fill="#10B981"/>
+            </svg>
+            <div class="font-mono text-xs" style="color: #94A3B8; margin-top: 12px; display: flex; justify-content: space-between;">
+              <span data-i18n="features.axis_x_low">SCHWACHE TEXT-PROMINENZ</span>
+              <span data-i18n="features.axis_x_high">STARKE TEXT-EMPFEHLUNG (#1)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3 Technical Specification Pillars -->
+        <div class="spec-pillars-grid">
+          <div class="spec-pillar">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <path d="M3 13L8 3l5 10M4.5 10h7"/>
+              </svg>
+              <span data-i18n="features.spec_unicode_title">Deutsche Unicode-Präzision</span>
+            </h3>
+            <p data-i18n="features.spec_unicode_desc">
+              Deterministische Case-Folding-Normalisierung für ä, ö, ü, ß und ẞ sowie mehrteilige B2B-Markennamen.
+            </p>
+          </div>
+          <div class="spec-pillar">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <rect x="3" y="7" width="10" height="7"/>
+                <path d="M5 7V4.5a3 3 0 016 0V7"/>
+              </svg>
+              <span data-i18n="features.spec_gdpr_title">Zero-CDN &amp; Frankfurt Hosting</span>
+            </h3>
+            <p data-i18n="features.spec_gdpr_desc">
+              Keine externen Tracker, keine US-Font-CDNs, volle DSGVO-Konformität auf dedizierter Infrastruktur.
+            </p>
+          </div>
+          <div class="spec-pillar">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <path d="M6 10l4-4M4.5 11.5a2.5 2.5 0 010-3.5l2-2M11.5 4.5a2.5 2.5 0 010 3.5l-2 2"/>
+              </svg>
+              <span data-i18n="features.spec_audit_title">Shareable Magic Audits</span>
+            </h3>
+            <p data-i18n="features.spec_audit_desc">
+              Kryptografisch gesicherte Read-Only-Links für Vorstände, Kunden und Agentur-Pitches mit einem Klick.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT 5: 4-Tier Hybrid Pricing Table -->
+    <section id="pricing" class="section pricing-section">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-index" data-i18n="pricing.index">SYS // 05 — TARIFF SPECIFICATION</div>
+          <h2 class="section-title" data-i18n="pricing.title">4-Tier Hybrid Pricing</h2>
+          <p class="section-subtitle" data-i18n="pricing.subtitle">
+            Vom kostenlosen Freemium-Einstieg bis zum maßgeschneiderten Managed GEO Retainer für Marktführer.
+          </p>
+        </div>
+
+        <div class="pricing-grid">
+          <!-- Tier 1: Free -->
+          <div class="pricing-card card">
+            <div>
+              <div class="pricing-card-header">
+                <h3 class="tier-name" data-i18n="pricing.free.name">Free</h3>
+                <p class="tier-desc" data-i18n="pricing.free.desc">Für Evaluierung &amp; Proof-of-Concept</p>
+                <div class="tier-price">
+                  <span class="price-val font-mono">0 €</span>
+                  <span class="price-period" data-i18n="pricing.free.period">dauerhaft</span>
+                </div>
+              </div>
+              <ul class="pricing-features">
+                <li data-i18n="pricing.free.feat_1">✔ 40 Runs kostenloses Startguthaben</li>
+                <li data-i18n="pricing.free.feat_2">✔ 1 Tracking-Konfiguration</li>
+                <li data-i18n="pricing.free.feat_3">✔ OpenAI + Google Gemini Routing</li>
+                <li data-i18n="pricing.free.feat_4">✔ 4-State MECE Sofortklassifikation</li>
+                <li data-i18n="pricing.free.feat_5">✔ Community &amp; Doku-Support</li>
+              </ul>
+            </div>
+            <button class="btn btn-secondary btn-block" data-open-modal="auth" data-tier="free" data-i18n="pricing.free.cta">
+              Kostenlos starten
+            </button>
+          </div>
+
+          <!-- Tier 2: Starter -->
+          <div class="pricing-card card">
+            <div>
+              <div class="pricing-card-header">
+                <h3 class="tier-name" data-i18n="pricing.starter.name">Starter</h3>
+                <p class="tier-desc" data-i18n="pricing.starter.desc">Für wachsende KMU &amp; Produktteams</p>
+                <div class="tier-price">
+                  <span class="price-val font-mono">149 €</span>
+                  <span class="price-period" data-i18n="pricing.per_month">/ Monat</span>
+                </div>
+              </div>
+              <ul class="pricing-features">
+                <li data-i18n="pricing.starter.feat_1">✔ 500 Runs pro Monat inklusive</li>
+                <li data-i18n="pricing.starter.feat_2">✔ 5 Tracking-Konfigurationen</li>
+                <li data-i18n="pricing.starter.feat_3">✔ Tägliche automatische Audit-Jobs</li>
+                <li data-i18n="pricing.starter.feat_4">✔ PoP Periodenvergleich (7d / 30d)</li>
+                <li data-i18n="pricing.starter.feat_5">✔ Grounding Citation Analyse</li>
+                <li data-i18n="pricing.starter.feat_6">✔ E-Mail Support (24h SLA)</li>
+              </ul>
+            </div>
+            <button class="btn btn-secondary btn-block" data-open-modal="auth" data-tier="starter" data-i18n="pricing.starter.cta">
+              Starter wählen
+            </button>
+          </div>
+
+          <!-- Tier 3: Growth (Featured) -->
+          <div class="pricing-card card card-highlighted">
+            <div>
+              <div class="tier-badge" data-i18n="pricing.growth.badge">Empfehlung</div>
+              <div class="pricing-card-header">
+                <h3 class="tier-name" data-i18n="pricing.growth.name">Growth</h3>
+                <p class="tier-desc" data-i18n="pricing.growth.desc">Für marktführende B2B SaaS Unternehmen</p>
+                <div class="tier-price">
+                  <span class="price-val font-mono">399 €</span>
+                  <span class="price-period" data-i18n="pricing.per_month">/ Monat</span>
+                </div>
+              </div>
+              <ul class="pricing-features">
+                <li data-i18n="pricing.growth.feat_1">✔ 2.000 Runs pro Monat inklusive</li>
+                <li data-i18n="pricing.growth.feat_2">✔ 25 Tracking-Konfigurationen</li>
+                <li data-i18n="pricing.growth.feat_3">✔ Stündliche Queue-Synchronisation</li>
+                <li data-i18n="pricing.growth.feat_4">✔ Alle LLMs: OpenAI, Anthropic Claude, Gemini</li>
+                <li data-i18n="pricing.growth.feat_5">✔ 4-Quadrant GEO Action Panel Empfehlungen</li>
+                <li data-i18n="pricing.growth.feat_6">✔ Magic Audit Share-Links für Stakeholder</li>
+                <li data-i18n="pricing.growth.feat_7">✔ Priority Support &amp; Onboarding Call</li>
+              </ul>
+            </div>
+            <button class="btn btn-primary btn-block" data-open-modal="auth" data-tier="growth" data-i18n="pricing.growth.cta">
+              Growth wählen
+            </button>
+          </div>
+
+          <!-- Tier 4: Managed GEO Retainer -->
+          <div class="pricing-card card">
+            <div>
+              <div class="pricing-card-header">
+                <h3 class="tier-name" data-i18n="pricing.managed.name">Managed GEO Retainer</h3>
+                <p class="tier-desc" data-i18n="pricing.managed.desc">Ganzheitliche Generative Engine Optimierung</p>
+                <div class="tier-price">
+                  <span class="price-val font-mono">1.950 €+</span>
+                  <span class="price-period" data-i18n="pricing.per_month">/ Monat</span>
+                </div>
+              </div>
+              <ul class="pricing-features">
+                <li data-i18n="pricing.managed.feat_1">✔ Individuelles Run-Kontingent nach Bedarf</li>
+                <li data-i18n="pricing.managed.feat_2">✔ Unbegrenzte Tracking-Konfigurationen</li>
+                <li data-i18n="pricing.managed.feat_3">✔ Dedizierter B2B GEO Optimierungsberater</li>
+                <li data-i18n="pricing.managed.feat_4">✔ Reverse Engineering zitierter Quell-Domains</li>
+                <li data-i18n="pricing.managed.feat_5">✔ Custom Schema.org &amp; Knowledge-Graph Blueprint</li>
+                <li data-i18n="pricing.managed.feat_6">✔ Monatlicher C-Level Board Report &amp; SLA</li>
+              </ul>
+            </div>
+            <a href="mailto:kontakt@chatlytics.de?subject=Managed%20GEO%20Retainer%20Anfrage" class="btn btn-secondary btn-block" data-i18n="pricing.managed.cta">
+              Enterprise anfragen
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT 6: Technical Documentation & FAQ (#faq) -->
+    <section id="faq" class="section faq-section">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-index" data-i18n="faq.index">SYS // 06 — TECHNISCHE DOKUMENTATION &amp; FAQ</div>
+          <h2 class="section-title" data-i18n="faq.title">Häufige Fragen zur Share-of-Model Telemetrie</h2>
+          <p class="section-subtitle" data-i18n="faq.subtitle">
+            Architektur, Methodik und Lizenzierung für europäische B2B-Unternehmen.
+          </p>
+        </div>
+
+        <div class="faq-list">
+          <details class="faq-item" open>
+            <summary class="faq-question">
+              <span data-i18n="faq.q1">Wie unterscheidet sich Share-of-Model (SoM) von klassischem SEO-Ranking?</span>
+              <span class="faq-marker" aria-hidden="true">01</span>
+            </summary>
+            <p class="faq-answer" data-i18n="faq.a1">
+              Suchmaschinen liefern zehn blaue Links; Sprachmodelle synthetisieren eine einzige Antwort. Chatlytics misst deterministisch, ob Ihre Marke genannt wird, an welchem Zeichen-Offset (Earliness) sie auftritt und ob sie vor oder nach Ihren Wettbewerbern empfohlen wird.
+            </p>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span data-i18n="faq.q2">Was bedeutet die 4-Zustände-MECE-Klassifikation?</span>
+              <span class="faq-marker" aria-hidden="true">02</span>
+            </summary>
+            <p class="faq-answer" data-i18n="faq.a2">
+              MECE steht für Mutually Exclusive &amp; Collectively Exhaustive. Jeder LLM-Run fällt mathematisch eindeutig in genau eine Kategorie: 1_DIRECT_WIN (Marke führt), 2_BRAND_HALO (Marke hinter Wettbewerber), 3_COMPETITOR_TAKEOVER (nur Wettbewerber genannt) oder 4_GENERIC (keine Marken genannt).
+            </p>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span data-i18n="faq.q3">Wie funktioniert das Google Gemini Search Grounding Tracking?</span>
+              <span class="faq-marker" aria-hidden="true">03</span>
+            </summary>
+            <p class="faq-answer" data-i18n="faq.a3">
+              Unsere n8n-Worker-Pipeline extrahiert neben dem Antworttext auch die verifizierten Grounding-Chunks und Quell-Domains. Dadurch erkennen wir sofort, ob Ihre eigene Domain (z.B. personio.de) oder ein Drittportal als Beleg herangezogen wurde.
+            </p>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span data-i18n="faq.q4">Warum sind bei der kostenlosen Registrierung nur Firmen-E-Mails erlaubt?</span>
+              <span class="faq-marker" aria-hidden="true">04</span>
+            </summary>
+            <p class="faq-answer" data-i18n="faq.a4">
+              Da jeder Test-Account 40 echte Multi-LLM-Runs über OpenAI, Anthropic und Google Gemini freischaltet, schützen wir die Plattform-Infrastruktur vor Missbrauch durch automatisierte Freemail- und Wegwerf-Adressen.
+            </p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Persistent Swiss Coordinate Trace Rail -->
+  <aside id="sc-trace-rail" class="sc-trace-rail" aria-label="Scroll Coordinate Trace">
+    <div class="trace-progress-track">
+      <div id="trace-rail-fill" class="trace-progress-fill"></div>
+    </div>
+    <div class="container trace-rail-inner">
+      <div class="trace-waypoints">
+        <a href="#hero-stage" class="trace-link active" data-trace-target="hero-stage" data-i18n="trace.hero">01.SYNTHESE</a>
+        <a href="#race" class="trace-link" data-trace-target="race" data-i18n="trace.race">02.MODELL-RENNEN</a>
+        <a href="#simulator" class="trace-link" data-trace-target="simulator" data-i18n="trace.sim">03.MECE-LABOR</a>
+        <a href="#features" class="trace-link" data-trace-target="features" data-i18n="trace.geo">04.GEO-MATRIX</a>
+        <a href="#pricing" class="trace-link" data-trace-target="pricing" data-i18n="trace.pricing">05.TARIFE</a>
+        <a href="#faq" class="trace-link" data-trace-target="faq" data-i18n="trace.faq">06.FAQ</a>
+      </div>
+      <div>
+        <span>SCROLL_OFFSET // </span>
+        <span id="trace-playhead-pct">000%</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Freemium Work-Email Authentication Modal -->
+  <div id="auth-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="tab-signup">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <div class="modal-tabs">
+          <button id="tab-signup" class="tab-btn active" data-i18n="auth.tab_signup">Registrieren</button>
+          <button id="tab-login" class="tab-btn" data-i18n="auth.tab_login">Anmelden</button>
+        </div>
+        <button id="modal-close" class="btn-close" aria-label="Schließen">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Signup Form -->
+        <form id="form-signup" class="auth-form">
+          <div class="modal-intro">
+            <p class="text-sm text-muted" style="margin-bottom: 12px;" data-i18n="auth.signup_sub">
+              Erstellen Sie Ihr Konto mit 40 kostenlosen Test-Runs. Nur geschäftliche Firmen-E-Mails.
+            </p>
+          </div>
+          <div id="signup-error" class="alert alert-error" role="alert"></div>
+
+          <div class="form-group">
+            <label for="signup-email" class="form-label" data-i18n="auth.work_email">Firmen-E-Mail-Adresse</label>
+            <input type="email" id="signup-email" class="form-control" placeholder="name@firma.de" required>
+            <span class="form-hint" data-i18n="auth.email_hint">Keine privaten Freemail-Adressen (Gmail, Web.de, etc.)</span>
+          </div>
+
+          <div class="form-group">
+            <label for="signup-password" class="form-label" data-i18n="auth.password">Passwort</label>
+            <input type="password" id="signup-password" class="form-control" placeholder="Mindestens 8 Zeichen" minlength="8" required>
+          </div>
+
+          <div class="form-group">
+            <label for="signup-company" class="form-label" data-i18n="auth.company">Unternehmensname (optional)</label>
+            <input type="text" id="signup-company" class="form-control" placeholder="z.B. Acme Solutions GmbH">
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.btn_signup">
+            Konto erstellen &amp; 40 Runs freischalten
+          </button>
+        </form>
+
+        <!-- Login Form -->
+        <form id="form-login" class="auth-form hidden">
+          <div class="modal-intro">
+            <p class="text-sm text-muted" style="margin-bottom: 12px;" data-i18n="auth.login_sub">Melden Sie sich mit Ihren Zugangsdaten an.</p>
+          </div>
+          <div id="login-error" class="alert alert-error" role="alert"></div>
+
+          <div class="form-group">
+            <label for="login-email" class="form-label" data-i18n="auth.email">E-Mail-Adresse</label>
+            <input type="email" id="login-email" class="form-control" placeholder="name@firma.de" required>
+          </div>
+
+          <div class="form-group">
+            <label for="login-password" class="form-label" data-i18n="auth.password">Passwort</label>
+            <input type="password" id="login-password" class="form-control" placeholder="Ihr Passwort" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.btn_login">
+            Anmelden
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-left">
+        <span>© 2026 Chatlytics.de — Enterprise AI Visibility Platform</span>
+        <span class="text-muted text-xs">Plesk Hosted in Frankfurt (DSGVO-konform)</span>
+      </div>
+      <div class="footer-right">
+        <a href="#privacy">Datenschutz</a>
+        <a href="#imprint">Impressum</a>
+        <a href="#terms">AGB</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script type="module">
+    import { auth } from './assets/js/auth.js';
+    import { i18n } from './assets/js/i18n.js';
+    import { scrollStage } from './assets/js/scroll-stage.js';
+
+    // Initialize Auth Modal
+    auth.initModal();
+
+    // Initialize i18n
+    i18n.init();
+
+    // Initialize Scroll-Craft Stage & 3-Model Race Scrubber
+    scrollStage.init();
+
+    // Interactive MECE Simulator Logic
+    const brandInput = document.getElementById('sim-brand');
+    const compInput = document.getElementById('sim-competitor');
+    const textInput = document.getElementById('sim-text');
+    const badgeEl = document.getElementById('sim-badge');
+    const titleEl = document.getElementById('sim-result-title');
+    const descEl = document.getElementById('sim-result-desc');
+    const charEl = document.getElementById('sim-char-earliness');
+    const wordEl = document.getElementById('sim-word-earliness');
+    const relEl = document.getElementById('sim-rel-pos');
+    const compEarlyEl = document.getElementById('sim-comp-earliness');
+    const markerBrandEl = document.getElementById('sim-marker-brand');
+    const markerCompEl = document.getElementById('sim-marker-comp');
+
+    const PRESETS = {
+      directWin: {
+        brand: 'Personio',
+        competitors: 'Workday, SAP SuccessFactors',
+        text: 'Für den deutschen Mittelstand ist Personio die führende All-in-One HR-Software. Als internationale Alternative kommt Workday in Betracht.'
+      },
+      brandHalo: {
+        brand: 'Celonis',
+        competitors: 'SAP Signavio, UiPath',
+        text: 'Für Geschäftsprozessanalyse ist SAP Signavio die am weitesten verbreitete Plattform. Im gehobenen Mittelstand wird zudem Celonis häufig eingesetzt.'
+      },
+      takeover: {
+        brand: 'Personio',
+        competitors: 'Workday, BambooHR',
+        text: 'Großkonzerne setzen weltweit auf Workday. Ergänzend bedient BambooHR kleine Startups. Unsere Zielmarke wird in diesem Vergleich nicht erwähnt.'
+      },
+      generic: {
+        brand: 'Personio',
+        competitors: 'Workday, BambooHR',
+        text: 'HR-Software ermöglicht Unternehmen die automatisierte Abwicklung von Personalprozessen wie Urlaubserfassung und Lohnabrechnung.'
+      }
+    };
+
+    function runSimulator() {
+      const brand = (brandInput.value || '').trim();
+      const rawComps = (compInput.value || '').split(',').map(c => c.trim()).filter(Boolean);
+      const text = textInput.value || '';
+
+      const lowerText = text.toLowerCase();
+      const lowerBrand = brand.toLowerCase();
+
+      const brandIdx = lowerBrand ? lowerText.indexOf(lowerBrand) : -1;
+      const brandFound = brandIdx !== -1;
+
+      let minCompIdx = null;
+      for (const comp of rawComps) {
+        const cIdx = lowerText.indexOf(comp.toLowerCase());
+        if (cIdx !== -1) {
+          if (minCompIdx === null || cIdx < minCompIdx) {
+            minCompIdx = cIdx;
+          }
+        }
+      }
+      const compFound = minCompIdx !== null;
+
+      let category = '4_GENERIC';
+      if (!brandFound && !compFound) {
+        category = '4_GENERIC';
+      } else if (!brandFound && compFound) {
+        category = '3_COMPETITOR_TAKEOVER';
+      } else if (brandFound && !compFound) {
+        category = '1_DIRECT_WIN';
+      } else {
+        category = (brandIdx <= minCompIdx) ? '1_DIRECT_WIN' : '2_BRAND_HALO';
+      }
+
+      const i18nEngine = window.ChatlyticsI18n || window.i18n;
+      const tFunc = (k, fb) => (i18nEngine && typeof i18nEngine.t === 'function' ? i18nEngine.t(k, fb) : fb);
+
+      badgeEl.className = 'badge';
+      if (category === '1_DIRECT_WIN') {
+        badgeEl.classList.add('mece-direct-win');
+        badgeEl.textContent = tFunc(category, '1_DIRECT_WIN');
+        titleEl.textContent = tFunc('mece.1_DIRECT_WIN.title', 'Direct Win — Eindeutiger Spitzenreiter');
+        descEl.textContent = tFunc('mece.1_DIRECT_WIN.desc', 'Die Marke wird vor allen Mitbewerbern oder als alleinige Empfehlung im Synthesetext genannt.');
+      } else if (category === '2_BRAND_HALO') {
+        badgeEl.classList.add('mece-brand-halo');
+        badgeEl.textContent = tFunc(category, '2_BRAND_HALO');
+        titleEl.textContent = tFunc('mece.2_BRAND_HALO.title', 'Brand Halo — Nachrangig hinter Wettbewerber');
+        descEl.textContent = tFunc('mece.2_BRAND_HALO.desc', 'Die Marke wird genannt, erscheint jedoch hinter einem Wettbewerber im Empfehlungstext.');
+      } else if (category === '3_COMPETITOR_TAKEOVER') {
+        badgeEl.classList.add('mece-competitor-takeover');
+        badgeEl.textContent = tFunc(category, '3_COMPETITOR_TAKEOVER');
+        titleEl.textContent = tFunc('mece.3_COMPETITOR_TAKEOVER.title', 'Competitor Takeover — Wettbewerber dominiert');
+        descEl.textContent = tFunc('mece.3_COMPETITOR_TAKEOVER.desc', 'Wettbewerber werden positiv empfohlen, während Ihre Zielmarke vollständig fehlt.');
+      } else {
+        badgeEl.classList.add('mece-generic');
+        badgeEl.textContent = tFunc(category, '4_GENERIC');
+        titleEl.textContent = tFunc('mece.4_GENERIC.title', 'Generic — Allgemeiner Marktüberblick');
+        descEl.textContent = tFunc('mece.4_GENERIC.desc', 'Weder Ihre Marke noch die definierten Wettbewerber wurden im Synthesetext genannt.');
+      }
+
+      // Telemetry metrics & Caliper Markers
+      if (brandFound) {
+        charEl.textContent = brandIdx;
+        const prefix = text.slice(0, brandIdx).trim();
+        const wordEarly = prefix === '' ? 1 : prefix.split(/\s+/).length + 1;
+        wordEl.textContent = wordEarly;
+        const relPosNum = text.length > 0 ? (brandIdx / text.length) * 100 : 0;
+        relEl.textContent = `${relPosNum.toFixed(2)} %`;
+        if (markerBrandEl) {
+          markerBrandEl.style.display = 'block';
+          markerBrandEl.style.left = `${Math.min(98, Math.max(2, relPosNum)).toFixed(1)}%`;
+        }
+      } else {
+        charEl.textContent = '—';
+        wordEl.textContent = '—';
+        relEl.textContent = '—';
+        if (markerBrandEl) markerBrandEl.style.display = 'none';
+      }
+
+      if (compFound) {
+        compEarlyEl.textContent = minCompIdx;
+        const compRel = text.length > 0 ? (minCompIdx / text.length) * 100 : 0;
+        if (markerCompEl) {
+          markerCompEl.style.display = 'block';
+          markerCompEl.style.left = `${Math.min(98, Math.max(2, compRel)).toFixed(1)}%`;
+        }
+      } else {
+        compEarlyEl.textContent = '—';
+        if (markerCompEl) markerCompEl.style.display = 'none';
+      }
+    }
+
+    brandInput.addEventListener('input', runSimulator);
+    compInput.addEventListener('input', runSimulator);
+    textInput.addEventListener('input', runSimulator);
+
+    document.getElementById('preset-direct-win').addEventListener('click', () => {
+      brandInput.value = PRESETS.directWin.brand;
+      compInput.value = PRESETS.directWin.competitors;
+      textInput.value = PRESETS.directWin.text;
+      runSimulator();
+    });
+
+    document.getElementById('preset-brand-halo').addEventListener('click', () => {
+      brandInput.value = PRESETS.brandHalo.brand;
+      compInput.value = PRESETS.brandHalo.competitors;
+      textInput.value = PRESETS.brandHalo.text;
+      runSimulator();
+    });
+
+    document.getElementById('preset-takeover').addEventListener('click', () => {
+      brandInput.value = PRESETS.takeover.brand;
+      compInput.value = PRESETS.takeover.competitors;
+      textInput.value = PRESETS.takeover.text;
+      runSimulator();
+    });
+
+    document.getElementById('preset-generic').addEventListener('click', () => {
+      brandInput.value = PRESETS.generic.brand;
+      compInput.value = PRESETS.generic.competitors;
+      textInput.value = PRESETS.generic.text;
+      runSimulator();
+    });
+
+    window.addEventListener('languageChanged', runSimulator);
+    runSimulator();
+  </script>
+</body>
+</html>
