@@ -225,6 +225,27 @@ export class AuthManager {
     const backdrop = modal.querySelector('.modal-backdrop');
 
     const openBtns = document.querySelectorAll('[data-open-modal="auth"], #btn-open-login, #btn-open-signup, #hero-btn-signup');
+    const tierBanner = document.getElementById('auth-tier-context');
+    let lastFocusedEl = null;
+
+    const TIER_LABELS = {
+      free: { de: 'Gewählter Tarif: Free (0 € · 40 Live-Abfragen)', en: 'Selected plan: Free (€0 · 40 live queries)' },
+      starter: { de: 'Gewählter Tarif: Starter (149 € / Monat · 40 Test-Abfragen vorab)', en: 'Selected plan: Starter (€149 / month · 40 trial queries included)' },
+      growth: { de: 'Gewählter Tarif: Growth (399 € / Monat · 40 Test-Abfragen vorab)', en: 'Selected plan: Growth (€399 / month · 40 trial queries included)' }
+    };
+
+    const updateTierContext = (tier) => {
+      if (!tierBanner) return;
+      const key = String(tier || '').toLowerCase();
+      if (key && TIER_LABELS[key]) {
+        const lang = document.documentElement?.lang === 'en' ? 'en' : 'de';
+        tierBanner.textContent = TIER_LABELS[key][lang];
+        tierBanner.classList.remove('hidden');
+      } else {
+        tierBanner.textContent = '';
+        tierBanner.classList.add('hidden');
+      }
+    };
 
     const switchTab = (mode) => {
       if (mode === 'signup') {
@@ -240,8 +261,10 @@ export class AuthManager {
       }
     };
 
-    const showModal = (mode = 'signup') => {
+    const showModal = (mode = 'signup', tier = null) => {
+      lastFocusedEl = document.activeElement;
       switchTab(mode);
+      updateTierContext(mode === 'signup' ? tier : null);
       modal.classList.remove('modal-hidden');
       modal.setAttribute('aria-hidden', 'false');
       const focusTarget = mode === 'signup'
@@ -253,13 +276,18 @@ export class AuthManager {
     const hideModal = () => {
       modal.classList.add('modal-hidden');
       modal.setAttribute('aria-hidden', 'true');
+      if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
+        lastFocusedEl.focus();
+      }
     };
 
     openBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        const mode = btn.id.includes('login') ? 'login' : 'signup';
-        showModal(mode);
+        const explicitMode = btn.getAttribute('data-auth-mode');
+        const mode = explicitMode || (btn.id && btn.id.includes('login') ? 'login' : 'signup');
+        const tier = btn.getAttribute('data-tier') || null;
+        showModal(mode, tier);
       });
     });
 
@@ -271,6 +299,17 @@ export class AuthManager {
         hideModal();
       }
     });
+
+    // Auto-open auth modal when redirected with ?auth=required or ?auth=signup
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const authParam = params.get('auth');
+      if (authParam === 'required') {
+        showModal('login');
+      } else if (authParam === 'signup') {
+        showModal('signup');
+      }
+    } catch (_) {}
 
     tabLogin?.addEventListener('click', () => switchTab('login'));
     tabSignup?.addEventListener('click', () => switchTab('signup'));

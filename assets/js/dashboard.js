@@ -78,8 +78,8 @@ class DashboardController {
       const bannerText = banner.querySelector('.banner-text');
       if (bannerText) {
         bannerText.textContent = lang === 'de'
-          ? '👁️ Sie betrachten ein geteiltes Chatlytics Magic Audit (Schreibgeschützt).'
-          : '👁️ You are viewing a shared Chatlytics Magic Audit (Read-Only).';
+          ? 'Sie betrachten einen geteilten Chatlytics-Vorstandsreport (Schreibgeschützt).'
+          : 'You are viewing a shared Chatlytics Board Report (Read-Only).';
       }
     }
 
@@ -253,7 +253,8 @@ class DashboardController {
     const origText = btnTrigger ? btnTrigger.innerHTML : '';
     if (btnTrigger) {
       btnTrigger.disabled = true;
-      btnTrigger.innerHTML = '<span class="icon">⏳</span> Dispatching...';
+      const runningLabel = i18n ? i18n.t('dashboard.btn_running', 'Abfrage läuft...') : 'Abfrage läuft...';
+      btnTrigger.textContent = runningLabel;
     }
 
     try {
@@ -442,7 +443,8 @@ class DashboardController {
     const prescriptionEl = document.getElementById('geo-prescription');
 
     if (activeBadge) {
-      activeBadge.textContent = activeQuad;
+      const activeLabel = i18n ? i18n.t(activeQuad, activeQuad) : activeQuad;
+      activeBadge.textContent = activeLabel;
       activeBadge.className = 'badge geo-badge';
       if (activeQuad === '1_CITATION_HIJACK') activeBadge.classList.add('geo-hijack');
       else if (activeQuad === '2_PARAMETRIC_BLINDSPOT') activeBadge.classList.add('geo-blindspot');
@@ -453,10 +455,11 @@ class DashboardController {
 
     if (prescriptionEl) {
       const lang = i18n ? i18n.getLanguage() : 'de';
+      const fallbackRx = i18n ? i18n.t(`geo.${activeQuad}.prescription`, 'Keine kritischen Sichtbarkeitslücken festgestellt.') : 'Keine kritischen Sichtbarkeitslücken festgestellt.';
       const prescription = lang === 'en'
-        ? (geo.prescription_en || geo.prescription_de || '')
-        : (geo.prescription_de || geo.prescription_en || '');
-      prescriptionEl.textContent = prescription || 'Keine kritischen Anomalien festgestellt.';
+        ? (geo.prescription_en || geo.prescription_de || fallbackRx)
+        : (geo.prescription_de || geo.prescription_en || fallbackRx);
+      prescriptionEl.textContent = prescription;
     }
 
     const counts = geo.quadrant_counts || {};

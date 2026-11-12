@@ -19,7 +19,10 @@ const CSS_PATH = path.resolve(__dirname, '../../assets/css/app.css');
 test('Feature 23.1: CSS root design tokens define brand, neutral and MECE palettes', () => {
   if (fs.existsSync(CSS_PATH)) {
     const css = fs.readFileSync(CSS_PATH, 'utf8');
-    assert.ok(css.includes('--color-brand-600') || css.includes('--color-brand'));
+    assert.ok(css.includes('--bg-obsidian') && css.includes('#0B0D10'));
+    assert.ok(css.includes('--bg-alabaster') && css.includes('#F7F8FA'));
+    assert.ok(css.includes('--bg-paper') && css.includes('--border-hairline'));
+    assert.ok(css.includes('--status-win-text') && css.includes('--status-halo-text') && css.includes('--status-loss-text'));;
     assert.ok(css.includes('--color-mece-win') || css.includes('mece-direct-win') || css.includes('--color-mece'));
   } else {
     assert.ok(true);

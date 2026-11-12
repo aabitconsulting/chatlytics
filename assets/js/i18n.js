@@ -1,14 +1,11 @@
 /**
  * assets/js/i18n.js
  * Chatlytics.de — Bilingual Internationalization Engine & Dictionaries
- * Feature 24 (Milestone 5)
  *
  * Requirements:
  * - Bilingual dictionaries in German (de) and English (en).
- * - Verbatim mission statements in DE and EN.
- * - Complete key-value mappings (nav, hero, MECE, GEO, pricing, tables, buttons, magic audit).
+ * - Full Obsidian Dossier copy & Terminology Replacement Matrix (zero internal enums/jargon in UI).
  * - Locale formatting functions: formatCurrency, formatPercent, formatNumber, formatDate.
- * - Fallback mechanism to ensure no missing keys render as undefined.
  * - Zero external dependencies, isomorphic (Browser ES6 module + Node.js CommonJS).
  */
 
@@ -27,328 +24,286 @@
 
   const dictionaries = {
     de: {
-      // 1. Verbatim Mission Statements
+      // 1. Canonical Brand Statements
       'mission.statement': 'Chatlytics.de — AI Visibility & Share-of-Model (SoM) Analytics für europäische B2B-Marken.',
       'mission.subtitle': 'Messen und steuern Sie, wie ChatGPT, Claude und Google Gemini Ihre Marke und Wettbewerber wahrnehmen, zitieren und empfehlen. DSGVO-konform, deterministisch und auf Unternehmensebene analysiert.',
 
-      // 2. Navigation
+      // 2. Navigation (Landing & Shared)
       'nav.brand': 'Chatlytics.de',
-      'nav.tagline': 'AI Visibility & Share-of-Model Analytics',
-      'nav.features': 'Funktionen',
-      'nav.mece': 'MECE-Modell',
+      'nav.tagline': 'Share-of-Model & GEO Analytics',
+      'nav.dossier': 'Modell-Vergleich',
+      'nav.workbench': 'Antwort-Prüfstand',
+      'nav.matrix': 'Ursachen-Matrix',
       'nav.pricing': 'Preise',
-      'nav.audit_demo': 'Live-Audit',
+      'nav.faq': 'FAQ',
+      'nav.features': 'Ursachen-Matrix',
+      'nav.mece': 'Empfehlungs-Stufen',
+      'nav.audit_demo': 'Vorstandsreport',
       'nav.dashboard': 'Dashboard',
       'nav.admin': 'Admin Cockpit',
-      'nav.login': 'Anmelden',
-      'nav.signup': 'Kostenlos starten',
+      'nav.login': 'Login',
+      'nav.signup': 'Kostenloses Audit starten',
       'nav.logout': 'Abmelden',
       'nav.home': 'Startseite',
+      'nav.menu': 'Menü',
+      'nav.billing': 'Abrechnung',
+      'nav.settings': 'Einstellungen',
 
-      // 3. Hero Section
-      'hero.title': 'Chatlytics.de — AI Visibility & Share-of-Model (SoM) Analytics für europäische B2B-Marken.',
-      'hero.subtitle': 'Messen und steuern Sie, wie ChatGPT, Claude und Google Gemini Ihre Marke und Wettbewerber wahrnehmen, zitieren und empfehlen. DSGVO-konform, deterministisch und auf Unternehmensebene analysiert.',
-      'hero.cta_free': 'Jetzt 40 Gratis-Audits sichern',
-      'hero.cta_demo': 'Interaktive MECE-Demo testen',
-      'hero.trust_gdpr': '100% DSGVO-konform (Hosting in Frankfurt am Main)',
-      'hero.trust_deterministic': 'Deterministische MECE-Klassifizierung & Unicode-Metrik',
-      'hero.trust_multi_llm': 'Multi-LLM Telemetrie: GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Pro',
+      // 3. Hero Stage (Obsidian)
+      'hero.eyebrow': 'SHARE-OF-MODEL & GEO ANALYTICS FÜR MARKEN, MITTELSTAND & BERATUNGEN',
+      'hero.title': 'Wen empfiehlt die KI, wenn Ihre Kunden nach dem Marktführer fragen?',
+      'hero.subtitle': 'Zehn blaue Google-Links gehören der Vergangenheit an. Ob Hautpflege-Routine, Handwerkstechnik, B2B-Software oder Strategieberatung: Kunden treffen ihre Vorauswahl heute direkt in ChatGPT, Claude und Gemini. Chatlytics misst Zeichen für Zeichen, ob Ihre Marke als Spitzenreiter empfohlen wird, im Windschatten der Konkurrenz landet oder trotz eigener Ratgeber-Artikel komplett verschwiegen wird.',
+      'hero.cta_primary': 'Eigene Marke kostenlos prüfen (40 Live-Abfragen)',
+      'hero.cta_secondary': 'Beispiel-Vorstandsreport ansehen →',
+      'hero.switcher_label': 'Live-Markenduell wählen:',
+      'hero.switcher_note': 'Live-Markenduelle (Beispieldaten)',
 
-      // 4. MECE 4-State Classifier
-      '1_DIRECT_WIN': '1_DIRECT_WIN',
-      '2_BRAND_HALO': '2_BRAND_HALO',
-      '3_COMPETITOR_TAKEOVER': '3_COMPETITOR_TAKEOVER',
-      '4_GENERIC': '4_GENERIC',
+      // 4. Section 2: Das interaktive Marken-Dossier
+      'dossier.eyebrow': 'DER MODELL-VERGLEICH',
+      'dossier.title': 'Eine Einkäufer-Frage. Drei Sprachmodelle. Drei völlig andere Marktführer.',
+      'dossier.prompt_label': 'Einkäufer-Frage (Prompt)',
+      'dossier.scrubber_label': 'Lesefortschritt Zeichen für Zeichen',
+      'dossier.scrubber_hint': 'Regler bewegen, um den Antwortaufbau Zeichen für Zeichen nachzuvollziehen.',
+      'dossier.openai_sub': 'Parametrische Synthese',
+      'dossier.claude_sub': 'Konservative Gewichtung',
+      'dossier.gemini_sub': 'Google Search Grounding aktiv',
+      'dossier.col_first': 'Erstnennung',
+      'dossier.col_delta': 'Vorsprung / Rückstand',
+      'dossier.col_rel': 'Position im Text',
+      'dossier.col_diag': 'Zitierte Quelle / Diagnose',
+      'dossier.col_source': 'Zitierte Quelle',
+      'dossier.timeline_title': 'Synchrone Zeichen-Zeitleiste (OpenAI GPT-4o, Skala Zeichen 0 bis 200)',
 
-      'mece.section_title': 'Das Chatlytics MECE-Klassifizierungsmodell',
-      'mece.section_desc': 'Jeder KI-Antwortstrom wird mathematisch eindeutig und überschneidungsfrei in einen von vier Zuständen eingeordnet.',
-      
-      'mece.1_DIRECT_WIN.title': '1_DIRECT_WIN (Direkte Empfehlung)',
-      'mece.1_DIRECT_WIN.badge': 'Direkter Gewinn',
-      'mece.1_DIRECT_WIN.desc': 'Ihre Marke führt die Modell-Empfehlung an (#1 Position) oder wird als primäre Lösung hervorgehoben.',
-      
-      'mece.2_BRAND_HALO.title': '2_BRAND_HALO (Windschatten / Ko-Erwähnung)',
-      'mece.2_BRAND_HALO.badge': 'Windschatten-Erwähnung',
-      'mece.2_BRAND_HALO.desc': 'Ihre Marke wird sekundär hinter einem führenden Wettbewerber genannt.',
-      
-      'mece.3_COMPETITOR_TAKEOVER.title': '3_COMPETITOR_TAKEOVER (Wettbewerber-Übernahme)',
-      'mece.3_COMPETITOR_TAKEOVER.badge': 'Wettbewerber-Übernahme',
-      'mece.3_COMPETITOR_TAKEOVER.desc': 'Wettbewerber werden empfohlen, während Ihre Marke im Antwortstrom vollständig ausgelassen wird.',
-      
-      'mece.4_GENERIC.title': '4_GENERIC (Generische Antwort)',
-      'mece.4_GENERIC.badge': 'Generisch',
-      'mece.4_GENERIC.desc': 'Weder Ihre Marke noch relevante Wettbewerber werden im generierten Text genannt.',
+      // 5. Empfehlungs-Stufen (Mapped from internal enum keys without exposing raw identifiers)
+      '1_DIRECT_WIN': 'Platz 1 · Erste Wahl',
+      '2_BRAND_HALO': 'Platz 2 · Im Windschatten',
+      '3_COMPETITOR_TAKEOVER': 'Verdrängt · Wettbewerbs-Übernahme',
+      '4_GENERIC': 'Markenfreie Antwort',
 
-      // 5. 4-Quadrant GEO Diagnostics
-      '1_CITATION_HIJACK': '1_CITATION_HIJACK',
-      '2_PARAMETRIC_BLINDSPOT': '2_PARAMETRIC_BLINDSPOT',
-      '3_BRAND_HALO_TRAP': '3_BRAND_HALO_TRAP',
-      '4_BURIED_WINNER': '4_BURIED_WINNER',
-      'NONE': 'NONE',
+      'mece.section_title': 'Die 4 Empfehlungs-Stufen',
+      'mece.section_desc': 'Jede KI-Antwort fällt mathematisch reproduzierbar in genau eine von vier Stufen.',
 
-      'geo.section_title': '4-Quadrant GEO Aktionspanel',
-      'geo.section_desc': 'Taktische Handlungsempfehlungen basierend auf der Korrelation von Zitier-Autorität und Modell-Empfehlung.',
+      'mece.1_DIRECT_WIN.title': 'Spitzenreiter · Erste Wahl',
+      'mece.1_DIRECT_WIN.badge': 'Platz 1 · Erste Wahl',
+      'mece.1_DIRECT_WIN.desc': 'Ihre Marke fällt als erste Empfehlung im Text und schlägt jeden Wettbewerber in der Lesereihenfolge. Kommerzieller Effekt: Maximale Shortlist-Konvertierung.',
 
-      'geo.1_CITATION_HIJACK.title': 'Quadrant 1: Zitations-Übernahme (Citation Hijack)',
-      'geo.1_CITATION_HIJACK.condition': 'Marke in Quellen zitiert, aber Wettbewerber im Synthesetext empfohlen.',
-      'geo.1_CITATION_HIJACK.prescription': 'Wettbewerber kapert Ihre Quellen. Schema.org Markup aktualisieren.',
-      'geo.1_CITATION_HIJACK.action': 'Schema.org Markup aktualisieren, Vergleichsportale korrigieren und Primärquellen stärken.',
+      'mece.2_BRAND_HALO.title': 'Verfolgerplatz · Im Windschatten',
+      'mece.2_BRAND_HALO.badge': 'Platz 2 · Im Windschatten',
+      'mece.2_BRAND_HALO.desc': 'Ihre Marke wird genannt, erscheint aber erst als nachgelagerte Alternative hinter dem Marktführer. Kommerzieller Effekt: Preis- und Rechtfertigungsdruck.',
 
-      'geo.2_PARAMETRIC_BLINDSPOT.title': 'Quadrant 2: Parametrischer Blindfleck (Parametric Blindspot)',
-      'geo.2_PARAMETRIC_BLINDSPOT.condition': 'Domain zitiert, aber Marke im Synthesetext ausgelassen.',
-      'geo.2_PARAMETRIC_BLINDSPOT.prescription': 'Domain zitiert, aber Marke im Synthesetext ausgelassen. Entitäts-Kookkurrenzen ausbauen.',
-      'geo.2_PARAMETRIC_BLINDSPOT.action': 'Entitäts-Kookkurrenzen ausbauen, Digital-PR initiieren und Wikipedia-Verankerung vertiefen.',
+      'mece.3_COMPETITOR_TAKEOVER.title': 'Verdrängt · Wettbewerbs-Übernahme',
+      'mece.3_COMPETITOR_TAKEOVER.badge': 'Verdrängt · Wettbewerbs-Übernahme',
+      'mece.3_COMPETITOR_TAKEOVER.desc': 'Das Modell empfiehlt ausschließlich Ihre Konkurrenten; Ihre Marke fehlt in der Antwort vollständig. Kommerzieller Effekt: Direkter Pipeline- und Warenkorb-Verlust.',
 
-      'geo.3_BRAND_HALO_TRAP.title': 'Quadrant 3: Windschatten-Falle (Brand Halo Trap)',
-      'geo.3_BRAND_HALO_TRAP.condition': 'Marke im Windschatten des Wettbewerbers gefangen.',
-      'geo.3_BRAND_HALO_TRAP.prescription': 'Marke im Windschatten des Wettbewerbers gefangen. Differenzierende Alleinstellungsmerkmale schärfen.',
-      'geo.3_BRAND_HALO_TRAP.action': 'Differenzierende Alleinstellungsmerkmale (USPs) schärfen und Benchmark-Reports publizieren.',
+      'mece.4_GENERIC.title': 'Markenfreie Antwort',
+      'mece.4_GENERIC.badge': 'Markenfreie Antwort',
+      'mece.4_GENERIC.desc': 'Das Modell beantwortet die Fachfrage allgemein, ohne konkrete Anbieter oder Produkte zu nennen. Kommerzieller Effekt: Offenes Potenzial für gezieltes GEO-Content-Seeding.',
 
-      'geo.4_BURIED_WINNER.title': 'Quadrant 4: Versteckter Gewinner (Buried Winner)',
-      'geo.4_BURIED_WINNER.condition': 'Gewinner, aber spät genannt (hoher Token-Offset).',
-      'geo.4_BURIED_WINNER.prescription': 'Gewinner, aber spät genannt. Semantische Dichte optimieren.',
-      'geo.4_BURIED_WINNER.action': 'Semantische Dichte optimieren, Keyphrase-Frontloading umsetzen und Glossare schärfen.',
+      // 6. Ursachen-Matrix (Terminology Replacement Matrix)
+      '1_CITATION_HIJACK': 'Die gekaperte Vorlage',
+      '2_PARAMETRIC_BLINDSPOT': 'Das stumme Quell-Zitat',
+      '3_BRAND_HALO_TRAP': 'Die ewige Zweitnennung',
+      '4_BURIED_WINNER': 'Der versteckte Gewinner',
+      'NONE': 'Optimal · Spitzenreiter',
 
-      'geo.NONE.title': 'Keine akute GEO-Anomalie',
-      'geo.NONE.condition': 'Stabile Markenpräsenz ohne kritische Schieflagen.',
-      'geo.NONE.prescription': 'Keine kritischen GEO-Anomalien festgestellt. Sichtbarkeit stabil.',
-      'geo.NONE.action': 'Laufendes Monitoring und monatliche Audits beibehalten.',
+      'geo.section_title': 'Ursachen-Diagnose',
+      'geo.section_desc': 'Zusammenhang zwischen Quellen-Autorität und Marken-Prominenz im Antworttext.',
 
-      // 6. Pricing Tiers
-      'pricing.section_title': 'Transparente B2B SaaS-Preise',
-      'pricing.billing_monthly': 'Monatliche Abrechnung',
-      'pricing.billing_annual': 'Jährliche Abrechnung (-20%)',
-      'pricing.popular_badge': 'Beliebteste Wahl',
-      
-      'pricing.free_name': 'Free / Kostenlos',
+      'geo.1_CITATION_HIJACK.title': 'Die gekaperte Vorlage',
+      'geo.1_CITATION_HIJACK.condition': 'Fremde/Eigene Vorlage · Wettbewerb erntet Platz 1',
+      'geo.1_CITATION_HIJACK.prescription': 'Ihre Fachartikel liefern die Sachfakten im Hintergrund, doch die KI empfiehlt im ersten Satz Ihren Wettbewerber. Strukturierte Vergleichstabellen und klare Positionierungs-Statements direkt in rankende Ratgeber-Seiten einbauen.',
+      'geo.1_CITATION_HIJACK.action': 'Strukturierte Vergleichstabellen, objektive Auswahlkriterien und klare Positionierungs-Statements direkt in rankende Ratgeber-Seiten einbauen.',
+
+      'geo.2_PARAMETRIC_BLINDSPOT.title': 'Das stumme Quell-Zitat',
+      'geo.2_PARAMETRIC_BLINDSPOT.condition': 'Eigene Quelle zitiert · Marke fehlt im Text',
+      'geo.2_PARAMETRIC_BLINDSPOT.prescription': 'Ihre URL wird als Quell-Fußnote geladen, aber im sichtbaren Antworttext fehlt Ihr Markenname komplett. Marken-Entität, Autorenschaft und Produktkategorie im ersten Abschnitt und Schema.org-Markup direkt koppeln.',
+      'geo.2_PARAMETRIC_BLINDSPOT.action': 'Marken-Entität, Autorenschaft und Produktkategorie im ersten Abschnitt der zitierten Seite und im Schema.org-Markup direkt koppeln.',
+
+      'geo.3_BRAND_HALO_TRAP.title': 'Die ewige Zweitnennung',
+      'geo.3_BRAND_HALO_TRAP.condition': 'Reines Trainingswissen · Dauerhaft Platz 2–3',
+      'geo.3_BRAND_HALO_TRAP.prescription': 'Das Modell kennt Ihre Marke, ordnet Sie aber gewohnheitsmäßig hinter dem US-Marktführer ein. Spezifische DACH- und Qualitäts-Attribute gezielt in unabhängigen Fachmedien verankern.',
+      'geo.3_BRAND_HALO_TRAP.action': 'Spezifische DACH- und Qualitäts-Attribute gezielt in unabhängigen Fachmedien und Verzeichnissen verankern.',
+
+      'geo.4_BURIED_WINNER.title': 'Der versteckte Gewinner',
+      'geo.4_BURIED_WINNER.condition': 'Eigene Quelle zitiert · Späte Nennung (>50 % Text-Offset)',
+      'geo.4_BURIED_WINNER.prescription': 'Ihre Marke gewinnt zwar den inhaltlichen Vergleich, taucht aber erst im letzten Absatz auf. TL;DR-Zusammenfassungen und prägnante Einstiegs-Definitionen auf Ihren Hauptseiten schärfen.',
+      'geo.4_BURIED_WINNER.action': 'TL;DR-Zusammenfassungen und prägnante Einstiegs-Definitionen auf Ihren Hauptseiten schärfen, damit Sprachmodelle Ihre Marke in den ersten Satz ziehen.',
+
+      'geo.NONE.title': 'Optimal · Spitzenreiter',
+      'geo.NONE.condition': 'Stabile Spitzenposition ohne kritische Sichtbarkeitslücken.',
+      'geo.NONE.prescription': 'Keine kritischen Abweichungen festgestellt. Ihre Marke führt den Empfehlungstext an.',
+      'geo.NONE.action': 'Laufendes Monitoring über alle kaufrelevanten Prompts beibehalten.',
+
+      // 7. Section 3: Der Antwort-Prüfstand
+      'workbench.eyebrow': 'DER ANTWORT-PRÜFSTAND',
+      'workbench.title': 'Vier eindeutige Empfehlungs-Stufen statt vager Sentiment-Kurven.',
+      'workbench.subtitle': 'Für belastbare Wachstums- und SEO-Entscheidungen reichen ungenaue Stimmungs-Scores nicht aus. Jede KI-Antwort fällt mathematisch reproduzierbar in eines von vier kommerziellen Szenarien. Testen Sie unsere Positions-Berechnung live im Browser:',
+      'workbench.presets_label': 'Schnellwahl-Presets:',
+      'workbench.preset_1': 'Szenario 1: Spitzenreiter (Nøva Skin)',
+      'workbench.preset_2': 'Szenario 2: Im Windschatten (Biovena One)',
+      'workbench.preset_3': 'Szenario 3: Verdrängt (Personia fehlt)',
+      'workbench.preset_4': 'Szenario 4: Markenfreie Antwort',
+      'workbench.brand_label': 'Ihre Marke (inkl. Varianten)',
+      'workbench.competitors_label': 'Wettbewerber (kommagetrennt)',
+      'workbench.text_label': 'KI-Antworttext zum Prüfen',
+      'workbench.result_label': 'Erkannte Empfehlungs-Stufe',
+      'workbench.pos_bar_label': 'Positions-Leiste (0 % bis 100 % der Textlänge)',
+      'workbench.legend_brand': 'Ihre Marke',
+      'workbench.legend_comp': '1. Wettbewerber',
+      'workbench.metric_char': 'Erstnennung (Zeichen)',
+      'workbench.metric_word': 'Erstnennung (Wort)',
+      'workbench.metric_rel': 'Position im Text (%)',
+      'workbench.metric_comp': '1. Wettbewerber (Zeichen)',
+
+      // 8. Section 4: Die Ursachen-Matrix & 3 DACH Trust Pillars
+      'matrix.eyebrow': 'DIE URSACHEN-MATRIX',
+      'matrix.title': 'Warum klassisches SEO vor Sprachmodellen blind ist.',
+      'matrix.subtitle': 'Sprachmodelle kombinieren antrainiertes Basiswissen mit Echtzeit-Websuche (RAG / Grounding). Unser 4-Felder-Modell trennt sauber zwischen Quellen-Autorität (Y-Achse) und Marken-Prominenz im Antworttext (X-Achse) – damit Ihr Team sofort sieht, welcher Hebel fehlt:',
+      'matrix.y_title': 'Quellen-Autorität (Search Grounding & Zitate)',
+      'matrix.y_high': 'Eigene Domain als Quelle zitiert',
+      'matrix.y_low': 'Fremde Quelle oder reines Trainingswissen',
+      'matrix.x_title': 'Marken-Prominenz im Antworttext',
+      'matrix.x_low': 'Marke fehlt oder verdrängt',
+      'matrix.x_high': 'Marke im Text empfohlen',
+      'matrix.label_problem': 'Problem',
+      'matrix.label_lever': 'Technischer Hebel',
+
+      'matrix.q1_badge': 'Diagnose 01 · Hohe Dringlichkeit',
+      'matrix.q1_title': 'Das stumme Quell-Zitat',
+      'matrix.q1_problem': 'Ihre URL (z. B. novaskin.de/ratgeber oder berger-kucher.de/whitepaper) wird von Gemini oder ChatGPT als Quell-Fußnote geladen, aber im sichtbaren Antworttext fehlt Ihr Markenname komplett.',
+      'matrix.q1_lever': 'Marken-Entität, Autorenschaft und Produktkategorie im ersten Abschnitt der zitierten Seite und im Schema.org-Markup direkt koppeln.',
+
+      'matrix.q2_badge': 'Diagnose 02 · Quick Win',
+      'matrix.q2_title': 'Der versteckte Gewinner',
+      'matrix.q2_problem': 'Ihre Marke gewinnt zwar den inhaltlichen Vergleich, taucht aber erst im letzten Absatz auf – dort, wo kaum ein Käufer weiterliest.',
+      'matrix.q2_lever': 'TL;DR-Zusammenfassungen und prägnante Einstiegs-Definitionen auf Ihren Hauptseiten schärfen, damit Sprachmodelle Ihre Marke in den ersten Satz ziehen.',
+
+      'matrix.q3_badge': 'Diagnose 03 · Pipeline-Verlust',
+      'matrix.q3_title': 'Die gekaperte Vorlage',
+      'matrix.q3_problem': 'Ihre Fachartikel liefern die Sachfakten im Hintergrund, doch die KI empfiehlt im ersten Satz Ihren Wettbewerber (AthleticOne, Dysonix).',
+      'matrix.q3_lever': 'Strukturierte Vergleichstabellen, objektive Auswahlkriterien und klare Positionierungs-Statements direkt in rankende Ratgeber-Seiten einbauen.',
+
+      'matrix.q4_badge': 'Diagnose 04 · Positionierungs-Hebel',
+      'matrix.q4_title': 'Die ewige Zweitnennung',
+      'matrix.q4_problem': 'Das Modell kennt Ihre Marke aus dem Trainingswissen, ordnet Sie aber gewohnheitsmäßig als „weitere Option“ hinter dem US-Marktführer ein.',
+      'matrix.q4_lever': 'Spezifische DACH- und Qualitäts-Attribute („unabhängig laborgeprüft“, „DATEV-Schnittstelle“, „deutscher Mittelstand“) gezielt in unabhängigen Fachmedien und Verzeichnissen verankern.',
+
+      'pillar.1_title': 'DACH-Marken- & Rechtsform-Erkennung',
+      'pillar.1_desc': 'Fehlerfreie Entitäts-Auflösung für mehrteilige deutsche Markennamen, GmbH/AG-Firmierungen, Umlaute und branchenspezifische Fachbegriffe.',
+      'pillar.2_title': '100 % Frankfurt-Infrastruktur ohne US-Tracker',
+      'pillar.2_desc': 'Keine externen Font-CDNs, keine Werbe-Pixel, volle DSGVO-Konformität auf dedizierten Servern in Frankfurt am Main.',
+      'pillar.3_title': 'Verifizierte Vorstands- & Pitch-Reports',
+      'pillar.3_desc': 'Teilen Sie kryptografisch gesicherte, schreibgeschützte Live-Audits per Klick mit Geschäftsführung, Revenue-Teams oder Agentur-Kunden.',
+
+      // 9. Section 5: Tarife & Kapazitäten
+      'pricing.eyebrow': 'TARIFE & KAPAZITÄTEN',
+      'pricing.title': 'Vom ersten Sichtbarkeits-Audit bis zur systematischen Marktführerschaft.',
+      'pricing.subtitle': 'Starten Sie dauerhaft kostenlos mit 40 echten Live-Abfragen oder sichern Sie sich kontinuierliches Monitoring und aktive Optimierung für Ihre kaufrelevanten Prompts.',
+      'pricing.per_month': '/ Monat',
+
+      'pricing.free_name': 'Free',
       'pricing.free_price': '0 €',
-      'pricing.free_cadence': 'Einmalig 40 Credits',
-      'pricing.free_target': 'Evaluierung für B2B Marketing- & SEO-Teams',
-      'pricing.free_cta': 'Kostenlos starten',
-      'pricing.free_feat_1': '1 Tracking-Konfiguration',
-      'pricing.free_feat_2': 'GPT-4o Mini & Claude 3.5 Haiku',
-      'pricing.free_feat_3': 'Grundlegende MECE-Klassifizierung',
-      'pricing.free_feat_4': '7 Tage Historie',
-      'pricing.free_feat_5': 'Community Support',
+      'pricing.free.name': 'Free',
+      'pricing.free.desc': 'Für Evaluierung & ersten Statusbericht',
+      'pricing.free.period': '/ dauerhaft',
+      'pricing.free.cta': 'Kostenlos starten',
+      'pricing.free.feat_1': '✔ 40 Live-Abfragen Startguthaben inklusive',
+      'pricing.free.feat_2': '✔ 1 Marken- & Wettbewerbs-Profil',
+      'pricing.free.feat_3': '✔ OpenAI GPT-4o & Google Gemini Analyse',
+      'pricing.free.feat_4': '✔ Auswertung nach den 4 Empfehlungs-Stufen',
+      'pricing.free.feat_5': '✔ Dokumentation & Standard-Support',
 
       'pricing.starter_name': 'Starter',
       'pricing.starter_price': '149 €',
-      'pricing.starter_cadence': 'pro Monat / 500 Credits',
-      'pricing.starter_target': 'Wachsende europäische B2B Startups & Scale-ups',
-      'pricing.starter_cta': 'Starter wählen',
-      'pricing.starter_feat_1': 'Bis zu 5 Tracking-Konfigurationen',
-      'pricing.starter_feat_2': 'Multi-LLM (GPT-4o, Claude 3.5 Sonnet, Gemini)',
-      'pricing.starter_feat_3': 'Wöchentliche automatische Runs',
-      'pricing.starter_feat_4': 'Grounding Citation Tracking',
-      'pricing.starter_feat_5': '30 Tage Historie',
-      'pricing.starter_feat_6': 'Standard E-Mail Support',
+      'pricing.starter.name': 'Starter',
+      'pricing.starter.desc': 'Für wachsende Marken & Produkt-Teams',
+      'pricing.starter.cta': 'Starter wählen',
+      'pricing.starter.feat_1': '✔ 500 Live-Abfragen pro Monat inklusive',
+      'pricing.starter.feat_2': '✔ 5 Marken- oder Produktkategorie-Profile',
+      'pricing.starter.feat_3': '✔ Tägliche automatische Audit-Läufe',
+      'pricing.starter.feat_4': '✔ Zeitreihen-Vergleich (7 Tage / 30 Tage)',
+      'pricing.starter.feat_5': '✔ Vollständige Quell-Domain- & Zitat-Analyse',
+      'pricing.starter.feat_6': '✔ E-Mail-Support (24h Reaktionszeit)',
 
       'pricing.growth_name': 'Growth',
       'pricing.growth_price': '399 €',
-      'pricing.growth_cadence': 'pro Monat / 2.000 Credits',
-      'pricing.growth_target': 'Etablierte europäische B2B Marken & Agenturen',
-      'pricing.growth_cta': 'Growth wählen',
-      'pricing.growth_feat_1': 'Bis zu 20 Tracking-Konfigurationen',
-      'pricing.growth_feat_2': 'Alle LLMs inkl. Gemini 1.5 Pro & Search Grounding',
-      'pricing.growth_feat_3': 'Tägliche automatische Runs',
-      'pricing.growth_feat_4': '4-Quadrant GEO Action Matrix',
-      'pricing.growth_feat_5': 'Wettbewerber-Benchmark Leaderboard',
-      'pricing.growth_feat_6': 'Unbegrenzte Magic Audit Share Links',
-      'pricing.growth_feat_7': 'Prioritäts-Support',
-
-      'pricing.managed_name': 'Managed GEO Retainer',
-      'pricing.managed_price': 'Ab 1.950 €',
-      'pricing.managed_cadence': 'pro Monat / Individuell',
-      'pricing.managed_target': 'Enterprise & Marktführer mit strategischem KI-Sichtbarkeitsbedarf',
-      'pricing.managed_cta': 'Beratung anfragen',
-      'pricing.managed_feat_1': 'Unbegrenzte Audits & Prompts',
-      'pricing.managed_feat_2': 'Maßgeschneiderte Prompt-Architektur',
-      'pricing.managed_feat_3': 'Kontinuierliches Citation Engineering',
-      'pricing.managed_feat_4': 'Parametrische Digital-PR Begleitung',
-      'pricing.managed_feat_5': 'Monatlicher Executive C-Level Report',
-      'pricing.managed_feat_6': 'Dedizierter GEO-Stratege',
-
-      // 7. Dashboard & Analytics
-      'dashboard.title': 'KI-Sichtbarkeits-Cockpit',
-      'dashboard.kpi_som': 'Share of Model (SoM)',
-      'dashboard.kpi_visibility': 'Sichtbarkeits-Index',
-      'dashboard.kpi_earliness': 'Durchschnittliche Frühzeitigkeit',
-      'dashboard.kpi_runs': 'Ausgeführte Audits',
-      'dashboard.kpi_citation_share': 'Zitations-Anteil',
-      'dashboard.kpi_credits': 'Verbleibende Credits',
-      
-      'dashboard.period_7d': '7 Tage',
-      'dashboard.period_14d': '14 Tage',
-      'dashboard.period_30d': '30 Tage',
-      'dashboard.period_90d': '90 Tage',
-      'dashboard.period_all': 'Alle',
-      
-      'dashboard.btn_trigger_run': 'Audit jetzt starten',
-      'dashboard.btn_running': 'Audit läuft (n8n Engine)...',
-      'dashboard.mece_distribution': 'MECE-Kategorieverteilung',
-      'dashboard.pop_comparison': 'Vergleich zur Vorperiode (PoP)',
-      'dashboard.competitor_leaderboard': 'Wettbewerber-Benchmark Leaderboard',
-      'dashboard.citations_table': 'Top Grounding-Zitationen & Referenzquellen',
-      'dashboard.empty_title': 'Keine Daten für diesen Zeitraum vorhanden',
-      'dashboard.empty_desc': 'Starten Sie einen Sofort-Audit oder wählen Sie eine andere Konfiguration.',
-
-      // 8. Magic Audit Preview Mode
-      'audit.banner_notice': '👁️ Sie betrachten ein geteiltes Chatlytics Magic Audit (Schreibgeschützt).',
-      'audit.conversion_text': 'Möchten Sie kontinuierliche KI-Sichtbarkeitsanalysen für Ihre eigene Marke durchführen?',
-      'audit.conversion_btn': 'Jetzt 40 Gratis-Audits starten',
-
-      // 9. Admin Cockpit
-      'admin.title': 'Owner Cockpit — Plattformverwaltung',
-      'admin.kpi_users': 'Registrierte Benutzer',
-      'admin.kpi_runs': 'Ausgeführte LLM-Runs',
-      'admin.kpi_configs': 'Aktive Konfigurationen',
-      'admin.kpi_credits_used': 'Verbrauchte Credits',
-      'admin.user_directory': 'Benutzerverzeichnis',
-      'admin.btn_seed_demo': '🇩🇪 Realistische B2B-Demodaten laden',
-      'admin.btn_magic_audit': 'Magic Audit Link erstellen',
-      'admin.btn_adjust_credits': 'Credits anpassen',
-
-      // 10. Table Column Headers
-      'col.rank': 'Rang',
-      'col.brand': 'Marke / Wettbewerber',
-      'col.domain': 'Domain',
-      'col.mentions': 'Erwähnungen',
-      'col.win_rate': 'Win Rate %',
-      'col.visibility': 'Sichtbarkeit %',
-      'col.earliness': 'Frühzeitigkeit (Wort)',
-      'col.recommendations': 'Empfehlungen',
-      'col.citations': 'Zitationen',
-      'col.source_url': 'Quell-URL',
-      'col.authority': 'Autorität',
-      'col.id': 'ID',
-      'col.email': 'E-Mail',
-      'col.company': 'Unternehmen',
-      'col.role': 'Rolle',
-      'col.tier': 'Tarif',
-      'col.credits': 'Credits',
-      'col.created_at': 'Registriert am',
-      'col.actions': 'Aktionen',
-
-      // 11. Status Badges & Common UI
-      'status.active': 'Aktiv',
-      'status.pending': 'Ausstehend',
-      'status.completed': 'Abgeschlossen',
-      'status.queued': 'In Warteschlange',
-      'status.failed': 'Fehlgeschlagen',
-      
-      'common.save': 'Speichern',
-      'common.cancel': 'Abbrechen',
-      'common.close': 'Schließen',
-      'common.delete': 'Löschen',
-      'common.edit': 'Bearbeiten',
-      'common.loading': 'Wird geladen...',
-      'common.success': 'Erfolgreich',
-      'common.error': 'Fehler',
-      'common.copy': 'Kopieren',
-      'common.copied': 'In die Zwischenablage kopiert!',
-      'common.vs_previous': 'vs. Vorperiode',
-      'common.details': 'Details',
-
-      // === 1. Navigation & Hero Additions ===
-      'nav.simulator': 'MECE-Simulator',
-      'nav.faq': 'FAQ',
-      'nav.billing': 'Abrechnung',
-      'nav.settings': 'Einstellungen',
-      'hero.badge': 'B2B Generative Engine Optimization (GEO) & SoM',
-      'hero.cta_primary': 'Kostenlos starten (40 Runs)',
-      'hero.cta_secondary': 'Live MECE Simulator testen',
-
-      // === 2. Interactive MECE Simulator ===
-      'simulator.title': 'Interaktiver MECE-Simulator',
-      'simulator.subtitle': 'Testen Sie die mathematisch strikte 4-Zustände-MECE-Klassifikation direkt im Browser.',
-      'simulator.presets_label': 'Presets laden:',
-      'simulator.brand_label': 'Ihre Marke',
-      'simulator.competitors_label': 'Wettbewerber (kommagetrennt)',
-      'simulator.text_label': 'KI-Antworttext (Synthese)',
-      'simulator.result_label': 'Klassifikationsergebnis:',
-      'simulator.char_earliness': 'Zeichen-Earliness:',
-      'simulator.word_earliness': 'Wort-Earliness:',
-      'simulator.rel_pos': 'Relative Position:',
-      'simulator.comp_earliness': '1. Wettbewerber:',
-
-      // === 3. 4-Tier Hybrid Pricing Table ===
-      'pricing.title': '4-Tier Hybrid Pricing',
-      'pricing.subtitle': 'Vom kostenlosen Freemium-Einstieg bis zum maßgeschneiderten Managed GEO Retainer für Marktführer.',
-      'pricing.free.name': 'Free',
-      'pricing.free.desc': 'Für Evaluierung & Proof-of-Concept',
-      'pricing.free.period': 'dauerhaft',
-      'pricing.free.cta': 'Kostenlos starten',
-      'pricing.starter.name': 'Starter',
-      'pricing.starter.desc': 'Für wachsende KMU & Produktteams',
-      'pricing.per_month': '/ Monat',
-      'pricing.starter.cta': 'Starter wählen',
       'pricing.growth.badge': 'Empfehlung',
       'pricing.growth.name': 'Growth',
-      'pricing.growth.desc': 'Für marktführende B2B SaaS Unternehmen',
-      'pricing.growth.cta': 'Growth wählen',
-      'pricing.managed.name': 'Managed GEO Retainer',
-      'pricing.managed.desc': 'Ganzheitliche Generative Engine Optimierung',
-      'pricing.managed.cta': 'Enterprise anfragen',
+      'pricing.growth.desc': 'Für führende Mittelständler, D2C- & SaaS-Marken',
+      'pricing.growth.cta': 'Growth starten',
+      'pricing.growth.feat_1': '✔ 2.000 Live-Abfragen pro Monat inklusive',
+      'pricing.growth.feat_2': '✔ 25 Marken-, Branchen- oder Länder-Profile',
+      'pricing.growth.feat_3': '✔ Stündliche Aktualisierung & Monitoring',
+      'pricing.growth.feat_4': '✔ Alle Modelle: OpenAI, Anthropic Claude, Google Gemini',
+      'pricing.growth.feat_5': '✔ Vollständige 4-Felder-Ursachen-Diagnose & Content-Hebel',
+      'pricing.growth.feat_6': '✔ Teilbare Vorstands- & Stakeholder-Report-Links',
+      'pricing.growth.feat_7': '✔ Priority-Support & persönliches Onboarding',
 
-      // Pricing Feature Bullets
-      'pricing.free.feat_1': '✔ 40 Runs kostenloses Startguthaben',
-      'pricing.free.feat_2': '✔ 1 Tracking-Konfiguration',
-      'pricing.free.feat_3': '✔ OpenAI + Google Gemini Routing',
-      'pricing.free.feat_4': '✔ 4-State MECE Sofortklassifikation',
-      'pricing.free.feat_5': '✔ Community & Doku-Support',
-      'pricing.starter.feat_1': '✔ 500 Runs pro Monat inklusive',
-      'pricing.starter.feat_2': '✔ 5 Tracking-Konfigurationen',
-      'pricing.starter.feat_3': '✔ Tägliche automatische Audit-Jobs',
-      'pricing.starter.feat_4': '✔ PoP Periodenvergleich (7d / 30d)',
-      'pricing.starter.feat_5': '✔ Grounding Citation Analyse',
-      'pricing.starter.feat_6': '✔ E-Mail Support (24h SLA)',
-      'pricing.growth.feat_1': '✔ 2.000 Runs pro Monat inklusive',
-      'pricing.growth.feat_2': '✔ 25 Tracking-Konfigurationen',
-      'pricing.growth.feat_3': '✔ Stündliche Queue-Synchronisation',
-      'pricing.growth.feat_4': '✔ Alle LLMs: OpenAI, Anthropic Claude, Gemini',
-      'pricing.growth.feat_5': '✔ 4-Quadrant GEO Action Panel Empfehlungen',
-      'pricing.growth.feat_6': '✔ Magic Audit Share-Links für Stakeholder',
-      'pricing.growth.feat_7': '✔ Priority Support & Onboarding Call',
-      'pricing.managed.feat_1': '✔ Individuelles Run-Kontingent nach Bedarf',
-      'pricing.managed.feat_2': '✔ Unbegrenzte Tracking-Konfigurationen',
-      'pricing.managed.feat_3': '✔ Dedizierter B2B GEO Optimierungsberater',
-      'pricing.managed.feat_4': '✔ Reverse Engineering zitierter Quell-Domains',
-      'pricing.managed.feat_5': '✔ Custom Schema.org & Knowledge-Graph Blueprint',
-      'pricing.managed.feat_6': '✔ Monatlicher C-Level Board Report & SLA',
+      'pricing.managed_name': 'Managed GEO & Pipeline Defense',
+      'pricing.managed_price': '1.950 €+',
+      'pricing.managed.badge': 'Für Markt- & Kategorieführer',
+      'pricing.managed.name': 'Managed GEO & Pipeline Defense',
+      'pricing.managed.desc': 'Wir holen Ihre Marke bei kaufentscheidenden Prompts messbar auf Platz 1 zurück.',
+      'pricing.managed.cta': 'Strategiegespräch anfragen →',
+      'pricing.managed.feat_1': '✔ Individuelles Abfrage-Kontingent über alle Kauf-Prompts',
+      'pricing.managed.feat_2': '✔ Unbegrenzte Marken- und Wettbewerbs-Profile',
+      'pricing.managed.feat_3': '✔ Reverse-Engineering zitierter Dritt-Domains & Fachmedien',
+      'pricing.managed.feat_4': '✔ Technischer GEO- & Schema.org-Blueprint für Ihr Team',
+      'pricing.managed.feat_5': '✔ Dedizierter GEO-Stratege & monatlicher Vorstands-Report',
 
-      // === 4. Freemium & Auth Modal ===
+      // 10. Section 6: FAQ & Footer
+      'faq.eyebrow': 'METHODIK & ARCHITEKTUR',
+      'faq.title': 'Häufige Fragen zur Share-of-Model Analyse.',
+      'faq.q1': 'Wie unterscheidet sich Share-of-Model (SoM) von klassischem SEO-Ranking?',
+      'faq.a1': 'Suchmaschinen liefern zehn blaue Links; Sprachmodelle verdichten den Markt auf eine einzige Empfehlung. Selbst wenn Ihre Website bei Google auf Platz 1 rankt, kann ChatGPT oder Gemini im Antworttext Ihren Wettbewerber als Marktführer nennen. Chatlytics misst reproduzierbar, ob Ihre Marke genannt wird, an welcher Zeichen-Position sie erscheint und welche Quellen die Antwort speisen.',
+      'faq.q2': 'Nach welcher Logik werden die KI-Antworten ausgewertet?',
+      'faq.a2': 'Im Gegensatz zu schwammigen Stimmungs-Scores arbeitet Chatlytics rein positions- und faktenbasiert. Jede Antwort wird eindeutig einer von vier Stufen zugeordnet: Spitzenreiter (Ihre Marke fällt vor allen Wettbewerbern), Im Windschatten (ein Wettbewerber wird zuerst genannt), Verdrängt (nur Konkurrenten werden genannt) oder Markenfreie Antwort (keine Anbieter genannt).',
+      'faq.q3': 'Wie funktioniert die Quellen-Analyse (Search Grounding) bei Google Gemini und ChatGPT?',
+      'faq.a3': 'Unsere dedizierte Multi-LLM-Abruf-Infrastruktur extrahiert neben dem sichtbaren Antworttext auch die im Hintergrund abgerufenen Such-Snippets und zitierten Quell-Domains. So erkennen Ihre SEO- und Content-Teams sofort, ob Ihre eigene Website (z. B. novaskin.de oder personia.de) oder ein Drittportal als Beleg herangezogen wurde.',
+      'faq.q4': 'Warum sind bei der kostenlosen Registrierung nur Firmen-E-Mails erlaubt?',
+      'faq.a4': 'Da jeder Test-Account 40 echte Live-Abfragen über OpenAI, Anthropic und Google Gemini freischaltet, schützen wir unsere Rechenkapazitäten vor automatisierten Wegwerf-Adressen. Sie können sofort ohne Kreditkarte starten.',
+
+      'footer.copyright': '© 2026 Chatlytics.de — Enterprise AI Visibility & Share-of-Model Analytics',
+      'footer.infra': 'Gehostet auf dedizierter Infrastruktur in Frankfurt am Main (100 % DSGVO-konform, ohne US-CDNs)',
+      'footer.privacy': 'Datenschutz',
+      'footer.imprint': 'Impressum',
+      'footer.terms': 'AGB',
+
+      // 11. Auth Modal
       'auth.tab_signup': 'Registrieren',
-      'auth.tab_login': 'Anmelden',
-      'auth.signup_sub': 'Erstellen Sie Ihr Konto mit 40 kostenlosen Test-Runs. Nur geschäftliche Firmen-E-Mails.',
+      'auth.tab_login': 'Login',
+      'auth.signup_sub': 'Erstellen Sie Ihr Konto mit 40 kostenlosen Live-Abfragen. Nur geschäftliche Firmen-E-Mails.',
       'auth.work_email': 'Firmen-E-Mail-Adresse',
       'auth.email_hint': 'Keine privaten Freemail-Adressen (Gmail, Web.de, etc.)',
       'auth.password': 'Passwort',
       'auth.company': 'Unternehmensname (optional)',
-      'auth.btn_signup': 'Konto erstellen & 40 Runs freischalten',
+      'auth.btn_signup': 'Konto erstellen & 40 Abfragen freischalten',
       'auth.login_sub': 'Melden Sie sich mit Ihren Zugangsdaten an.',
       'auth.email': 'E-Mail-Adresse',
       'auth.btn_login': 'Anmelden',
       'auth.logout': 'Abmelden',
 
-      // === 5. Client Dashboard ===
-      'audit.banner': 'Sie betrachten ein geteiltes Chatlytics Magic Audit (Schreibgeschützt).',
-      'dashboard.new_config': '+ Neue Konfiguration',
-      'dashboard.trigger_run': 'Run ausführen',
-      'dashboard.share': 'Teilen',
+      // 12. Dashboard & Analytics
+      'audit.banner': 'Sie betrachten einen geteilten Chatlytics-Vorstandsreport (Schreibgeschützt).',
+      'dashboard.page_title': 'Share-of-Model & GEO Analyse-Cockpit',
+      'dashboard.new_config': '+ Neues Profil',
+      'dashboard.trigger_run': 'Abfrage starten',
+      'dashboard.btn_running': 'Abfrage läuft...',
+      'dashboard.share': 'Report teilen',
       'kpi.som': 'Share-of-Model (SoM)',
-      'kpi.som_sub': 'Anteil der Nennungen an allen LLM-Runs',
-      'kpi.visibility': 'Visibility Index',
+      'kpi.som_sub': 'Anteil der Nennungen an allen KI-Abfragen',
+      'kpi.visibility': 'Sichtbarkeits-Index',
       'kpi.visibility_sub': 'Markennennung oder Quellenzitat vorhanden',
-      'kpi.earliness': 'Average Earliness',
-      'kpi.earliness_sub': 'Durchschnittliche relative Position im Text',
-      'kpi.total_runs': 'Total Runs',
-      'kpi.runs_sub': 'Durchgeführte Multi-Model Evaluierungen',
-      'kpi.citation_share': 'Citations Share',
-      'kpi.citation_share_sub': 'Eigene Domain in Grounding-Quellen',
-      'kpi.credits': 'Credits Remaining',
-      'kpi.credits_sub': 'Guthaben für Live- und Queue-Audits',
-      'dashboard.mece_trend': 'MECE-Kategorieverteilung',
-      'dashboard.mece_sum_hint': '100% lückenlos und überschneidungsfrei',
+      'kpi.earliness': 'Position im Text (Ø)',
+      'kpi.earliness_sub': 'Durchschnittliche relative Position im Antworttext',
+      'kpi.total_runs': 'Abfragen gesamt',
+      'kpi.runs_sub': 'Durchgeführte Multi-Modell-Analysen',
+      'kpi.citation_share': 'Quellen-Anteil',
+      'kpi.citation_share_sub': 'Eigene Domain in Hintergrund-Quellen',
+      'kpi.credits': 'Verbleibende Abfragen',
+      'kpi.credits_sub': 'Guthaben für Live- und geplante Audits',
+      'dashboard.mece_trend': 'Verteilung nach den 4 Empfehlungs-Stufen',
+      'dashboard.mece_sum_hint': 'Vollständige Aufteilung über alle ausgewerteten Antworten',
       'dashboard.competitors': 'Wettbewerber-Leaderboard',
       'table.competitor': 'Wettbewerber',
       'table.domain': 'Domain',
@@ -356,28 +311,32 @@
       'table.mentions': 'Nennungen',
       'table.recommendations': 'Empfehlungen',
       'table.avg_pos': 'Ø Position',
-      'dashboard.citations': 'Grounding-Zitierungen & Quellen',
+      'dashboard.citations': 'Zitierte Quell-Domains (Search Grounding)',
       'table.source_domain': 'Quell-Domain',
       'table.domain_type': 'Typ',
       'table.citation_count': 'Zitate',
-      'geo.title': '4-Quadrant GEO Action Panel',
-      'geo.prescription_label': 'Empfohlene Handlungsanweisung:',
+      'dashboard.empty_title': 'Keine Analysedaten im gewählten Zeitraum',
+      'dashboard.empty_desc': 'Für das ausgewählte Profil liegen im Zeitraum noch keine abgeschlossenen Abfragen vor. Starten Sie jetzt Ihre erste Analyse.',
+      'geo.title': '4-Felder-Ursachen-Diagnose',
+      'geo.prescription_label': 'Empfohlener Hebel:',
       'geo.matrix_title': 'Diagnose-Matrix:',
+      'geo.svg_title': 'Quellen-Autorität vs. Marken-Prominenz',
       'audit.cta_text': 'Möchten Sie kontinuierliche KI-Sichtbarkeitsanalysen für Ihre eigene Marke durchführen?',
-      'audit.cta_btn': 'Jetzt kostenlos registrieren (40 Runs)',
+      'audit.cta_btn': 'Jetzt kostenlos registrieren (40 Abfragen)',
 
-      // === 6. Owner Cockpit ===
+      // 13. Owner Cockpit (Admin)
       'admin.meta_title': 'Chatlytics.de — Owner Cockpit & Systemverwaltung',
       'admin.badge_owner': 'Owner Cockpit',
       'admin.page_title': 'Owner Cockpit & Systemverwaltung',
-      'admin.page_subtitle': 'Zentrale Verwaltung von Mandanten, Guthaben, Magic Audit Links und Demodaten.',
+      'admin.page_subtitle': 'Zentrale Verwaltung von Mandanten, Abfrage-Kontingenten, Vorstandsreport-Links und Beispieldaten.',
+      'admin.btn_seed_demo': 'Beispieldaten generieren',
       'admin.kpi_users_label': 'Registrierte Benutzer',
       'admin.kpi_users_sub': 'Aktive Mandantenkonten',
-      'admin.kpi_configs_label': 'Tracking-Konfigurationen',
-      'admin.kpi_configs_sub': 'Überwachte Prompt-Keywords',
-      'admin.kpi_runs_label': 'Ausgeführte Runs',
-      'admin.kpi_runs_sub': 'LLM-Audits gesamt',
-      'admin.kpi_credits_label': 'Verfügbare Credits',
+      'admin.kpi_configs_label': 'Marken-Profile',
+      'admin.kpi_configs_sub': 'Überwachte Prompt-Profile',
+      'admin.kpi_runs_label': 'Ausgeführte Abfragen',
+      'admin.kpi_runs_sub': 'KI-Audits gesamt',
+      'admin.kpi_credits_label': 'Verfügbare Abfragen',
       'admin.kpi_credits_sub': 'Im Umlauf befindlich',
       'admin.table_title': 'Benutzerverzeichnis',
       'admin.search_label': 'Benutzer suchen',
@@ -385,438 +344,318 @@
       'admin.col_email': 'E-Mail',
       'admin.col_company': 'Unternehmen',
       'admin.col_tier': 'Tarif',
-      'admin.col_credits': 'Credits',
-      'admin.col_runs': 'Runs',
+      'admin.col_credits': 'Abfragen',
+      'admin.col_runs': 'Läufe',
       'admin.col_status': 'Status',
       'admin.col_created': 'Registriert',
       'admin.col_actions': 'Aktionen',
       'admin.empty_title': 'Keine Benutzerkonten gefunden',
-      'admin.empty_desc': 'Es wurden keine Benutzerkonten gefunden. Passen Sie die Suche an oder generieren Sie realistische Demodaten.',
+      'admin.empty_desc': 'Es wurden keine Benutzerkonten gefunden. Passen Sie die Suche an oder generieren Sie Beispieldaten.',
       'pagination.prev': '← Zurück',
       'pagination.next': 'Weiter →',
-      'admin.modal_credit_title': 'Credits anpassen',
+      'admin.modal_credit_title': 'Kontingent anpassen',
       'admin.modal_user_label': 'Benutzer:',
       'admin.modal_current_credits': 'Aktuelles Guthaben:',
-      'admin.modal_delta_label': 'Guthaben-Änderung (Delta +/-):',
-      'admin.modal_delta_hint': 'Positive Werte addieren Credits, negative Werte ziehen Credits ab (minimaler Endwert: 0).',
+      'admin.modal_delta_label': 'Änderung (Delta +/-):',
+      'admin.modal_delta_hint': 'Positive Werte addieren Abfragen, negative Werte ziehen Abfragen ab (Minimum: 0).',
       'admin.modal_reason_label': 'Begründung (optional):',
-      'admin.modal_credit_save': 'Credits speichern',
-      'admin.modal_magic_title': 'Magic Audit Link',
-      'admin.modal_magic_desc': 'Dieser sichere Link gewährt schreibgeschützten Zugriff auf das Client-Dashboard dieses Kontos ohne Anmeldedaten:',
+      'admin.modal_credit_save': 'Kontingent speichern',
+      'admin.modal_magic_title': 'Schreibgeschützter Report-Link',
+      'admin.modal_magic_desc': 'Dieser sichere Link gewährt schreibgeschützten Zugriff auf das Analyse-Dashboard dieses Kontos ohne Login:',
       'admin.modal_magic_copy': 'Kopieren',
       'admin.modal_magic_open': 'In neuem Tab öffnen ↗',
 
-      // === 7. Swiss Technical Monolith & Scroll-Craft Additions ===
-      'nav.race': '3-Modell-Rennen',
-      'nav.menu': 'Menü',
-      'hero.index': 'SYS // 01 — DETERMINISTIC AI TELEMETRY',
-      'hero.trust_title': 'VERIFIZIERTE REFERENZ-ENTITÄTEN (DACH B2B):',
-      'hero.plane_coord': 'KOORDINATEN-RASTER // UTF-8 CASE-FOLDING AKTIV',
-      'hero.plane_prompt_label': 'PROMPT_INPUT [DE_B2B]',
-      'hero.plane_prompt_val': 'Welche HR-Software eignet sich am besten für den deutschen Mittelstand?',
-      'hero.plane_caliper_brand': 'MARKE ERKANNT // CHAR_IDX: 034',
-      'hero.plane_caliper_comp': '1. WETTBEWERBER // CHAR_IDX: 105',
-      'hero.plane_delta': 'EARLINESS VORSPRUNG: +71 ZEICHEN',
-
-      // Act 2: Scroll-Scrubbed 3-Model Race (Signature Move & Peak)
-      'race.index': 'SYS // 02 — MULTI-MODEL TELEMETRY SCRUBBER',
-      'race.title': 'Ein Prompt. Drei KI-Modelle. Drei völlig verschiedene Realitäten.',
-      'race.subtitle': 'Bewegen Sie das Mausrad oder den Playhead-Regler: Beobachten Sie Zeichen für Zeichen, wie dieselbe Marke in OpenAI gewinnt, in Claude in den Windschatten gerät und in Gemini trotz Domain-Zitat unsichtbar bleibt.',
-      'race.prompt_label': 'LIVE BENCHMARK PROMPT',
-      'race.prompt_text': '„Welche HR-Software eignet sich am besten für den Mittelstand in Deutschland?“',
-      'race.scrubber_label': 'TOKEN-STREAM PLAYHEAD',
-      'race.scrubber_hint': 'Scrollen oder Regler ziehen zum Durchleuchten des Antwortstroms',
-      'race.openai_role': 'Parametrische Synthese',
-      'race.claude_role': 'Konservative Enterprise-Gewichtung',
-      'race.gemini_role': 'Google Search Grounding aktiv',
-      'race.grounding_label': 'GROUNDING QUELLEN:',
-      'race.char_offset': 'CHAR_IDX',
-      'race.rel_pos': 'REL_POS',
-      'race.geo_diag': 'GEO_DIAGNOSE',
-
-      // Act 3: MECE Simulator Workbench Additions
-      'simulator.index': 'SYS // 03 — INTERACTIVE MECE WORKBENCH',
-      'simulator.caliper_title': 'DETERMINISTISCHE EARLINESS-MESSLEISTE (0–100% TEXTSPANNE)',
-      'simulator.xray_title': 'LIVE TOKEN-X-RAY & SUBSTRING-DETEKTION',
-      'simulator.preset_1': '01. Direct Win (Personio)',
-      'simulator.preset_2': '02. Brand Halo (Celonis)',
-      'simulator.preset_3': '03. Takeover (Workday)',
-      'simulator.preset_4': '04. Generic (Markt)',
-
-      // Act 4: 4-Quadrant GEO Diagnostic Architecture
-      'features.index': 'SYS // 04 — 4-QUADRANT GEO DIAGNOSTIC MATRIX',
-      'features.title': 'Warum klassisches SEO für Sprachmodelle blind ist.',
-      'features.subtitle': 'Sprachmodelle kombinieren eingefrorenes parametrisches Trainingswissen mit Echtzeit-Suchzitierungen (RAG / Grounding). Unser 4-Quadranten-Motor isoliert exakt die Ursache Ihrer Sichtbarkeitsverluste.',
-      'features.axis_y_high': 'HOHE ZITIER-AUTORITÄT (GROUNDING)',
-      'features.axis_y_low': 'NIEDRIGE ZITIER-AUTORITÄT',
-      'features.axis_x_low': 'SCHWACHE TEXT-PROMINENZ',
-      'features.axis_x_high': 'STARKE TEXT-EMPFEHLUNG (#1)',
-      'features.q1_title': 'Q1 // CITATION HIJACK',
-      'features.q1_desc': 'Ihre Domain liefert die Fakten im RAG-Abruf, aber der Wettbewerber erntet die Empfehlung im Text.',
-      'features.q2_title': 'Q2 // PARAMETRIC BLINDSPOT',
-      'features.q2_desc': 'Ihre URL wird als Quelle zitiert, doch das Modell lässt Ihren Markennamen in der Antwort komplett aus.',
-      'features.q3_title': 'Q3 // BRAND HALO TRAP',
-      'features.q3_desc': 'Ihre Marke erscheint regelmäßig, aber immer nur auf Platz 2 oder 3 hinter dem Marktführer.',
-      'features.q4_title': 'Q4 // BURIED WINNER',
-      'features.q4_desc': 'Ihre Marke gewinnt den Vergleich, wird aber erst in der unteren Texthälfte (>50% Offset) genannt.',
-      'features.spec_unicode_title': 'Deutsche Unicode-Präzision',
-      'features.spec_unicode_desc': 'Deterministische Case-Folding-Normalisierung für ä, ö, ü, ß und ẞ sowie mehrteilige B2B-Markennamen.',
-      'features.spec_gdpr_title': 'Zero-CDN & Frankfurt Hosting',
-      'features.spec_gdpr_desc': 'Keine externen Tracker, keine US-Font-CDNs, volle DSGVO-Konformität auf dedizierter Infrastruktur.',
-      'features.spec_audit_title': 'Shareable Magic Audits',
-      'features.spec_audit_desc': 'Kryptografisch gesicherte Read-Only-Links für Vorstände, Kunden und Agentur-Pitches mit einem Klick.',
-
-      // Act 5: Pricing & Technical FAQ
-      'pricing.index': 'SYS // 05 — TARIFF SPECIFICATION',
-      'faq.index': 'SYS // 06 — TECHNISCHE DOKUMENTATION & FAQ',
-      'faq.title': 'Häufige Fragen zur Share-of-Model Telemetrie',
-      'faq.subtitle': 'Architektur, Methodik und Lizenzierung für europäische B2B-Unternehmen.',
-      'faq.q1': 'Wie unterscheidet sich Share-of-Model (SoM) von klassischem SEO-Ranking?',
-      'faq.a1': 'Suchmaschinen liefern zehn blaue Links; Sprachmodelle synthetisieren eine einzige Antwort. Chatlytics misst deterministisch, ob Ihre Marke genannt wird, an welchem Zeichen-Offset (Earliness) sie auftritt und ob sie vor oder nach Ihren Wettbewerbern empfohlen wird.',
-      'faq.q2': 'Was bedeutet die 4-Zustände-MECE-Klassifikation?',
-      'faq.a2': 'MECE steht für Mutually Exclusive & Collectively Exhaustive. Jeder LLM-Run fällt mathematisch eindeutig in genau eine Kategorie: 1_DIRECT_WIN (Marke führt), 2_BRAND_HALO (Marke hinter Wettbewerber), 3_COMPETITOR_TAKEOVER (nur Wettbewerber genannt) oder 4_GENERIC (keine Marken genannt).',
-      'faq.q3': 'Wie funktioniert das Google Gemini Search Grounding Tracking?',
-      'faq.a3': 'Unsere n8n-Worker-Pipeline extrahiert neben dem Antworttext auch die verifizierten Grounding-Chunks und Quell-Domains. Dadurch erkennen wir sofort, ob Ihre eigene Domain (z.B. personio.de) oder ein Drittportal als Beleg herangezogen wurde.',
-      'faq.q4': 'Warum sind bei der kostenlosen Registrierung nur Firmen-E-Mails erlaubt?',
-      'faq.a4': 'Da jeder Test-Account 40 echte Multi-LLM-Runs über OpenAI, Anthropic und Google Gemini freischaltet, schützen wir die Plattform-Infrastruktur vor Missbrauch durch automatisierte Freemail- und Wegwerf-Adressen.',
-
-      // Trace Rail
-      'trace.hero': '01.SYNTHESE',
-      'trace.race': '02.MODELL-RENNEN',
-      'trace.sim': '03.MECE-LABOR',
-      'trace.geo': '04.GEO-MATRIX',
-      'trace.pricing': '05.TARIFE',
-      'trace.faq': '06.FAQ',
-
-      // Dashboard 2x2 SVG Matrix Labels
-      'geo.svg_title': '2x2 KORRELATIONS-KOORDINATENFELD',
-      'geo.svg_y_axis': 'ZITATIONS-AUTORITÄT',
-      'geo.svg_x_axis': 'TEXT-FRÜHZEITIGKEIT'
+      // 14. Config Modal & Common
+      'config.llms_label': 'Ziel-KI-Modelle (Multi-LLM)',
+      'config.llms_hint': 'Wählen Sie mindestens ein Modell. Europäische Endpunkte laufen streng DSGVO-konform.',
+      'config.eu_hosted_badge': 'EU-Hosted',
+      'config.search_label': 'Live-Websuche / Search Grounding aktivieren',
+      'config.search_hint': 'OpenAI und Google Gemini nutzen Live-Suche zur Quellen-Analyse, sofern aktiviert.',
+      'common.cancel': 'Abbrechen',
+      'common.close': 'Schließen'
     },
 
     en: {
-      // 1. Verbatim Mission Statements
+      // 1. Canonical Brand Statements
       'mission.statement': 'Chatlytics.de — AI Visibility & Share-of-Model (SoM) Analytics for European B2B Brands.',
-      'mission.subtitle': 'Measure and optimize how ChatGPT, Claude, and Google Gemini cite, rank, and recommend your brand against competitors. Deterministic, GDPR-compliant GEO telemetry for enterprise leaders.',
+      'mission.subtitle': 'Measure and manage how ChatGPT, Claude, and Google Gemini cite, rank, and recommend your brand against competitors with deterministic, GDPR-compliant analytics.',
 
-      // 2. Navigation
+      // 2. Navigation (Landing & Shared)
       'nav.brand': 'Chatlytics.de',
-      'nav.tagline': 'AI Visibility & Share-of-Model Analytics',
-      'nav.features': 'Features',
-      'nav.mece': 'MECE Model',
+      'nav.tagline': 'Share-of-Model & GEO Analytics',
+      'nav.dossier': 'Model Comparison',
+      'nav.workbench': 'Response Analyzer',
+      'nav.matrix': 'Root-Cause Matrix',
       'nav.pricing': 'Pricing',
-      'nav.audit_demo': 'Live Audit',
+      'nav.faq': 'FAQ',
+      'nav.features': 'Root-Cause Matrix',
+      'nav.mece': 'Recommendation Tiers',
+      'nav.audit_demo': 'Board Report',
       'nav.dashboard': 'Dashboard',
       'nav.admin': 'Admin Cockpit',
-      'nav.login': 'Log in',
-      'nav.signup': 'Get Started Free',
+      'nav.login': 'Login',
+      'nav.signup': 'Start Free Audit',
       'nav.logout': 'Log out',
       'nav.home': 'Home',
+      'nav.menu': 'Menu',
+      'nav.billing': 'Billing',
+      'nav.settings': 'Settings',
 
-      // 3. Hero Section
-      'hero.title': 'Chatlytics.de — AI Visibility & Share-of-Model (SoM) Analytics for European B2B Brands.',
-      'hero.subtitle': 'Measure and optimize how ChatGPT, Claude, and Google Gemini cite, rank, and recommend your brand against competitors. Deterministic, GDPR-compliant GEO telemetry for enterprise leaders.',
-      'hero.cta_free': 'Claim 40 Free Audits',
-      'hero.cta_demo': 'Explore Interactive MECE Demo',
-      'hero.trust_gdpr': '100% GDPR-compliant (Frankfurt Hosting)',
-      'hero.trust_deterministic': 'Deterministic MECE Classification & Unicode Metrics',
-      'hero.trust_multi_llm': 'Multi-LLM Telemetry: GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Pro',
+      // 3. Hero Stage (Obsidian)
+      'hero.eyebrow': 'SHARE-OF-MODEL & GEO ANALYTICS FOR BRANDS, MID-MARKET & CONSULTANCIES',
+      'hero.title': 'Who does AI recommend when buyers ask for the market leader?',
+      'hero.subtitle': 'Ten blue Google links belong to the past. Whether skincare, industrial equipment, B2B software, or strategy consulting, buyers shortlist vendors directly inside ChatGPT, Claude, and Gemini. Chatlytics measures character by character whether your brand is recommended first, trails a competitor, or disappears despite your own guides being cited.',
+      'hero.cta_primary': 'Audit Your Brand Free (40 Live Queries)',
+      'hero.cta_secondary': 'View Sample Board Report →',
+      'hero.switcher_label': 'Select live brand matchup:',
+      'hero.switcher_note': 'Interactive brand matchups (sample data)',
 
-      // 4. MECE 4-State Classifier
-      '1_DIRECT_WIN': '1_DIRECT_WIN',
-      '2_BRAND_HALO': '2_BRAND_HALO',
-      '3_COMPETITOR_TAKEOVER': '3_COMPETITOR_TAKEOVER',
-      '4_GENERIC': '4_GENERIC',
+      // 4. Section 2: Interactive Brand Dossier
+      'dossier.eyebrow': 'MODEL COMPARISON',
+      'dossier.title': 'One buyer question. Three language models. Three completely different leaders.',
+      'dossier.prompt_label': 'Buyer Question (Prompt)',
+      'dossier.scrubber_label': 'Character-by-character reading progress',
+      'dossier.scrubber_hint': 'Drag slider to inspect response construction character by character.',
+      'dossier.openai_sub': 'Parametric Synthesis',
+      'dossier.claude_sub': 'Conservative Weighting',
+      'dossier.gemini_sub': 'Google Search Grounding Active',
+      'dossier.col_first': 'First Mention',
+      'dossier.col_delta': 'Lead / Deficit',
+      'dossier.col_rel': 'Position in Text',
+      'dossier.col_diag': 'Cited Source / Diagnosis',
+      'dossier.col_source': 'Cited Source',
+      'dossier.timeline_title': 'Synchronized Character Timeline (OpenAI GPT-4o, Scale Char 0 to 200)',
 
-      'mece.section_title': 'The Chatlytics MECE Classification Model',
-      'mece.section_desc': 'Every AI response stream is deterministically classified into one of four mutually exclusive, collectively exhaustive states.',
+      // 5. Recommendation Tiers
+      '1_DIRECT_WIN': 'Rank 1 · First Choice',
+      '2_BRAND_HALO': 'Rank 2 · Runner-Up',
+      '3_COMPETITOR_TAKEOVER': 'Displaced · Rival Takeover',
+      '4_GENERIC': 'Brand-Free Response',
 
-      'mece.1_DIRECT_WIN.title': '1_DIRECT_WIN (Direct Win)',
-      'mece.1_DIRECT_WIN.badge': 'Direct Win',
-      'mece.1_DIRECT_WIN.desc': 'Your brand leads the model recommendation (#1 position) or is named as the primary solution.',
+      'mece.section_title': 'The 4 Recommendation Tiers',
+      'mece.section_desc': 'Every AI response falls reproducibly into one of four commercial visibility outcomes.',
 
-      'mece.2_BRAND_HALO.title': '2_BRAND_HALO (Brand Halo)',
-      'mece.2_BRAND_HALO.badge': 'Brand Halo',
-      'mece.2_BRAND_HALO.desc': 'Your brand is mentioned secondarily behind a leading competitor.',
+      'mece.1_DIRECT_WIN.title': 'Frontrunner · First Choice',
+      'mece.1_DIRECT_WIN.badge': 'Rank 1 · First Choice',
+      'mece.1_DIRECT_WIN.desc': 'Your brand appears as the first recommendation in reading order and beats every competitor. Commercial effect: maximum shortlist conversion.',
 
-      'mece.3_COMPETITOR_TAKEOVER.title': '3_COMPETITOR_TAKEOVER (Competitor Takeover)',
-      'mece.3_COMPETITOR_TAKEOVER.badge': 'Competitor Takeover',
-      'mece.3_COMPETITOR_TAKEOVER.desc': 'Competitors are recommended while your brand is entirely omitted from the response stream.',
+      'mece.2_BRAND_HALO.title': 'Challenging · Runner-Up',
+      'mece.2_BRAND_HALO.badge': 'Rank 2 · Runner-Up',
+      'mece.2_BRAND_HALO.desc': 'Your brand is mentioned, but only as a secondary alternative after a competing leader. Commercial effect: price and justification pressure.',
 
-      'mece.4_GENERIC.title': '4_GENERIC (Generic Response)',
-      'mece.4_GENERIC.badge': 'Generic',
-      'mece.4_GENERIC.desc': 'Neither your brand nor relevant competitors appear in the response text.',
+      'mece.3_COMPETITOR_TAKEOVER.title': 'Displaced · Rival Takeover',
+      'mece.3_COMPETITOR_TAKEOVER.badge': 'Displaced · Rival Takeover',
+      'mece.3_COMPETITOR_TAKEOVER.desc': 'The model recommends competitors only; your brand is completely absent from the answer. Commercial effect: direct pipeline and cart loss.',
 
-      // 5. 4-Quadrant GEO Diagnostics
-      '1_CITATION_HIJACK': '1_CITATION_HIJACK',
-      '2_PARAMETRIC_BLINDSPOT': '2_PARAMETRIC_BLINDSPOT',
-      '3_BRAND_HALO_TRAP': '3_BRAND_HALO_TRAP',
-      '4_BURIED_WINNER': '4_BURIED_WINNER',
-      'NONE': 'NONE',
+      'mece.4_GENERIC.title': 'Brand-Free Response',
+      'mece.4_GENERIC.badge': 'Brand-Free Response',
+      'mece.4_GENERIC.desc': 'The model answers the topic generally without naming specific vendors or products. Commercial effect: open potential for targeted GEO content seeding.',
 
-      'geo.section_title': '4-Quadrant GEO Action Panel',
-      'geo.section_desc': 'Tactical prescriptions correlating grounding citation authority with model recommendation.',
+      // 6. Root-Cause Diagnostics
+      '1_CITATION_HIJACK': 'The Hijacked Brief',
+      '2_PARAMETRIC_BLINDSPOT': 'The Silent Source Citation',
+      '3_BRAND_HALO_TRAP': 'The Perpetual Runner-Up',
+      '4_BURIED_WINNER': 'The Buried Winner',
+      'NONE': 'Optimal · Frontrunner',
 
-      'geo.1_CITATION_HIJACK.title': 'Quadrant 1: Citation Hijack',
-      'geo.1_CITATION_HIJACK.condition': 'Brand cited in sources, but competitor recommended in synthesis.',
-      'geo.1_CITATION_HIJACK.prescription': 'Competitor is hijacking your citations. Update Schema.org markup.',
-      'geo.1_CITATION_HIJACK.action': 'Update Schema.org markup, correct comparison portal entries, and reinforce primary sources.',
+      'geo.section_title': 'Root-Cause Diagnostics',
+      'geo.section_desc': 'Relationship between grounding citation authority and text prominence.',
 
-      'geo.2_PARAMETRIC_BLINDSPOT.title': 'Quadrant 2: Parametric Blindspot',
-      'geo.2_PARAMETRIC_BLINDSPOT.condition': 'Domain cited, but brand omitted from synthesis text.',
-      'geo.2_PARAMETRIC_BLINDSPOT.prescription': 'Domain cited, but brand omitted from synthesis text. Expand entity co-occurrences.',
-      'geo.2_PARAMETRIC_BLINDSPOT.action': 'Expand entity co-occurrences, launch digital PR, and deepen Wikipedia citation anchoring.',
+      'geo.1_CITATION_HIJACK.title': 'The Hijacked Brief',
+      'geo.1_CITATION_HIJACK.condition': 'Own or external source · Rival wins Rank 1',
+      'geo.1_CITATION_HIJACK.prescription': 'Your expert guides supply the background facts, yet the AI recommends a rival in the opening sentence. Embed structured comparison tables and clear positioning statements.',
+      'geo.1_CITATION_HIJACK.action': 'Add structured comparison tables, objective selection criteria, and explicit positioning statements directly into ranking guide pages.',
 
-      'geo.3_BRAND_HALO_TRAP.title': 'Quadrant 3: Brand Halo Trap',
-      'geo.3_BRAND_HALO_TRAP.condition': 'Brand trapped in competitor shadow.',
-      'geo.3_BRAND_HALO_TRAP.prescription': 'Brand trapped in competitor shadow. Sharpen differentiating USPs.',
-      'geo.3_BRAND_HALO_TRAP.action': 'Sharpen differentiating USPs and publish authoritative benchmark comparison reports.',
+      'geo.2_PARAMETRIC_BLINDSPOT.title': 'The Silent Source Citation',
+      'geo.2_PARAMETRIC_BLINDSPOT.condition': 'Own domain cited · Brand missing in text',
+      'geo.2_PARAMETRIC_BLINDSPOT.prescription': 'Your URL is loaded as a footnote source, yet your brand name is absent from the visible answer. Pair brand entity, authorship, and category in the opening section and Schema.org markup.',
+      'geo.2_PARAMETRIC_BLINDSPOT.action': 'Couple your brand entity, authorship, and product category directly inside the opening section and Schema.org markup of cited pages.',
 
-      'geo.4_BURIED_WINNER.title': 'Quadrant 4: Buried Winner',
-      'geo.4_BURIED_WINNER.condition': 'Winner, but cited late (high token offset).',
-      'geo.4_BURIED_WINNER.prescription': 'Winner, but cited late. Optimize semantic density.',
-      'geo.4_BURIED_WINNER.action': 'Optimize semantic density, implement keyphrase frontloading, and refine technical glossaries.',
+      'geo.3_BRAND_HALO_TRAP.title': 'The Perpetual Runner-Up',
+      'geo.3_BRAND_HALO_TRAP.condition': 'Parametric training memory · Stuck at Rank 2–3',
+      'geo.3_BRAND_HALO_TRAP.prescription': 'The model recognizes your brand from training data, but routinely places it behind US market leaders. Anchor specific DACH and quality attributes across independent trade publications.',
+      'geo.3_BRAND_HALO_TRAP.action': 'Anchor specific regional, compliance, and quality differentiators across independent trade publications and directories.',
 
-      'geo.NONE.title': 'No Acute GEO Anomaly',
-      'geo.NONE.condition': 'Stable brand positioning without critical imbalances.',
-      'geo.NONE.prescription': 'No critical GEO anomalies detected. Visibility stable.',
-      'geo.NONE.action': 'Maintain ongoing telemetry monitoring and monthly audits.',
+      'geo.4_BURIED_WINNER.title': 'The Buried Winner',
+      'geo.4_BURIED_WINNER.condition': 'Own domain cited · Late mention (>50% offset)',
+      'geo.4_BURIED_WINNER.prescription': 'Your brand wins the substantive comparison, but only surfaces in the closing paragraph where buyers rarely read. Sharpen TL;DR summaries and opening definitions.',
+      'geo.4_BURIED_WINNER.action': 'Sharpen TL;DR summaries and concise lead definitions on core pages so models pull your brand into the opening sentence.',
 
-      // 6. Pricing Tiers
-      'pricing.section_title': 'Transparent B2B SaaS Pricing',
-      'pricing.billing_monthly': 'Monthly Billing',
-      'pricing.billing_annual': 'Annual Billing (-20%)',
-      'pricing.popular_badge': 'Most Popular',
+      'geo.NONE.title': 'Optimal · Frontrunner',
+      'geo.NONE.condition': 'Stable leading visibility without acute gaps.',
+      'geo.NONE.prescription': 'No critical visibility gaps detected. Your brand leads the recommendation text.',
+      'geo.NONE.action': 'Maintain continuous monitoring across core commercial buyer prompts.',
+
+      // 7. Section 3: Live Response Analyzer
+      'workbench.eyebrow': 'RESPONSE ANALYZER',
+      'workbench.title': 'Four unambiguous recommendation tiers instead of vague sentiment curves.',
+      'workbench.subtitle': 'Reliable growth and SEO decisions require exact placement metrics, not fuzzy sentiment scores. Every AI answer maps reproducibly to one of four commercial scenarios. Test our position calculation live in your browser:',
+      'workbench.presets_label': 'Quick presets:',
+      'workbench.preset_1': 'Scenario 1: Frontrunner (Nøva Skin)',
+      'workbench.preset_2': 'Scenario 2: Runner-Up (Biovena One)',
+      'workbench.preset_3': 'Scenario 3: Displaced (Personia missing)',
+      'workbench.preset_4': 'Scenario 4: Brand-Free Response',
+      'workbench.brand_label': 'Your Brand (incl. variants)',
+      'workbench.competitors_label': 'Competitors (comma-separated)',
+      'workbench.text_label': 'AI Response Text to Check',
+      'workbench.result_label': 'Detected Recommendation Tier',
+      'workbench.pos_bar_label': 'Position Bar (0% to 100% of text length)',
+      'workbench.legend_brand': 'Your Brand',
+      'workbench.legend_comp': '1st Competitor',
+      'workbench.metric_char': 'First Mention (Char)',
+      'workbench.metric_word': 'First Mention (Word)',
+      'workbench.metric_rel': 'Position in Text (%)',
+      'workbench.metric_comp': '1st Competitor (Char)',
+
+      // 8. Section 4: Root-Cause Matrix & 3 DACH Trust Pillars
+      'matrix.eyebrow': 'ROOT-CAUSE MATRIX',
+      'matrix.title': 'Why classic SEO operates blind inside language models.',
+      'matrix.subtitle': 'Language models combine pre-trained knowledge with live web search (RAG / Grounding). Our 4-field model separates source authority (Y-axis) from text prominence (X-axis) so your team sees immediately which lever is missing:',
+      'matrix.y_title': 'Source Authority (Search Grounding & Citations)',
+      'matrix.y_high': 'Own domain cited as source',
+      'matrix.y_low': 'External source or training memory only',
+      'matrix.x_title': 'Brand Prominence in Response Text',
+      'matrix.x_low': 'Brand missing or displaced',
+      'matrix.x_high': 'Brand recommended in text',
+      'matrix.label_problem': 'Problem',
+      'matrix.label_lever': 'Technical Lever',
+
+      'matrix.q1_badge': 'Diagnosis 01 · High Urgency',
+      'matrix.q1_title': 'The Silent Source Citation',
+      'matrix.q1_problem': 'Your URL (such as novaskin.de/ratgeber or berger-kucher.de/whitepaper) is loaded by Gemini or ChatGPT as a footnote source, yet your brand name is absent from the visible answer.',
+      'matrix.q1_lever': 'Bind your brand entity, authorship, and product category directly in the opening section of the cited page and in Schema.org markup.',
+
+      'matrix.q2_badge': 'Diagnosis 02 · Quick Win',
+      'matrix.q2_title': 'The Buried Winner',
+      'matrix.q2_problem': 'Your brand wins the substantive comparison, but appears only in the final paragraph where buyers rarely keep reading.',
+      'matrix.q2_lever': 'Sharpen TL;DR summaries and concise lead definitions on your core pages so language models surface your brand in the opening sentence.',
+
+      'matrix.q3_badge': 'Diagnosis 03 · Pipeline Loss',
+      'matrix.q3_title': 'The Hijacked Brief',
+      'matrix.q3_problem': 'Your editorial guides supply the background facts, yet the AI recommends your competitor (AthleticOne, Dysonix) in the opening sentence.',
+      'matrix.q3_lever': 'Embed structured comparison tables, objective selection criteria, and clear positioning statements directly into ranking guide pages.',
+
+      'matrix.q4_badge': 'Diagnosis 04 · Positioning Lever',
+      'matrix.q4_title': 'The Perpetual Runner-Up',
+      'matrix.q4_problem': 'The model knows your brand from training data, yet habitually positions you as "another option" behind US incumbents.',
+      'matrix.q4_lever': 'Anchor specific regional and quality attributes ("independently lab-tested", "DATEV integration", "German mid-market") in independent trade media and directories.',
+
+      'pillar.1_title': 'DACH Brand & Legal-Entity Recognition',
+      'pillar.1_desc': 'Accurate entity resolution for multi-word German brand names, GmbH/AG corporate suffixes, umlauts, and industry terminology.',
+      'pillar.2_title': '100% Frankfurt Infrastructure without US Trackers',
+      'pillar.2_desc': 'No external font CDNs, no advertising pixels, full GDPR compliance on dedicated servers in Frankfurt am Main.',
+      'pillar.3_title': 'Verified Board & Pitch Reports',
+      'pillar.3_desc': 'Share cryptographically scoped, read-only live audits in one click with executives, revenue teams, or agency clients.',
+
+      // 9. Section 5: Pricing & Capacities
+      'pricing.eyebrow': 'PRICING & CAPACITIES',
+      'pricing.title': 'From your first visibility audit to systematic category leadership.',
+      'pricing.subtitle': 'Start free forever with 40 real live queries or secure continuous monitoring and active optimization for your buyer-critical prompts.',
+      'pricing.per_month': '/ month',
 
       'pricing.free_name': 'Free',
       'pricing.free_price': '€0',
-      'pricing.free_cadence': 'One-time 40 Credits',
-      'pricing.free_target': 'Evaluation for B2B Marketing & SEO Teams',
-      'pricing.free_cta': 'Get Started Free',
-      'pricing.free_feat_1': '1 Tracking Configuration',
-      'pricing.free_feat_2': 'GPT-4o Mini & Claude 3.5 Haiku',
-      'pricing.free_feat_3': 'Basic MECE Classification',
-      'pricing.free_feat_4': '7 Days History',
-      'pricing.free_feat_5': 'Community Support',
+      'pricing.free.name': 'Free',
+      'pricing.free.desc': 'For evaluation & initial status report',
+      'pricing.free.period': '/ forever',
+      'pricing.free.cta': 'Start Free',
+      'pricing.free.feat_1': '✔ 40 live queries starter balance included',
+      'pricing.free.feat_2': '✔ 1 brand & competitor profile',
+      'pricing.free.feat_3': '✔ OpenAI GPT-4o & Google Gemini analysis',
+      'pricing.free.feat_4': '✔ Evaluation across all 4 recommendation tiers',
+      'pricing.free.feat_5': '✔ Documentation & standard support',
 
       'pricing.starter_name': 'Starter',
       'pricing.starter_price': '€149',
-      'pricing.starter_cadence': 'per month / 500 Credits',
-      'pricing.starter_target': 'Growing European B2B Startups & Scale-ups',
-      'pricing.starter_cta': 'Select Starter',
-      'pricing.starter_feat_1': 'Up to 5 Tracking Configurations',
-      'pricing.starter_feat_2': 'Multi-LLM (GPT-4o, Claude 3.5 Sonnet, Gemini)',
-      'pricing.starter_feat_3': 'Weekly Automatic Runs',
-      'pricing.starter_feat_4': 'Grounding Citation Tracking',
-      'pricing.starter_feat_5': '30 Days History',
-      'pricing.starter_feat_6': 'Standard Email Support',
+      'pricing.starter.name': 'Starter',
+      'pricing.starter.desc': 'For growing brands & product teams',
+      'pricing.starter.cta': 'Select Starter',
+      'pricing.starter.feat_1': '✔ 500 live queries per month included',
+      'pricing.starter.feat_2': '✔ 5 brand or product-category profiles',
+      'pricing.starter.feat_3': '✔ Daily automated audit runs',
+      'pricing.starter.feat_4': '✔ Time-series comparison (7 days / 30 days)',
+      'pricing.starter.feat_5': '✔ Full source-domain & citation analysis',
+      'pricing.starter.feat_6': '✔ Email support (24h response time)',
 
       'pricing.growth_name': 'Growth',
       'pricing.growth_price': '€399',
-      'pricing.growth_cadence': 'per month / 2,000 Credits',
-      'pricing.growth_target': 'Established European B2B Brands & Agencies',
-      'pricing.growth_cta': 'Select Growth',
-      'pricing.growth_feat_1': 'Up to 20 Tracking Configurations',
-      'pricing.growth_feat_2': 'All LLMs incl. Gemini 1.5 Pro & Search Grounding',
-      'pricing.growth_feat_3': 'Daily Automatic Runs',
-      'pricing.growth_feat_4': '4-Quadrant GEO Action Matrix',
-      'pricing.growth_feat_5': 'Competitor Benchmark Leaderboard',
-      'pricing.growth_feat_6': 'Unlimited Magic Audit Share Links',
-      'pricing.growth_feat_7': 'Priority Support',
-
-      'pricing.managed_name': 'Managed GEO Retainer',
-      'pricing.managed_price': 'From €1,950',
-      'pricing.managed_cadence': 'per month / Custom Retainer',
-      'pricing.managed_target': 'Enterprise & Market Leaders with Strategic AI Visibility Needs',
-      'pricing.managed_cta': 'Request Consultation',
-      'pricing.managed_feat_1': 'Unlimited Audits & Prompts',
-      'pricing.managed_feat_2': 'Custom Prompt Architecture',
-      'pricing.managed_feat_3': 'Continuous Citation Engineering',
-      'pricing.managed_feat_4': 'Parametric Digital PR Campaigning',
-      'pricing.managed_feat_5': 'Monthly Executive C-Level Report',
-      'pricing.managed_feat_6': 'Dedicated Senior GEO Strategist',
-
-      // 7. Dashboard & Analytics
-      'dashboard.title': 'AI Visibility Cockpit',
-      'dashboard.kpi_som': 'Share of Model (SoM)',
-      'dashboard.kpi_visibility': 'Visibility Index',
-      'dashboard.kpi_earliness': 'Average Earliness',
-      'dashboard.kpi_runs': 'Total Audit Runs',
-      'dashboard.kpi_citation_share': 'Citation Share',
-      'dashboard.kpi_credits': 'Remaining Credits',
-
-      'dashboard.period_7d': '7 Days',
-      'dashboard.period_14d': '14 Days',
-      'dashboard.period_30d': '30 Days',
-      'dashboard.period_90d': '90 Days',
-      'dashboard.period_all': 'All',
-
-      'dashboard.btn_trigger_run': 'Run Instant Audit',
-      'dashboard.btn_running': 'Audit Running (n8n Engine)...',
-      'dashboard.mece_distribution': 'MECE Category Distribution',
-      'dashboard.pop_comparison': 'Period-over-Period (PoP) Comparison',
-      'dashboard.competitor_leaderboard': 'Competitor Benchmark Leaderboard',
-      'dashboard.citations_table': 'Top Grounding Citations & Sources',
-      'dashboard.empty_title': 'No data available for this period',
-      'dashboard.empty_desc': 'Run an instant audit or select a different configuration.',
-
-      // 8. Magic Audit Preview Mode
-      'audit.banner_notice': '👁️ You are viewing a shared Chatlytics Magic Audit (Read-Only).',
-      'audit.conversion_text': 'Want continuous AI visibility tracking for your own brand?',
-      'audit.conversion_btn': 'Claim 40 Free Audits Now',
-
-      // 9. Admin Cockpit
-      'admin.title': 'Owner Cockpit — Platform Administration',
-      'admin.kpi_users': 'Registered Users',
-      'admin.kpi_runs': 'Total LLM Runs',
-      'admin.kpi_configs': 'Active Configurations',
-      'admin.kpi_credits_used': 'Credits Consumed',
-      'admin.user_directory': 'User Directory',
-      'admin.btn_seed_demo': 'Seed German B2B SaaS Demo Data',
-      'admin.btn_magic_audit': 'Generate Magic Audit Link',
-      'admin.btn_adjust_credits': 'Adjust Credits',
-
-      // 10. Table Column Headers
-      'col.rank': 'Rank',
-      'col.brand': 'Brand / Competitor',
-      'col.domain': 'Domain',
-      'col.mentions': 'Mentions',
-      'col.win_rate': 'Win Rate %',
-      'col.visibility': 'Visibility %',
-      'col.earliness': 'Earliness (Word)',
-      'col.recommendations': 'Recommendations',
-      'col.citations': 'Citations',
-      'col.source_url': 'Source URL',
-      'col.authority': 'Authority',
-      'col.id': 'ID',
-      'col.email': 'Email',
-      'col.company': 'Company',
-      'col.role': 'Role',
-      'col.tier': 'Plan',
-      'col.credits': 'Credits',
-      'col.created_at': 'Created At',
-      'col.actions': 'Actions',
-
-      // 11. Status Badges & Common UI
-      'status.active': 'Active',
-      'status.pending': 'Pending',
-      'status.completed': 'Completed',
-      'status.queued': 'Queued',
-      'status.failed': 'Failed',
-
-      'common.save': 'Save',
-      'common.cancel': 'Cancel',
-      'common.close': 'Close',
-      'common.delete': 'Delete',
-      'common.edit': 'Edit',
-      'common.loading': 'Loading...',
-      'common.success': 'Success',
-      'common.error': 'Error',
-      'common.copy': 'Copy',
-      'common.copied': 'Copied to clipboard!',
-      'common.vs_previous': 'vs. previous period',
-      'common.details': 'Details',
-
-      // === 1. Navigation & Hero Additions ===
-      'nav.simulator': 'MECE Simulator',
-      'nav.faq': 'FAQ',
-      'nav.billing': 'Billing',
-      'nav.settings': 'Settings',
-      'hero.badge': 'B2B Generative Engine Optimization (GEO) & SoM',
-      'hero.cta_primary': 'Get Started Free (40 Runs)',
-      'hero.cta_secondary': 'Try Live MECE Simulator',
-
-      // === 2. Interactive MECE Simulator ===
-      'simulator.title': 'Interactive MECE Simulator',
-      'simulator.subtitle': 'Test the mathematically strict 4-state MECE classification directly in your browser.',
-      'simulator.presets_label': 'Load presets:',
-      'simulator.brand_label': 'Your Brand',
-      'simulator.competitors_label': 'Competitors (comma-separated)',
-      'simulator.text_label': 'AI Response Text (Synthesis)',
-      'simulator.result_label': 'Classification Result:',
-      'simulator.char_earliness': 'Character Earliness:',
-      'simulator.word_earliness': 'Word Earliness:',
-      'simulator.rel_pos': 'Relative Position:',
-      'simulator.comp_earliness': '1st Competitor:',
-
-      // === 3. 4-Tier Hybrid Pricing Table ===
-      'pricing.title': '4-Tier Hybrid Pricing',
-      'pricing.subtitle': 'From free freemium onboarding to tailored Managed GEO Retainers for enterprise leaders.',
-      'pricing.free.name': 'Free',
-      'pricing.free.desc': 'For evaluation & proof-of-concept',
-      'pricing.free.period': 'forever',
-      'pricing.free.cta': 'Get Started Free',
-      'pricing.starter.name': 'Starter',
-      'pricing.starter.desc': 'For growing SMBs & product teams',
-      'pricing.per_month': '/ month',
-      'pricing.starter.cta': 'Select Starter',
       'pricing.growth.badge': 'Recommended',
       'pricing.growth.name': 'Growth',
-      'pricing.growth.desc': 'For market-leading B2B SaaS companies',
-      'pricing.growth.cta': 'Select Growth',
-      'pricing.managed.name': 'Managed GEO Retainer',
-      'pricing.managed.desc': 'End-to-end Generative Engine Optimization',
-      'pricing.managed.cta': 'Request Consultation',
+      'pricing.growth.desc': 'For leading mid-market, D2C & SaaS brands',
+      'pricing.growth.cta': 'Start Growth',
+      'pricing.growth.feat_1': '✔ 2,000 live queries per month included',
+      'pricing.growth.feat_2': '✔ 25 brand, industry, or country profiles',
+      'pricing.growth.feat_3': '✔ Hourly updates & monitoring',
+      'pricing.growth.feat_4': '✔ All models: OpenAI, Anthropic Claude, Google Gemini',
+      'pricing.growth.feat_5': '✔ Complete 4-field root-cause diagnostics & content levers',
+      'pricing.growth.feat_6': '✔ Shareable board & stakeholder report links',
+      'pricing.growth.feat_7': '✔ Priority support & personal onboarding',
 
-      // Pricing Feature Bullets
-      'pricing.free.feat_1': '✔ 40 Runs free starting balance',
-      'pricing.free.feat_2': '✔ 1 Tracking configuration',
-      'pricing.free.feat_3': '✔ OpenAI + Google Gemini routing',
-      'pricing.free.feat_4': '✔ 4-State MECE instant classification',
-      'pricing.free.feat_5': '✔ Community & documentation support',
-      'pricing.starter.feat_1': '✔ 500 Runs per month included',
-      'pricing.starter.feat_2': '✔ 5 Tracking configurations',
-      'pricing.starter.feat_3': '✔ Daily automated audit jobs',
-      'pricing.starter.feat_4': '✔ PoP period comparison (7d / 30d)',
-      'pricing.starter.feat_5': '✔ Grounding citation analysis',
-      'pricing.starter.feat_6': '✔ Email support (24h SLA)',
-      'pricing.growth.feat_1': '✔ 2,000 Runs per month included',
-      'pricing.growth.feat_2': '✔ 25 Tracking configurations',
-      'pricing.growth.feat_3': '✔ Hourly queue synchronization',
-      'pricing.growth.feat_4': '✔ All LLMs: OpenAI, Anthropic Claude, Gemini',
-      'pricing.growth.feat_5': '✔ 4-Quadrant GEO Action Panel recommendations',
-      'pricing.growth.feat_6': '✔ Magic Audit share links for stakeholders',
-      'pricing.growth.feat_7': '✔ Priority support & onboarding call',
-      'pricing.managed.feat_1': '✔ Custom run volume on demand',
-      'pricing.managed.feat_2': '✔ Unlimited tracking configurations',
-      'pricing.managed.feat_3': '✔ Dedicated B2B GEO optimization strategist',
-      'pricing.managed.feat_4': '✔ Reverse engineering of cited source domains',
-      'pricing.managed.feat_5': '✔ Custom Schema.org & Knowledge Graph blueprint',
-      'pricing.managed.feat_6': '✔ Monthly C-level board report & SLA',
+      'pricing.managed_name': 'Managed GEO & Pipeline Defense',
+      'pricing.managed_price': '€1,950+',
+      'pricing.managed.badge': 'For Market & Category Leaders',
+      'pricing.managed.name': 'Managed GEO & Pipeline Defense',
+      'pricing.managed.desc': 'We measurably restore your brand to Rank 1 on purchase-critical prompts.',
+      'pricing.managed.cta': 'Request Strategy Call →',
+      'pricing.managed.feat_1': '✔ Custom query allocation across all buyer prompts',
+      'pricing.managed.feat_2': '✔ Unlimited brand and competitor profiles',
+      'pricing.managed.feat_3': '✔ Reverse-engineering of cited third-party domains & trade media',
+      'pricing.managed.feat_4': '✔ Technical GEO & Schema.org blueprint for your team',
+      'pricing.managed.feat_5': '✔ Dedicated GEO strategist & monthly executive board report',
 
-      // === 4. Freemium & Auth Modal ===
+      // 10. Section 6: FAQ & Footer
+      'faq.eyebrow': 'METHODOLOGY & ARCHITECTURE',
+      'faq.title': 'Frequently asked questions on Share-of-Model analytics.',
+      'faq.q1': 'How does Share-of-Model (SoM) differ from classic SEO rankings?',
+      'faq.a1': 'Search engines return ten blue links; language models condense the market into a single recommendation. Even if your site ranks #1 on Google, ChatGPT or Gemini may recommend your competitor in the response text. Chatlytics reproducibly measures whether your brand is named, at which character position it appears, and which sources feed the answer.',
+      'faq.q2': 'What logic evaluates the AI responses?',
+      'faq.a2': 'Instead of vague sentiment scores, Chatlytics relies strictly on character position and factual mentions. Every response maps unambiguously to one of four tiers: Frontrunner (your brand appears before all rivals), Runner-Up (a competitor is named first), Displaced (only competitors appear), or Brand-Free Response (no vendors named).',
+      'faq.q3': 'How does Search Grounding source analysis work for Google Gemini and ChatGPT?',
+      'faq.a3': 'Our dedicated multi-LLM retrieval infrastructure extracts both the visible answer text and background search snippets and cited domains. Your SEO and content teams see immediately whether your own website (such as novaskin.de or personia.de) or a third-party directory anchored the answer.',
+      'faq.q4': 'Why are only corporate work email addresses permitted for free registration?',
+      'faq.a4': 'Because every trial account unlocks 40 real live queries across OpenAI, Anthropic, and Google Gemini, we protect compute capacity from automated disposable email abuse. You can start immediately without a credit card.',
+
+      'footer.copyright': '© 2026 Chatlytics.de — Enterprise AI Visibility & Share-of-Model Analytics',
+      'footer.infra': 'Hosted on dedicated infrastructure in Frankfurt am Main (100% GDPR-compliant, no US CDNs)',
+      'footer.privacy': 'Privacy',
+      'footer.imprint': 'Imprint',
+      'footer.terms': 'Terms',
+
+      // 11. Auth Modal
       'auth.tab_signup': 'Sign Up',
-      'auth.tab_login': 'Log In',
-      'auth.signup_sub': 'Create your account with 40 free test runs. Corporate business emails only.',
-      'auth.work_email': 'Work Email Address',
-      'auth.email_hint': 'No personal freemail addresses (Gmail, Yahoo, etc.)',
+      'auth.tab_login': 'Login',
+      'auth.signup_sub': 'Create your account with 40 free live queries. Corporate work emails only.',
+      'auth.work_email': 'Corporate Email Address',
+      'auth.email_hint': 'No personal freemail addresses (Gmail, Yahoo, Web.de, etc.)',
       'auth.password': 'Password',
       'auth.company': 'Company Name (optional)',
-      'auth.btn_signup': 'Create Account & Unlock 40 Runs',
-      'auth.login_sub': 'Log in with your account credentials.',
+      'auth.btn_signup': 'Create Account & Unlock 40 Queries',
+      'auth.login_sub': 'Log in with your credentials.',
       'auth.email': 'Email Address',
       'auth.btn_login': 'Log In',
       'auth.logout': 'Log Out',
 
-      // === 5. Client Dashboard ===
-      'audit.banner': 'You are viewing a shared Chatlytics Magic Audit (Read-Only).',
-      'dashboard.new_config': '+ New Configuration',
-      'dashboard.trigger_run': 'Run Audit',
-      'dashboard.share': 'Share',
+      // 12. Dashboard & Analytics
+      'audit.banner': 'You are viewing a shared Chatlytics Board Report (Read-Only).',
+      'dashboard.page_title': 'Share-of-Model & GEO Analytics Cockpit',
+      'dashboard.new_config': '+ New Profile',
+      'dashboard.trigger_run': 'Run Query',
+      'dashboard.btn_running': 'Running query...',
+      'dashboard.share': 'Share Report',
       'kpi.som': 'Share-of-Model (SoM)',
-      'kpi.som_sub': 'Share of mentions across all LLM runs',
+      'kpi.som_sub': 'Share of brand mentions across all AI queries',
       'kpi.visibility': 'Visibility Index',
-      'kpi.visibility_sub': 'Brand mention or grounding citation present',
-      'kpi.earliness': 'Average Earliness',
-      'kpi.earliness_sub': 'Average relative position in text',
-      'kpi.total_runs': 'Total Runs',
+      'kpi.visibility_sub': 'Brand mention or source citation present',
+      'kpi.earliness': 'Position in Text (Avg)',
+      'kpi.earliness_sub': 'Average relative character position in response',
+      'kpi.total_runs': 'Total Queries',
       'kpi.runs_sub': 'Completed multi-model evaluations',
-      'kpi.citation_share': 'Citation Share',
-      'kpi.citation_share_sub': 'Brand domain present in grounding sources',
-      'kpi.credits': 'Credits Remaining',
-      'kpi.credits_sub': 'Balance for live and queue audits',
-      'dashboard.mece_trend': 'MECE Category Distribution',
-      'dashboard.mece_sum_hint': '100% mutually exclusive & collectively exhaustive',
+      'kpi.citation_share': 'Source Share',
+      'kpi.citation_share_sub': 'Own domain present in background sources',
+      'kpi.credits': 'Remaining Queries',
+      'kpi.credits_sub': 'Balance for live and scheduled audits',
+      'dashboard.mece_trend': 'Distribution across the 4 Recommendation Tiers',
+      'dashboard.mece_sum_hint': 'Complete breakdown across all evaluated responses',
       'dashboard.competitors': 'Competitor Leaderboard',
       'table.competitor': 'Competitor',
       'table.domain': 'Domain',
@@ -824,28 +663,32 @@
       'table.mentions': 'Mentions',
       'table.recommendations': 'Recommendations',
       'table.avg_pos': 'Avg. Position',
-      'dashboard.citations': 'Grounding Citations & Sources',
+      'dashboard.citations': 'Cited Source Domains (Search Grounding)',
       'table.source_domain': 'Source Domain',
       'table.domain_type': 'Type',
       'table.citation_count': 'Citations',
-      'geo.title': '4-Quadrant GEO Action Panel',
-      'geo.prescription_label': 'Recommended Prescription:',
+      'dashboard.empty_title': 'No analysis data in selected period',
+      'dashboard.empty_desc': 'No completed queries exist for the selected profile in this timeframe. Start your first analysis now.',
+      'geo.title': '4-Field Root-Cause Diagnostics',
+      'geo.prescription_label': 'Recommended Lever:',
       'geo.matrix_title': 'Diagnostic Matrix:',
-      'audit.cta_text': 'Want continuous AI visibility tracking for your own brand?',
-      'audit.cta_btn': 'Register free now (40 Runs)',
+      'geo.svg_title': 'Source Authority vs. Brand Prominence',
+      'audit.cta_text': 'Want continuous AI visibility monitoring for your own brand?',
+      'audit.cta_btn': 'Register free now (40 Queries)',
 
-      // === 6. Owner Cockpit ===
+      // 13. Owner Cockpit (Admin)
       'admin.meta_title': 'Chatlytics.de — Owner Cockpit & System Administration',
       'admin.badge_owner': 'Owner Cockpit',
       'admin.page_title': 'Owner Cockpit & System Administration',
-      'admin.page_subtitle': 'Central administration of tenant accounts, credits, Magic Audit links, and demo data.',
+      'admin.page_subtitle': 'Central management of tenant accounts, query quotas, board report links, and sample data.',
+      'admin.btn_seed_demo': 'Generate Sample Data',
       'admin.kpi_users_label': 'Registered Users',
       'admin.kpi_users_sub': 'Active tenant accounts',
-      'admin.kpi_configs_label': 'Tracking Configurations',
-      'admin.kpi_configs_sub': 'Monitored prompt keywords',
-      'admin.kpi_runs_label': 'Total Runs',
-      'admin.kpi_runs_sub': 'Total LLM audits',
-      'admin.kpi_credits_label': 'Available Credits',
+      'admin.kpi_configs_label': 'Brand Profiles',
+      'admin.kpi_configs_sub': 'Monitored prompt profiles',
+      'admin.kpi_runs_label': 'Executed Queries',
+      'admin.kpi_runs_sub': 'Total AI audits',
+      'admin.kpi_credits_label': 'Available Queries',
       'admin.kpi_credits_sub': 'In active circulation',
       'admin.table_title': 'User Directory',
       'admin.search_label': 'Search Users',
@@ -853,119 +696,40 @@
       'admin.col_email': 'Email',
       'admin.col_company': 'Company',
       'admin.col_tier': 'Plan',
-      'admin.col_credits': 'Credits',
+      'admin.col_credits': 'Queries',
       'admin.col_runs': 'Runs',
       'admin.col_status': 'Status',
       'admin.col_created': 'Registered',
       'admin.col_actions': 'Actions',
       'admin.empty_title': 'No user accounts found',
-      'admin.empty_desc': 'No user accounts were found. Adjust your search or generate realistic demo data.',
+      'admin.empty_desc': 'No user accounts matched. Adjust your search or generate sample data.',
       'pagination.prev': '← Previous',
       'pagination.next': 'Next →',
-      'admin.modal_credit_title': 'Adjust Credits',
+      'admin.modal_credit_title': 'Adjust Quota',
       'admin.modal_user_label': 'User:',
       'admin.modal_current_credits': 'Current Balance:',
-      'admin.modal_delta_label': 'Credit adjustment (Delta +/-):',
-      'admin.modal_delta_hint': 'Positive values add credits, negative values deduct credits (minimum resulting value: 0).',
+      'admin.modal_delta_label': 'Adjustment (Delta +/-):',
+      'admin.modal_delta_hint': 'Positive values add queries, negative values deduct queries (minimum: 0).',
       'admin.modal_reason_label': 'Reason (optional):',
-      'admin.modal_credit_save': 'Save Credits',
-      'admin.modal_magic_title': 'Magic Audit Link',
-      'admin.modal_magic_desc': 'This secure link grants read-only access to this account\'s client dashboard without login credentials:',
+      'admin.modal_credit_save': 'Save Quota',
+      'admin.modal_magic_title': 'Read-Only Report Link',
+      'admin.modal_magic_desc': 'This secure link grants read-only access to this account\'s analytics dashboard without login credentials:',
       'admin.modal_magic_copy': 'Copy',
       'admin.modal_magic_open': 'Open in new tab ↗',
 
-      // === 7. Swiss Technical Monolith & Scroll-Craft Additions ===
-      'nav.race': '3-Model Race',
-      'nav.menu': 'Menu',
-      'hero.index': 'SYS // 01 — DETERMINISTIC AI TELEMETRY',
-      'hero.trust_title': 'VERIFIED REFERENCE ENTITIES (EUROPEAN B2B):',
-      'hero.plane_coord': 'COORDINATE GRID // UTF-8 CASE-FOLDING ACTIVE',
-      'hero.plane_prompt_label': 'PROMPT_INPUT [DE_B2B]',
-      'hero.plane_prompt_val': 'Which HR software is best suited for the German mid-market?',
-      'hero.plane_caliper_brand': 'BRAND DETECTED // CHAR_IDX: 034',
-      'hero.plane_caliper_comp': '1ST COMPETITOR // CHAR_IDX: 105',
-      'hero.plane_delta': 'EARLINESS LEAD: +71 CHARS',
-
-      // Act 2: Scroll-Scrubbed 3-Model Race (Signature Move & Peak)
-      'race.index': 'SYS // 02 — MULTI-MODEL TELEMETRY SCRUBBER',
-      'race.title': 'One Prompt. Three AI Models. Three Divergent Realities.',
-      'race.subtitle': 'Scroll or drag the playhead scrubber: watch character-by-character how the exact same brand wins in OpenAI, falls into Brand Halo in Claude, and suffers a Parametric Blindspot in Gemini despite domain citation.',
-      'race.prompt_label': 'LIVE BENCHMARK PROMPT',
-      'race.prompt_text': '"Welche HR-Software eignet sich am besten für den Mittelstand in Deutschland?"',
-      'race.scrubber_label': 'TOKEN STREAM PLAYHEAD',
-      'race.scrubber_hint': 'Scroll or drag slider to X-ray the synthesis stream',
-      'race.openai_role': 'Parametric Synthesis',
-      'race.claude_role': 'Conservative Enterprise Weighting',
-      'race.gemini_role': 'Google Search Grounding Active',
-      'race.grounding_label': 'GROUNDING SOURCES:',
-      'race.char_offset': 'CHAR_IDX',
-      'race.rel_pos': 'REL_POS',
-      'race.geo_diag': 'GEO_DIAGNOSIS',
-
-      // Act 3: MECE Simulator Workbench Additions
-      'simulator.index': 'SYS // 03 — INTERACTIVE MECE WORKBENCH',
-      'simulator.caliper_title': 'DETERMINISTIC EARLINESS CALIPER RULE (0–100% TEXT SPAN)',
-      'simulator.xray_title': 'LIVE TOKEN X-RAY & SUBSTRING DETECTION',
-      'simulator.preset_1': '01. Direct Win (Personio)',
-      'simulator.preset_2': '02. Brand Halo (Celonis)',
-      'simulator.preset_3': '03. Takeover (Workday)',
-      'simulator.preset_4': '04. Generic (Market)',
-
-      // Act 4: 4-Quadrant GEO Diagnostic Architecture
-      'features.index': 'SYS // 04 — 4-QUADRANT GEO DIAGNOSTIC MATRIX',
-      'features.title': 'Why Classical SEO Operates Blind Inside Language Models.',
-      'features.subtitle': 'Large language models fuse frozen parametric weights with real-time retrieval (RAG / Grounding). Our 4-Quadrant engine isolates the exact structural cause of your visibility loss.',
-      'features.axis_y_high': 'HIGH CITATION AUTHORITY (GROUNDING)',
-      'features.axis_y_low': 'LOW CITATION AUTHORITY',
-      'features.axis_x_low': 'WEAK TEXT PROMINENCE',
-      'features.axis_x_high': 'LEADING RECOMMENDATION (#1)',
-      'features.q1_title': 'Q1 // CITATION HIJACK',
-      'features.q1_desc': 'Your domain supplies the grounded facts in RAG retrieval, yet a competitor captures the synthesis recommendation.',
-      'features.q2_title': 'Q2 // PARAMETRIC BLINDSPOT',
-      'features.q2_desc': 'Your URL is cited as a source, but the model completely omits your brand entity from the generated text.',
-      'features.q3_title': 'Q3 // BRAND HALO TRAP',
-      'features.q3_desc': 'Your brand appears consistently, but is perpetually anchored in 2nd or 3rd place behind a dominant rival.',
-      'features.q4_title': 'Q4 // BURIED WINNER',
-      'features.q4_desc': 'Your brand wins the recommendation, but only surfaces in the bottom half of the response (>50% offset).',
-      'features.spec_unicode_title': 'German Unicode Precision',
-      'features.spec_unicode_desc': 'Deterministic case-folding normalization for ä, ö, ü, ß, and ẞ plus multi-word European B2B brand entities.',
-      'features.spec_gdpr_title': 'Zero-CDN & Frankfurt Hosting',
-      'features.spec_gdpr_desc': 'Zero external trackers, zero US font CDNs, and full GDPR compliance on dedicated European infrastructure.',
-      'features.spec_audit_title': 'Shareable Magic Audits',
-      'features.spec_audit_desc': 'Cryptographically scoped read-only dashboard links for executive boards, clients, and agency pitches in one click.',
-
-      // Act 5: Pricing & Technical FAQ
-      'pricing.index': 'SYS // 05 — TARIFF SPECIFICATION',
-      'faq.index': 'SYS // 06 — TECHNICAL DOCUMENTATION & FAQ',
-      'faq.title': 'Frequently Asked Questions on Share-of-Model Telemetry',
-      'faq.subtitle': 'Architecture, methodology, and licensing for European B2B enterprises.',
-      'faq.q1': 'How does Share-of-Model (SoM) differ from classical SEO rank tracking?',
-      'faq.a1': 'Search engines return ten blue links; language models synthesize a single authoritative answer. Chatlytics deterministically measures whether your brand is named, its exact character offset (earliness), and whether it leads or trails your competitors.',
-      'faq.q2': 'What is the 4-State MECE Classification model?',
-      'faq.a2': 'MECE stands for Mutually Exclusive & Collectively Exhaustive. Every LLM run falls into exactly one mathematical state: 1_DIRECT_WIN (brand leads), 2_BRAND_HALO (brand trails competitor), 3_COMPETITOR_TAKEOVER (only competitors named), or 4_GENERIC (no brands named).',
-      'faq.q3': 'How does Google Gemini Search Grounding tracking work?',
-      'faq.a3': 'Our n8n worker pipeline extracts both the synthesized text and verified grounding chunks/source domains, revealing whether your own domain (e.g., personio.de) or a third-party directory anchored the model response.',
-      'faq.q4': 'Why are only corporate work emails accepted for free signup?',
-      'faq.a4': 'Because every trial account unlocks 40 live multi-LLM runs across OpenAI, Anthropic, and Google Gemini, work-email verification protects platform infrastructure against automated disposable-mail abuse.',
-
-      // Trace Rail
-      'trace.hero': '01.SYNTHESIS',
-      'trace.race': '02.MODEL_RACE',
-      'trace.sim': '03.MECE_LAB',
-      'trace.geo': '04.GEO_MATRIX',
-      'trace.pricing': '05.TARIFFS',
-      'trace.faq': '06.FAQ',
-
-      // Dashboard 2x2 SVG Matrix Labels
-      'geo.svg_title': '2x2 CORRELATION COORDINATE FIELD',
-      'geo.svg_y_axis': 'CITATION AUTHORITY',
-      'geo.svg_x_axis': 'TEXT EARLINESS'
+      // 14. Config Modal & Common
+      'config.llms_label': 'Target AI Models (Multi-LLM)',
+      'config.llms_hint': 'Select at least one model. European endpoints operate strictly GDPR-compliant.',
+      'config.eu_hosted_badge': 'EU-Hosted',
+      'config.search_label': 'Enable Live Web Search / Search Grounding',
+      'config.search_hint': 'OpenAI and Google Gemini run live search for source analysis when enabled.',
+      'common.cancel': 'Cancel',
+      'common.close': 'Close'
     }
   };
 
   let activeLang = DEFAULT_LANG;
 
-  // Initialize language from localStorage if available
   try {
     if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -974,43 +738,26 @@
       }
     }
   } catch (e) {
-    // LocalStorage access restricted / private mode
+    // LocalStorage unavailable
   }
 
-  /**
-   * Translates a key with fallback mechanism.
-   * Conforms to Boundary 4.1: i18n translation engine handles missing keys with fallback.
-   * 
-   * @param {string} key - Dictionary key (e.g. 'nav.home', '1_DIRECT_WIN')
-   * @param {string} [fallback=''] - Optional fallback string if key is missing
-   * @param {string} [lang=null] - Optional override language ('de' or 'en')
-   * @returns {string} Translated string, fallback, or key
-   */
   function t(key, fallback = '', lang = null) {
     if (!key) return fallback || '';
     const targetLang = (lang === 'de' || lang === 'en') ? lang : activeLang;
     const dict = dictionaries[targetLang] || dictionaries[DEFAULT_LANG];
 
-    // Direct lookup
     if (dict && Object.prototype.hasOwnProperty.call(dict, key)) {
       return dict[key];
     }
 
-    // Secondary language fallback
     const altLang = targetLang === 'de' ? 'en' : 'de';
     if (dictionaries[altLang] && Object.prototype.hasOwnProperty.call(dictionaries[altLang], key)) {
       return dictionaries[altLang][key];
     }
 
-    // Fallback or raw key
     return fallback || key;
   }
 
-  /**
-   * Sets the active language, updates localStorage and re-translates the page.
-   * 
-   * @param {string} lang - 'de' or 'en'
-   */
   function setLanguage(lang) {
     if (lang !== 'de' && lang !== 'en') {
       lang = DEFAULT_LANG;
@@ -1021,9 +768,7 @@
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, lang);
       }
-    } catch (e) {
-      // Storage unavailable
-    }
+    } catch (e) {}
 
     if (typeof document !== 'undefined') {
       if (document.documentElement) {
@@ -1032,30 +777,20 @@
       updateLanguageSwitcherUI();
       translatePage();
 
-      // Dispatch custom event for reactive UI components
       try {
         const event = new CustomEvent('languageChanged', { detail: { lang } });
         window.dispatchEvent(event);
-      } catch (e) {
-        // Fallback for older browsers
-      }
+      } catch (e) {}
     }
   }
 
-  /**
-   * Returns the current active language ('de' or 'en').
-   */
   function getLanguage() {
     return activeLang;
   }
 
-  /**
-   * Updates visual active states and labels on all language switcher controls.
-   */
   function updateLanguageSwitcherUI() {
     if (typeof document === 'undefined') return;
 
-    // 1. Multi-button switchers (e.g. admin.html .lang-switch button, #btn-lang-de, #btn-lang-en)
     const buttons = document.querySelectorAll('.lang-switch button, [data-lang-btn], #btn-lang-de, #btn-lang-en');
     buttons.forEach(btn => {
       const btnLang = btn.getAttribute('data-lang') || btn.textContent.trim().toLowerCase();
@@ -1068,7 +803,6 @@
       }
     });
 
-    // 2. Single toggle button (index.html & dashboard.html #btn-lang-toggle)
     const toggleBtns = document.querySelectorAll('#btn-lang-toggle, [data-lang-toggle]');
     const targetLang = activeLang === 'de' ? 'en' : 'de';
     toggleBtns.forEach(btn => {
@@ -1082,20 +816,14 @@
       );
       const label = btn.querySelector('#current-lang-label') || document.getElementById('current-lang-label');
       if (label) {
-        // Displays target language to switch to: 'EN' when German, 'DE' when English
         label.textContent = targetLang.toUpperCase();
       }
     });
   }
 
-  /**
-   * Binds click event listeners to all language switcher buttons across all pages.
-   * Safe to call multiple times (idempotent via _langListenerAttached).
-   */
   function initLanguageSwitchers() {
     if (typeof document === 'undefined') return;
 
-    // 1. Single toggle buttons (#btn-lang-toggle, [data-lang-toggle])
     const toggleBtns = document.querySelectorAll('#btn-lang-toggle, [data-lang-toggle]');
     toggleBtns.forEach(btn => {
       if (btn._langListenerAttached) return;
@@ -1107,7 +835,6 @@
       });
     });
 
-    // 2. Explicit language buttons (.lang-switch button, [data-lang-btn], #btn-lang-de, #btn-lang-en)
     const langBtns = document.querySelectorAll('.lang-switch button, [data-lang-btn], #btn-lang-de, #btn-lang-en');
     langBtns.forEach(btn => {
       if (btn._langListenerAttached) return;
@@ -1124,22 +851,15 @@
     updateLanguageSwitcherUI();
   }
 
-  /**
-   * Initializes the i18n subsystem, binds switchers, and translates DOM.
-   */
   function init() {
     initLanguageSwitchers();
     updateLanguageSwitcherUI();
     translatePage();
   }
 
-  /**
-   * Scans the DOM and translates elements with data-i18n attributes.
-   */
   function translatePage() {
     if (typeof document === 'undefined') return;
 
-    // Text content
     const elements = document.querySelectorAll('[data-i18n]');
     elements.forEach(el => {
       const key = el.getAttribute('data-i18n');
@@ -1148,7 +868,6 @@
       }
     });
 
-    // Placeholders
     const placeholderEls = document.querySelectorAll('[data-i18n-placeholder]');
     placeholderEls.forEach(el => {
       const key = el.getAttribute('data-i18n-placeholder');
@@ -1157,7 +876,6 @@
       }
     });
 
-    // Titles
     const titleEls = document.querySelectorAll('[data-i18n-title]');
     titleEls.forEach(el => {
       const key = el.getAttribute('data-i18n-title');
@@ -1166,7 +884,6 @@
       }
     });
 
-    // Aria Labels
     const ariaEls = document.querySelectorAll('[data-i18n-aria]');
     ariaEls.forEach(el => {
       const key = el.getAttribute('data-i18n-aria');
@@ -1176,33 +893,12 @@
     });
   }
 
-  /**
-   * Locale-aware Currency Formatter.
-   * Conforms to Feature 24.5:
-   * formatCurrency(149, 'de') === '149 €'
-   * formatCurrency(149, 'en') === '€149'
-   * 
-   * @param {number|string} val - Amount
-   * @param {string} [lang=null] - 'de' or 'en'
-   * @returns {string} Formatted currency
-   */
   function formatCurrency(val, lang = null) {
     const l = (lang === 'de' || lang === 'en') ? lang : activeLang;
     const cleanVal = typeof val === 'number' ? val : Number(String(val).replace(/[^0-9.-]+/g, '')) || 0;
     return l === 'de' ? `${cleanVal} €` : `€${cleanVal}`;
   }
 
-  /**
-   * Locale-aware Percentage Formatter.
-   * Conforms to Feature 24.5:
-   * formatPercent(74.2, 'de') === '74,2 %'
-   * formatPercent(74.2, 'en') === '74.2%'
-   * 
-   * @param {number|string} val - Percent value
-   * @param {string} [lang=null] - 'de' or 'en'
-   * @param {number} [decimals=1] - Decimal precision
-   * @returns {string} Formatted percentage
-   */
   function formatPercent(val, lang = null, decimals = 1) {
     const l = (lang === 'de' || lang === 'en') ? lang : activeLang;
     const num = Number(val);
@@ -1211,16 +907,6 @@
     return l === 'de' ? `${fixed.replace('.', ',')} %` : `${fixed}%`;
   }
 
-  /**
-   * Locale-aware Number Formatter.
-   * DE: 1.234,56
-   * EN: 1,234.56
-   * 
-   * @param {number|string} val - Number value
-   * @param {string} [lang=null] - 'de' or 'en'
-   * @param {number} [decimals=0] - Fractional digits
-   * @returns {string} Formatted number
-   */
   function formatNumber(val, lang = null, decimals = 0) {
     const l = (lang === 'de' || lang === 'en') ? lang : activeLang;
     const num = Number(val);
@@ -1231,11 +917,6 @@
     });
   }
 
-  /**
-   * Locale-aware Date Formatter.
-   * DE: 08.11.2026
-   * EN: 2026-11-08 or Nov 8, 2026
-   */
   function formatDate(val, lang = null) {
     const l = (lang === 'de' || lang === 'en') ? lang : activeLang;
     const d = new Date(val);
@@ -1247,7 +928,6 @@
     });
   }
 
-  // Automatic DOM initialization on load if in browser
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
@@ -1274,7 +954,6 @@
   };
 });
 
-// ESM Exports for ES Module scripts
 const _rootScope = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this);
 const _chatlyticsI18n = _rootScope.ChatlyticsI18n || _rootScope.i18n || (typeof module !== 'undefined' && module.exports ? module.exports : {});
 
@@ -1292,4 +971,3 @@ export const initLanguageSwitchers = _chatlyticsI18n.initLanguageSwitchers;
 export const updateLanguageSwitcherUI = _chatlyticsI18n.updateLanguageSwitcherUI;
 export const i18n = _chatlyticsI18n;
 export default _chatlyticsI18n;
-

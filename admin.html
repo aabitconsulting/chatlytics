@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="admin.meta_title">Chatlytics.de — Owner Cockpit & Systemverwaltung</title>
-  <meta name="description" content="Chatlytics Owner Cockpit: Benutzerverwaltung, Guthabenanpassung, Magic Audit Links und Demodaten-Seeder.">
+  <meta name="description" content="Chatlytics Owner Cockpit: Benutzerverwaltung, Guthabenanpassung, schreibgeschützte Vorstandsreport-Links und Demodaten-Generator.">
   <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body class="admin-body">
@@ -12,19 +12,13 @@
   <header class="navbar">
     <div class="container navbar-inner">
       <div class="navbar-brand">
-        <a href="index.html" class="logo">
-          <span class="logo-mark" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
-              <rect x="2" y="2" width="12" height="12"/>
-              <path d="M2 8h12M8 2v12"/>
-            </svg>
-          </span>
-          <span class="logo-text">Chatlytics<span class="logo-tld">.de</span></span>
+        <a href="index.html" class="logo" aria-label="Chatlytics.de Startseite">
+          Chatlytics<span class="logo-tld">.de</span>
         </a>
         <span class="badge badge-admin" data-i18n="admin.badge_owner">Owner Cockpit</span>
       </div>
 
-      <nav class="navbar-nav">
+      <nav class="navbar-nav" aria-label="Verwaltungsnavigation">
         <a href="dashboard.html" class="nav-link" data-i18n="nav.dashboard">Dashboard</a>
         <a href="admin.html" class="nav-link active" data-i18n="nav.admin">Administration</a>
       </nav>
@@ -32,15 +26,15 @@
       <div class="navbar-actions">
         <!-- Language Switcher -->
         <div class="lang-switch">
-          <button id="btn-lang-de" class="btn-lang active" data-lang="de">DE</button>
+          <button id="btn-lang-de" type="button" class="btn-lang active" data-lang="de">DE</button>
           <span class="lang-divider">/</span>
-          <button id="btn-lang-en" class="btn-lang" data-lang="en">EN</button>
+          <button id="btn-lang-en" type="button" class="btn-lang" data-lang="en">EN</button>
         </div>
 
         <!-- Current User Profile & Logout -->
         <div class="user-profile-menu">
           <span id="nav-user-email" class="user-email-text">admin@chatlytics.de</span>
-          <button id="btn-logout" class="btn btn-sm btn-outline" data-i18n="auth.logout">Abmelden</button>
+          <button id="btn-logout" type="button" class="btn btn-sm btn-dark-outline" data-i18n="auth.logout">Abmelden</button>
         </div>
       </div>
     </div>
@@ -53,7 +47,7 @@
       <div class="admin-header-text">
         <h1 data-i18n="admin.page_title">Owner Cockpit & Systemverwaltung</h1>
         <p class="admin-subtitle" data-i18n="admin.page_subtitle">
-          Zentrale Verwaltung von Mandanten, Guthaben, Magic Audit Links und Demodaten.
+          Zentrale Verwaltung von Mandanten, Guthaben, schreibgeschützten Vorstandsreport-Links und Demodaten.
         </p>
       </div>
       <div class="admin-header-actions">
@@ -61,7 +55,7 @@
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
             <polygon points="9,1 3,9 8,9 7,15 13,7 8,7"/>
           </svg>
-          <span id="btn-seed-demo-text" data-i18n="admin.btn_seed_demo">1-Click Demodaten generieren</span>
+          <span id="btn-seed-demo-text" data-i18n="admin.btn_seed_demo">Demodaten generieren</span>
         </button>
       </div>
     </section>
@@ -156,7 +150,7 @@
             Es wurden keine Benutzerkonten gefunden. Passen Sie die Suche an oder generieren Sie realistische Demodaten.
           </p>
           <button id="btn-empty-seed-demo" class="btn btn-secondary">
-            <span data-i18n="admin.btn_seed_demo">1-Click Demodaten generieren</span>
+            <span data-i18n="admin.btn_seed_demo">Demodaten generieren</span>
           </button>
         </div>
       </div>
@@ -228,7 +222,7 @@
   <div id="magic-audit-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="magic-modal-title">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3 id="magic-modal-title" class="modal-title" data-i18n="admin.modal_magic_title">Magic Audit Link</h3>
+        <h3 id="magic-modal-title" class="modal-title" data-i18n="admin.modal_magic_title">Vorstandsreport-Link</h3>
         <button type="button" class="btn-close" id="btn-magic-modal-close" aria-label="Schließen">✕</button>
       </div>
       <div class="modal-body">
@@ -255,6 +249,13 @@
 
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand" data-i18n="footer.copyright">© 2026 Chatlytics.de — Share-of-Model &amp; GEO Intelligence</div>
+      <div class="footer-infra" data-i18n="footer.infra">Gehostet auf dedizierter Infrastruktur in Frankfurt am Main · Keine externen Font-CDNs oder Drittanbieter-Tracker.</div>
+    </div>
+  </footer>
 
   <!-- Modular Scripts -->
   <script src="assets/js/i18n.js"></script>

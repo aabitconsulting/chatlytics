@@ -354,7 +354,7 @@ function renderUserTableRows(users) {
 
     const btnMagic = document.createElement('button');
     btnMagic.className = 'btn btn-xs btn-secondary';
-    btnMagic.textContent = 'Magic Link';
+    btnMagic.textContent = 'Vorstands-Link';
     btnMagic.addEventListener('click', () => generateAndOpenMagicAudit(u.id));
 
     tdActions.appendChild(btnCredit);
@@ -505,7 +505,7 @@ async function generateAndOpenMagicAudit(userId) {
     const json = await res.json();
 
     if (!res.ok || json.status === 'error') {
-      showToast(json.message || 'Fehler beim Generieren des Magic Audit Links.', 'error');
+      showToast(json.message || 'Fehler beim Generieren des Vorstandsreport-Links.', 'error');
       return;
     }
 
@@ -523,7 +523,7 @@ async function generateAndOpenMagicAudit(userId) {
 
   } catch (err) {
     console.error('generateAndOpenMagicAudit error:', err);
-    showToast('Netzwerkfehler beim Erzeugen des Magic Audit Tokens.', 'error');
+    showToast('Netzwerkfehler beim Erzeugen des Vorstandsreport-Links.', 'error');
   }
 }
 
@@ -539,7 +539,7 @@ function copyMagicAuditUrl() {
 
   navigator.clipboard.writeText(urlInput.value).then(() => {
     if (copyBtnText) copyBtnText.textContent = 'Kopiert!';
-    showToast('Magic Audit Link in die Zwischenablage kopiert!', 'success');
+    showToast('Vorstandsreport-Link in die Zwischenablage kopiert!', 'success');
     setTimeout(() => {
       if (copyBtnText) copyBtnText.textContent = 'Kopieren';
     }, 2000);
@@ -600,7 +600,7 @@ async function triggerDemoSeeder() {
   } finally {
     AdminState.isSeeding = false;
     if (seedBtn) seedBtn.disabled = false;
-    if (seedBtnText) seedBtnText.textContent = '1-Click Demodaten generieren';
+    if (seedBtnText) seedBtnText.textContent = 'Demodaten generieren';
   }
 }
 
