@@ -9,7 +9,7 @@
 
 ## 1. System Overview & Prerequisites
 
-The Chatlytics Universal Worker (`chatlytics_universal_worker.json`) is an enterprise-grade n8n 2.44.5 workflow consisting of exactly **16 interconnected nodes** arranged across 6 execution stages. It unifies three simultaneous trigger mechanisms (Webhook POST, Interactive Canvas Chat, and 1-minute Schedule Poller), evaluates target brand visibility across multi-LLM providers (OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet, Google Gemini 1.5 Flash with Search Grounding), extracts citations and competitor mentions, computes deterministic German Unicode metrics and strict 4-state MECE classifications, and dispatches evaluation results to the MySQL backend and client responses.
+The Chatlytics Universal Worker (`chatlytics_universal_worker.json`) is an enterprise-grade n8n workflow consisting of **21 interconnected nodes** arranged across 6 execution stages. It unifies three simultaneous trigger mechanisms (Webhook POST, Interactive Canvas Chat, and 1-minute Schedule Poller), evaluates target brand visibility across active native and EU-hosted LLM providers (native OpenAI `gpt-6-luna` via `@n8n/n8n-nodes-langchain.openAi` v2.3, native Google Gemini `models/gemini-3.5-flash` via `@n8n/n8n-nodes-langchain.googleGemini` v1.2, and EU-hosted Mistral `mistral-medium-latest` / `mistral-large-latest` plus Mistral-hosted Z.ai GLM `zai-glm-5-3` / `zai-glm-5-3-flash` via `https://api.eu.mistral.ai/v1/chat/completions`, with an optional disabled Anthropic fallback route), extracts grounding citations and competitor mentions, computes deterministic German Unicode metrics and strict 4-state MECE classifications, and dispatches evaluation results to the MySQL backend and client responses.
 
 ### 1.1 Prerequisites Table
 
@@ -17,9 +17,10 @@ The Chatlytics Universal Worker (`chatlytics_universal_worker.json`) is an enter
 |---|---|---|
 | **n8n Community / Enterprise** | `>= 2.44.5` | Workflow canvas and orchestration engine |
 | **Node.js** | `>= 20.15.0` (or Docker) | Execution runtime for embedded JavaScript Code nodes |
-| **OpenAI API Key** | Active Tier 1+ account | `gpt-4o` completion execution |
-| **Anthropic API Key** | Active account | `claude-3-5-sonnet-20241022` execution |
-| **Google Gemini API Key** | Google AI Studio key | `gemini-1.5-flash` with dynamic Google Search grounding |
+| **OpenAI API Key** | Active Tier 1+ account | Native `@n8n/n8n-nodes-langchain.openAi` (`gpt-6-luna`, Responses API + optional Web Search) |
+| **Google Gemini API Key** | Google AI Studio key | Native `@n8n/n8n-nodes-langchain.googleGemini` (`models/gemini-3.5-flash` + optional Google Search grounding) |
+| **Mistral AI API Key (EU-Hosted)** | Active Mistral La Plateforme account | `mistralCloudApi` via `https://api.eu.mistral.ai/v1/chat/completions` (`mistral-medium-latest`, `mistral-large-latest`, `zai-glm-5-3`, `zai-glm-5-3-flash`) |
+| **Anthropic API Key (Optional)** | Active account | Optional disabled fallback node (`claude-3-5-sonnet-20241022`) |
 | **Chatlytics Ingest Secret** | 32+ character string | Shared HMAC secret for `X-Chatlytics-Ingest-Key` |
 | **Chatlytics Queue Secret** | 32+ character string | Shared HMAC secret for `X-Chatlytics-Cron-Key` |
 
@@ -39,20 +40,20 @@ The workflow can be deployed either via the n8n graphical canvas interface or th
 4. **Paste to Canvas**:
    - Click anywhere on the empty checkered n8n canvas background.
    - Press `Ctrl + V` (Windows/Linux) or `Cmd + V` (macOS).
-   - n8n automatically deserializes all 16 nodes and positions them on the 2D coordinate grid with predefined connection lines intact.
-5. **Verify Node Topology (16 Nodes)**:
+   - n8n automatically deserializes all 21 nodes and positions them on the 2D coordinate grid with predefined connection lines intact.
+5. **Verify Node Topology (21 Nodes)**:
    - **Stage 1 (Triggers)**: `Universal API Webhook`, `Interactive Chat Trigger`, `Schedule Poller Trigger`
    - **Stage 2 (Queue & Async Handshake)**: `Poll Backend Queue`, `Check Async Mode`, `Fast Async Response`
-   - **Stage 3 (Normalization & Routing)**: `Universal Normalizer`, `Provider Router` (Switch)
-   - **Stage 4 (Multi-LLM Execution)**: `Call OpenAI`, `Call Anthropic Claude`, `Call Google Gemini`
-   - **Stage 5 (Analytics & Extraction)**: `Secondary Extractor`, `Metric & MECE Calculator`
+   - **Stage 3 (Normalization & Routing)**: `Universal Normalizer`, `Provider Router` (Switch), `OpenAI Search Router`, `Gemini Search Router`
+   - **Stage 4 (Multi-LLM Execution)**: `Call OpenAI (Search Enabled)`, `Call OpenAI (No Search)`, `Call Google Gemini (Search Enabled)`, `Call Google Gemini (No Search)`, `Call Mistral EU (Mistral & GLM)`, `Call Anthropic Claude (Optional Fallback)` (disabled by default)
+   - **Stage 5 (Analytics & Extraction)**: `Secondary Extractor` (includes failed-run detection & Responses API / Gemini grounding citation extraction), `Metric & MECE Calculator`
    - **Stage 6 (Persistence & Formatters)**: `Dispatch Ingest API`, `Format Chat Response`, `Respond Webhook Sync`
 6. **Save Workflow**:
    - Click **Save** in the top right corner (or press `Ctrl + S`).
    - Name the workflow: `Chatlytics Universal Worker`.
 7. **Configure Workflow Settings**:
    - Open the workflow settings dialog (gear icon in top right).
-   - Verify **Execution Order**: `v1` (mandatory for n8n 2.44.5 sequential stability).
+   - Verify **Execution Order**: `v1` (mandatory for sequential stability).
    - Verify **Save manual executions**: `true`.
 
 ### 2.2 Method B: Headless n8n CLI Import (Production & Docker)
@@ -81,21 +82,25 @@ To prevent sensitive secret exposure, the workflow does not hardcode any API cre
 - **n8n Credential Type**: `OpenAI API` (`openAiApi`)
 - **Navigation**: Left sidebar -> **Credentials** -> **Add Credential** -> Select **OpenAI API**.
 - **Field Value**: Enter your OpenAI secret key (`sk-proj-...`).
-- **Node Assignment**: Open node `Call OpenAI` -> under **Authentication**, verify predefined credential type points to your `OpenAI API` credential.
+- **Node Assignment**: Open `Call OpenAI (Search Enabled)` and `Call OpenAI (No Search)` -> select your `OpenAI API` credential (e.g. `OpenAI - Chatlytics - Chatlytics-dev-1`).
 
-### 3.2 Anthropic API Credential
-- **n8n Credential Type**: `Anthropic API` (`anthropicApi`)
-- **Navigation**: Left sidebar -> **Credentials** -> **Add Credential** -> Select **Anthropic API**.
-- **Field Value**: Enter your Anthropic API key (`sk-ant-api03-...`).
-- **Node Assignment**: Open node `Call Anthropic Claude` -> verify predefined credential type points to your `Anthropic API` credential.
-
-### 3.3 Google Gemini API Credential
+### 3.2 Google Gemini API Credential
 - **n8n Credential Type**: `Google PaLM / Gemini API` (`googlePalmApi`)
-- **Navigation**: Left sidebar -> **Credentials** -> **Add Credential** -> Select **Google PaLM API** (or Gemini API).
+- **Navigation**: Left sidebar -> **Credentials** -> **Add Credential** -> Select **Google Gemini(PaLM) Api account** (`googlePalmApi`).
 - **Field Value**: Enter your Google AI Studio API key (`AIzaSy...`).
-- **Node Assignment**: Open node `Call Google Gemini` -> verify credential assignment.
+- **Node Assignment**: Open `Call Google Gemini (Search Enabled)` and `Call Google Gemini (No Search)` -> select your Google AI Studio credential (e.g. `Google_AI Studio - Chatlytics - Chatlytics-dev-1`).
 
-### 3.4 Environment Variable Configuration (`.env`)
+### 3.3 Mistral Cloud API Credential (EU-Hosted Mistral & Z.ai GLM 5.3)
+- **n8n Credential Type**: `Mistral Cloud API` (`mistralCloudApi`)
+- **Navigation**: Left sidebar -> **Credentials** -> **Add Credential** -> Select **Mistral Cloud API**.
+- **Field Value**: Enter your Mistral La Plateforme API key.
+- **Node Assignment**: Open `Call Mistral EU (Mistral & GLM)` -> confirm predefined credential type `mistralCloudApi` points to your credential (e.g. `Mistral - Chatlytics - Chatlytics-dev-1`). The node explicitly posts to `https://api.eu.mistral.ai/v1/chat/completions` to enforce EU-hosted execution across `mistral-medium-latest`, `mistral-large-latest`, `zai-glm-5-3`, and `zai-glm-5-3-flash`.
+
+### 3.4 Anthropic API Credential (Optional Fallback)
+- **n8n Credential Type**: `Anthropic API` (`anthropicApi`)
+- **Status**: `Call Anthropic Claude (Optional Fallback)` is **disabled by default**. Enable the node and assign your Anthropic API key only if you want to include Claude models outside the standard dashboard UI catalog.
+
+### 3.5 Environment Variable Configuration (`.env`)
 
 Add the following environment variables to your n8n `.env` file or Docker Compose environment block to configure backend endpoints and fallback authentication:
 
@@ -168,7 +173,8 @@ The `Format Chat Response` node generates an executive audit summary:
 | **Brand** | **Personio** |
 | **Getrackte Marke** | **Personio** (`personio.de, personio.com`) |
 | **Provider** | `gemini` |
-| **Modell / Provider** | `gemini` (`gemini-1.5-flash`) |
+| **Modell / Provider** | `gemini` (`models/gemini-3.5-flash`) |
+| **Execution Status** | `completed` |
 | **MECE Status** | `1_DIRECT_WIN` 🏆 (Direct Win) |
 | **GEO Diagnostic** | `NONE` |
 | **GEO-Diagnostik** | `NONE` — Clean Visibility |

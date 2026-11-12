@@ -164,24 +164,13 @@ try {
             $domains = json_decode($cfg['brand_domains'] ?: '[]', true) ?? [];
             $prompts = json_decode($cfg['keywords_prompts'] ?: '[]', true) ?? [];
             $competitors = json_decode($cfg['competitors'] ?: '[]', true) ?? [];
-            $rawLLMs = json_decode($cfg['target_llms'] ?: '[]', true) ?? ['openai', 'gemini'];
-
+            $rawLLMs = json_decode($cfg['target_llms'] ?: '[]', true);
             if (empty($prompts)) {
                 $prompts = ["Beste Empfehlungen und Produkte von {$cfg['brand_name']}"];
             }
 
-            // Normalize target LLMs to base provider names
-            $targetLLMs = array_values(array_unique(array_filter(array_map(function ($llm) {
-                $clean = strtolower(trim((string)$llm));
-                if (str_contains($clean, 'openai') || str_contains($clean, 'gpt')) return 'openai';
-                if (str_contains($clean, 'anthropic') || str_contains($clean, 'claude')) return 'anthropic';
-                if (str_contains($clean, 'gemini') || str_contains($clean, 'google')) return 'gemini';
-                return $clean;
-            }, $rawLLMs))));
-
-            if (empty($targetLLMs)) {
-                $targetLLMs = ['openai', 'gemini'];
-            }
+            // Normalize target LLMs to canonical provider/model tokens while preserving distinct models per provider
+            $targetLLMs = normalizeTargetLlmsList(is_array($rawLLMs) ? $rawLLMs : []);
 
             // Clean competitor names array
             $compList = [];

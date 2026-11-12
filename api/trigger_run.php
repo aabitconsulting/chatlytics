@@ -69,27 +69,9 @@ $brandName = (string)$config['brand_name'];
 $brandDomains = json_decode($config['brand_domains'] ?: '[]', true) ?? [];
 $competitors = json_decode($config['competitors'] ?: '[]', true) ?? [];
 
-// Resolve target LLMs
-$rawTargetLLMs = $requestData['target_llms'] ?? json_decode($config['target_llms'] ?: '[]', true) ?? ['openai', 'gemini'];
-if (is_string($rawTargetLLMs)) {
-    $rawTargetLLMs = explode(',', $rawTargetLLMs);
-}
-if (!is_array($rawTargetLLMs) || empty($rawTargetLLMs)) {
-    $rawTargetLLMs = ['openai', 'gemini'];
-}
-
-// Normalize provider names for n8n router compatibility (openai, anthropic, gemini)
-$targetLLMs = array_values(array_unique(array_filter(array_map(function ($llm) {
-    $clean = strtolower(trim((string)$llm));
-    if (str_contains($clean, 'openai') || str_contains($clean, 'gpt')) return 'openai';
-    if (str_contains($clean, 'anthropic') || str_contains($clean, 'claude')) return 'anthropic';
-    if (str_contains($clean, 'gemini') || str_contains($clean, 'google')) return 'gemini';
-    return $clean;
-}, $rawTargetLLMs))));
-
-if (empty($targetLLMs)) {
-    $targetLLMs = ['openai', 'gemini'];
-}
+// Resolve target LLMs while preserving per-model granularity (including Mistral vs Z.ai GLM)
+$rawTargetLLMs = $requestData['target_llms'] ?? json_decode($config['target_llms'] ?: '[]', true);
+$targetLLMs = normalizeTargetLlmsList($rawTargetLLMs);
 
 // Resolve search grounding enabled
 if (isset($requestData['search_enabled'])) {

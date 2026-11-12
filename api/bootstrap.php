@@ -545,3 +545,155 @@ function requireWritePermission(?array $user = null): void
         jsonError("Forbidden: Write operations are disabled in Magic Audit mode", 403);
     }
 }
+
+// -----------------------------------------------------------------------------
+// 6. Target LLM Catalog & Canonical Model Resolution
+// -----------------------------------------------------------------------------
+
+/**
+ * Resolves any bare provider alias, model name, or canonical provider/model token
+ * into structured routing metadata while preserving distinct models per provider
+ * (including Mistral-hosted Z.ai GLM models on the EU endpoint).
+ *
+ * @param string $rawToken
+ * @return array{id:string,provider:string,model:string,eu_hosted:bool}
+ */
+function resolveTargetLlmSpec(string $rawToken): array
+{
+    $clean = trim($rawToken);
+    if ($clean === '') {
+        return ['id' => '', 'provider' => '', 'model' => '', 'eu_hosted' => false];
+    }
+
+    $lower = strtolower($clean);
+    $provider = '';
+    $model = '';
+
+    if (str_contains($clean, '/')) {
+        [$rawProv, $rawModel] = explode('/', $clean, 2);
+        $provLower = strtolower(trim($rawProv));
+        $modelTrim = trim($rawModel);
+
+        if ($provLower === 'models' && str_starts_with(strtolower($modelTrim), 'gemini')) {
+            $provider = 'gemini';
+            $model = 'models/' . $modelTrim;
+        } elseif ($provLower === 'gemini' || $provLower === 'google') {
+            $provider = 'gemini';
+            if ($modelTrim === '') {
+                $model = 'models/gemini-3.5-flash';
+            } else {
+                $model = str_starts_with(strtolower($modelTrim), 'models/')
+                    ? 'models/' . substr($modelTrim, 7)
+                    : 'models/' . $modelTrim;
+            }
+        } elseif ($provLower === 'openai') {
+            $provider = 'openai';
+            $model = $modelTrim !== '' ? $modelTrim : 'gpt-6-luna';
+        } elseif ($provLower === 'mistral' || $provLower === 'mistralai' || $provLower === 'eu-mistral') {
+            $provider = 'mistral';
+            $model = $modelTrim !== '' ? $modelTrim : 'mistral-medium-latest';
+        } elseif ($provLower === 'glm' || $provLower === 'zai' || $provLower === 'z.ai') {
+            $provider = 'mistral';
+            $model = $modelTrim !== '' ? $modelTrim : 'zai-glm-5-3';
+        } elseif ($provLower === 'anthropic') {
+            $provider = 'anthropic';
+            $model = $modelTrim !== '' ? $modelTrim : 'claude-3-5-sonnet-20241022';
+        } else {
+            $provider = $provLower;
+            $model = $modelTrim;
+        }
+    } else {
+        if ($lower === 'openai') {
+            $provider = 'openai';
+            $model = 'gpt-6-luna';
+        } elseif (str_starts_with($lower, 'gpt-') || preg_match('/^o[134](-|$)/', $lower) === 1) {
+            $provider = 'openai';
+            $model = $clean;
+        } elseif ($lower === 'gemini' || $lower === 'google') {
+            $provider = 'gemini';
+            $model = 'models/gemini-3.5-flash';
+        } elseif (str_starts_with($lower, 'gemini-')) {
+            $provider = 'gemini';
+            $model = 'models/' . $clean;
+        } elseif ($lower === 'mistral' || $lower === 'mistralai') {
+            $provider = 'mistral';
+            $model = 'mistral-medium-latest';
+        } elseif (
+            str_starts_with($lower, 'mistral-')
+            || str_starts_with($lower, 'pixtral-')
+            || str_starts_with($lower, 'codestral-')
+            || str_starts_with($lower, 'ministral-')
+        ) {
+            $provider = 'mistral';
+            $model = $clean;
+        } elseif ($lower === 'glm' || $lower === 'glm-5-3') {
+            $provider = 'mistral';
+            $model = 'zai-glm-5-3';
+        } elseif ($lower === 'glm-5-3-flash') {
+            $provider = 'mistral';
+            $model = 'zai-glm-5-3-flash';
+        } elseif (str_starts_with($lower, 'zai-glm') || str_starts_with($lower, 'glm-')) {
+            $provider = 'mistral';
+            $model = $clean;
+        } elseif ($lower === 'anthropic') {
+            $provider = 'anthropic';
+            $model = 'claude-3-5-sonnet-20241022';
+        } elseif (str_starts_with($lower, 'claude-')) {
+            $provider = 'anthropic';
+            $model = $clean;
+        } else {
+            $provider = $lower;
+            $model = $clean;
+        }
+    }
+
+    $canonicalId = $model !== '' ? ($provider . '/' . $model) : $provider;
+    return [
+        'id'        => $canonicalId,
+        'provider'  => $provider,
+        'model'     => $model,
+        'eu_hosted' => ($provider === 'mistral'),
+    ];
+}
+
+/**
+ * Normalizes a single target_llms token to its canonical provider/model identifier.
+ */
+function normalizeTargetLlmToken(string $rawToken): string
+{
+    return resolveTargetLlmSpec($rawToken)['id'];
+}
+
+/**
+ * Normalizes a mixed string/array target_llms list into unique canonical tokens.
+ *
+ * @param mixed $rawTargetLlms
+ * @param array<int, string> $fallback
+ * @return array<int, string>
+ */
+function normalizeTargetLlmsList($rawTargetLlms, array $fallback = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash']): array
+{
+    if (is_string($rawTargetLlms)) {
+        $rawTargetLlms = explode(',', $rawTargetLlms);
+    }
+    if (!is_array($rawTargetLlms)) {
+        $rawTargetLlms = [];
+    }
+
+    $normalized = [];
+    foreach ($rawTargetLlms as $entry) {
+        if (!is_string($entry) && !is_numeric($entry)) {
+            continue;
+        }
+        $canon = normalizeTargetLlmToken((string)$entry);
+        if ($canon !== '') {
+            $normalized[] = $canon;
+        }
+    }
+
+    $normalized = array_values(array_unique($normalized));
+    if (empty($normalized)) {
+        return array_values(array_unique(array_map('normalizeTargetLlmToken', $fallback)));
+    }
+    return $normalized;
+}

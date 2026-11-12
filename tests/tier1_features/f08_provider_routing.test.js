@@ -25,54 +25,52 @@ test('Feature 8.1: Switch router ports for all 3 supported LLM providers', () =>
   }
 });
 
-test('Feature 8.2: OpenAI provider payload template conforms to /v1/chat/completions', () => {
+test('Feature 8.2: OpenAI native Responses payload config defaults to gpt-6-luna', () => {
   const openAiPayload = {
-    model: 'gpt-4o',
-    messages: [
+    model: 'gpt-6-luna',
+    responses: [
       { role: 'system', content: 'Du bist ein präziser, neutraler Recherche-Assistent.' },
       { role: 'user', content: 'Welche HR Software eignet sich?' }
-    ],
-    temperature: 0.2
+    ]
   };
-  assert.equal(openAiPayload.model, 'gpt-4o');
-  assert.equal(openAiPayload.messages.length, 2);
+  assert.equal(openAiPayload.model, 'gpt-6-luna');
+  assert.equal(openAiPayload.responses.length, 2);
 });
 
-test('Feature 8.3: Anthropic Claude payload template conforms to /v1/messages', () => {
-  const anthropicPayload = {
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 2048,
-    system: 'Du bist ein präziser, neutraler Recherche-Assistent.',
+test('Feature 8.3: Mistral EU & GLM 5.3 payload targets api.eu.mistral.ai and optional Anthropic fallback remains supported', () => {
+  const mistralPayload = {
+    url: 'https://api.eu.mistral.ai/v1/chat/completions',
+    model: 'zai-glm-5-3',
     messages: [
       { role: 'user', content: 'Welche HR Software eignet sich?' }
     ]
   };
-  assert.equal(anthropicPayload.model, 'claude-3-5-sonnet-20241022');
-  assert.equal(anthropicPayload.max_tokens, 2048);
+  assert.equal(mistralPayload.url, 'https://api.eu.mistral.ai/v1/chat/completions');
+  assert.equal(mistralPayload.model, 'zai-glm-5-3');
 });
 
 test('Feature 8.4: Google Gemini dynamic grounding search tool attachment', () => {
   const buildGeminiTools = (searchEnabled) => {
-    return searchEnabled ? [{ googleSearch: {} }] : [];
+    return searchEnabled ? { googleSearch: {} } : {};
   };
 
   const toolsEnabled = buildGeminiTools(true);
-  assert.equal(toolsEnabled.length, 1);
-  assert.ok(toolsEnabled[0].googleSearch !== undefined);
+  assert.ok(toolsEnabled.googleSearch !== undefined);
 
   const toolsDisabled = buildGeminiTools(false);
-  assert.equal(toolsDisabled.length, 0);
+  assert.deepEqual(toolsDisabled, {});
 });
 
-test('Feature 8.5: Provider expansion logic maps target_llms array correctly', () => {
+test('Feature 8.5: Provider expansion logic maps canonical, Mistral EU, GLM & legacy tokens correctly', () => {
   const { expandNormalizerTargetLLMs } = require('../helpers/reference_engine');
   const items = expandNormalizerTargetLLMs({
     prompt: 'CRM Software',
     brand_name: 'Chatlytics',
-    target_llms: ['openai', 'anthropic', 'gemini']
+    target_llms: ['openai', 'gemini', 'mistral/mistral-large-latest', 'mistral/zai-glm-5-3-flash']
   });
 
-  assert.equal(items.length, 3);
-  const providers = items.map(i => i.provider);
-  assert.deepEqual(providers, ['openai', 'anthropic', 'gemini']);
+  assert.equal(items.length, 4);
+  assert.deepEqual(items.map(i => i.provider), ['openai', 'gemini', 'mistral', 'mistral']);
+  assert.deepEqual(items.map(i => i.model), ['gpt-6-luna', 'models/gemini-3.5-flash', 'mistral-large-latest', 'zai-glm-5-3-flash']);
+  assert.deepEqual(items.map(i => i.eu_hosted), [false, false, true, true]);
 });

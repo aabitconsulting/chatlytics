@@ -460,7 +460,7 @@ test('AUDIT-6.1: Stripe webhook rejects timestamps older than 300 seconds and va
 // SUITE 7: n8n Workflow JSON Graph Completeness
 // ============================================================================
 
-test('AUDIT-7.1: n8n workflow contains all 16 mandatory nodes and valid connections', () => {
+test('AUDIT-7.1: n8n workflow contains all 21 mandatory nodes, native LLM nodes, Mistral EU endpoint, and valid connections', () => {
   const workflowPath = path.join(PROJECT_ROOT, 'n8n/chatlytics_universal_worker.json');
   assert.ok(fs.existsSync(workflowPath), 'Workflow JSON must exist');
   
@@ -468,7 +468,7 @@ test('AUDIT-7.1: n8n workflow contains all 16 mandatory nodes and valid connecti
   const wf = JSON.parse(raw);
   
   assert.ok(Array.isArray(wf.nodes), 'Nodes array must exist');
-  assert.equal(wf.nodes.length, 16, `Expected exactly 16 nodes, found ${wf.nodes.length}`);
+  assert.equal(wf.nodes.length, 21, `Expected exactly 21 nodes, found ${wf.nodes.length}`);
 
   const nodeNames = wf.nodes.map(n => n.name);
   const expectedNodes = [
@@ -480,9 +480,14 @@ test('AUDIT-7.1: n8n workflow contains all 16 mandatory nodes and valid connecti
     'Fast Async Response',
     'Universal Normalizer',
     'Provider Router',
-    'Call OpenAI',
-    'Call Anthropic Claude',
-    'Call Google Gemini',
+    'OpenAI Search Router',
+    'Call OpenAI (Search Enabled)',
+    'Call OpenAI (No Search)',
+    'Gemini Search Router',
+    'Call Google Gemini (Search Enabled)',
+    'Call Google Gemini (No Search)',
+    'Call Mistral EU (Mistral & GLM)',
+    'Call Anthropic Claude (Optional Fallback)',
     'Secondary Extractor',
     'Metric & MECE Calculator',
     'Dispatch Ingest API',
@@ -494,11 +499,66 @@ test('AUDIT-7.1: n8n workflow contains all 16 mandatory nodes and valid connecti
     assert.ok(nodeNames.includes(expected), `Missing node: ${expected}`);
   }
 
+  const mistralNode = wf.nodes.find(n => n.name === 'Call Mistral EU (Mistral & GLM)');
+  assert.equal(mistralNode.parameters.url, 'https://api.eu.mistral.ai/v1/chat/completions');
+  assert.equal(mistralNode.parameters.nodeCredentialType, 'mistralCloudApi');
+
+  const anthropicNode = wf.nodes.find(n => n.name === 'Call Anthropic Claude (Optional Fallback)');
+  assert.equal(anthropicNode.disabled, true);
+
+  // Security guard: ensure zero plaintext secret keys in JSON
+  assert.ok(!/sk-proj-|sk-ant-|AIzaSy/.test(raw), 'Workflow JSON must never contain hardcoded secret API keys');
+
   // Verify connections
   assert.ok(wf.connections['Universal API Webhook'], 'Universal API Webhook connection missing');
   assert.ok(wf.connections['Interactive Chat Trigger'], 'Interactive Chat Trigger connection missing');
   assert.ok(wf.connections['Schedule Poller Trigger'], 'Schedule Poller Trigger connection missing');
   assert.ok(wf.connections['Provider Router'], 'Provider Router connection missing');
+  assert.ok(wf.connections['OpenAI Search Router'], 'OpenAI Search Router connection missing');
+  assert.ok(wf.connections['Gemini Search Router'], 'Gemini Search Router connection missing');
   assert.ok(wf.connections['Secondary Extractor'], 'Secondary Extractor connection missing');
   assert.ok(wf.connections['Metric & MECE Calculator'], 'Metric & MECE Calculator connection missing');
+});
+
+test('AUDIT-7.2: PHP backend model normalization, compound idempotency, failed status & Dashboard EU-Hosted modal wiring', () => {
+  const triggerSrc = fs.readFileSync(path.join(PROJECT_ROOT, 'api/trigger_run.php'), 'utf8');
+  const queueSrc = fs.readFileSync(path.join(PROJECT_ROOT, 'api/n8n_queue.php'), 'utf8');
+  const ingestSrc = fs.readFileSync(path.join(PROJECT_ROOT, 'api/ingest.php'), 'utf8');
+  const dashHtml = fs.readFileSync(path.join(PROJECT_ROOT, 'dashboard.html'), 'utf8');
+
+  assert.ok(triggerSrc.includes('normalizeTargetLlmsList'), 'trigger_run.php must use normalizeTargetLlmsList');
+  assert.ok(queueSrc.includes('normalizeTargetLlmsList'), 'n8n_queue.php must use normalizeTargetLlmsList');
+  assert.ok(ingestSrc.includes('LOWER(provider) = LOWER(:provider)') && ingestSrc.includes('LOWER(model) = LOWER(:model)') && ingestSrc.includes('AND prompt = :prompt'), 'ingest.php idempotency must scope on provider, model, and prompt');
+  assert.ok(ingestSrc.includes("'failed'") && ingestSrc.includes('error_message'), 'ingest.php must persist failed status and error_message');
+
+  // Verify Dashboard modal exposes active models, EU-Hosted badges for Mistral & GLM, and search toggle
+  for (const modelVal of [
+    'openai/gpt-6-luna',
+    'gemini/models/gemini-3.5-flash',
+    'mistral/mistral-medium-latest',
+    'mistral/mistral-large-latest',
+    'mistral/zai-glm-5-3',
+    'mistral/zai-glm-5-3-flash'
+  ]) {
+    assert.ok(dashHtml.includes(modelVal), `Dashboard modal missing model option: ${modelVal}`);
+  }
+  assert.ok(dashHtml.includes('id="cfg-search-enabled"'), 'Dashboard modal missing search toggle');
+  assert.equal((dashHtml.match(/config\.eu_hosted_badge/g) || []).length, 4, 'Expected exactly 4 EU-Hosted badges (2 Mistral + 2 GLM)');
+
+  // Execute real PHP normalization check
+  const phpCheck = spawnSync('php', ['-r', `
+    require 'api/bootstrap.php';
+    $out = normalizeTargetLlmsList(['mistral', 'mistral/mistral-medium-latest', 'mistral/mistral-large-latest', 'glm', 'zai-glm-5-3-flash', 'openai', 'gemini']);
+    echo json_encode($out);
+  `], { cwd: PROJECT_ROOT, encoding: 'utf8' });
+  assert.equal(phpCheck.status, 0, phpCheck.stderr);
+  const parsed = JSON.parse(phpCheck.stdout);
+  assert.deepEqual(parsed, [
+    'mistral/mistral-medium-latest',
+    'mistral/mistral-large-latest',
+    'mistral/zai-glm-5-3',
+    'mistral/zai-glm-5-3-flash',
+    'openai/gpt-6-luna',
+    'gemini/models/gemini-3.5-flash'
+  ]);
 });

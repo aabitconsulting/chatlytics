@@ -299,7 +299,7 @@ function parseNormalizerShorthand(text) {
     brand_name: '',
     brand_domains: [],
     competitors: [],
-    target_llms: ['openai', 'gemini'],
+    target_llms: ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'],
     search_enabled: true
   };
   if (!text || typeof text !== 'string') return result;
@@ -334,40 +334,166 @@ function parseNormalizerShorthand(text) {
 }
 
 /**
+ * Resolves any bare provider alias, model name, or canonical provider/model token
+ * into routing metadata matching api/bootstrap.php and Universal Normalizer.
+ */
+function resolveModelSpec(rawToken) {
+  const clean = String(rawToken || '').trim();
+  if (!clean) return null;
+  const lower = clean.toLowerCase();
+  let provider = '';
+  let model = '';
+
+  if (clean.includes('/')) {
+    const slashIdx = clean.indexOf('/');
+    const rawProv = clean.slice(0, slashIdx).trim().toLowerCase();
+    const modelTrim = clean.slice(slashIdx + 1).trim();
+
+    if (rawProv === 'models' && modelTrim.toLowerCase().startsWith('gemini')) {
+      provider = 'gemini';
+      model = 'models/' + modelTrim;
+    } else if (rawProv === 'gemini' || rawProv === 'google') {
+      provider = 'gemini';
+      if (!modelTrim) {
+        model = 'models/gemini-3.5-flash';
+      } else {
+        model = modelTrim.toLowerCase().startsWith('models/')
+          ? 'models/' + modelTrim.slice(7)
+          : 'models/' + modelTrim;
+      }
+    } else if (rawProv === 'openai') {
+      provider = 'openai';
+      model = modelTrim || 'gpt-6-luna';
+    } else if (rawProv === 'mistral' || rawProv === 'mistralai' || rawProv === 'eu-mistral') {
+      provider = 'mistral';
+      model = modelTrim || 'mistral-medium-latest';
+    } else if (rawProv === 'glm' || rawProv === 'zai' || rawProv === 'z.ai') {
+      provider = 'mistral';
+      model = modelTrim || 'zai-glm-5-3';
+    } else if (rawProv === 'anthropic') {
+      provider = 'anthropic';
+      model = modelTrim || 'claude-3-5-sonnet-20241022';
+    } else {
+      provider = rawProv;
+      model = modelTrim;
+    }
+  } else {
+    if (lower === 'openai') {
+      provider = 'openai';
+      model = 'gpt-6-luna';
+    } else if (lower.startsWith('gpt-') || /^o[134](-|$)/.test(lower)) {
+      provider = 'openai';
+      model = clean;
+    } else if (lower === 'gemini' || lower === 'google') {
+      provider = 'gemini';
+      model = 'models/gemini-3.5-flash';
+    } else if (lower.startsWith('gemini-')) {
+      provider = 'gemini';
+      model = 'models/' + clean;
+    } else if (lower === 'mistral' || lower === 'mistralai') {
+      provider = 'mistral';
+      model = 'mistral-medium-latest';
+    } else if (
+      lower.startsWith('mistral-')
+      || lower.startsWith('pixtral-')
+      || lower.startsWith('codestral-')
+      || lower.startsWith('ministral-')
+    ) {
+      provider = 'mistral';
+      model = clean;
+    } else if (lower === 'glm' || lower === 'glm-5-3') {
+      provider = 'mistral';
+      model = 'zai-glm-5-3';
+    } else if (lower === 'glm-5-3-flash') {
+      provider = 'mistral';
+      model = 'zai-glm-5-3-flash';
+    } else if (lower.startsWith('zai-glm') || lower.startsWith('glm-')) {
+      provider = 'mistral';
+      model = clean;
+    } else if (lower === 'anthropic') {
+      provider = 'anthropic';
+      model = 'claude-3-5-sonnet-20241022';
+    } else if (lower.startsWith('claude-')) {
+      provider = 'anthropic';
+      model = clean;
+    } else {
+      provider = lower;
+      model = clean;
+    }
+  }
+
+  return {
+    id: model ? (provider + '/' + model) : provider,
+    provider,
+    model,
+    eu_hosted: provider === 'mistral'
+  };
+}
+
+/**
  * Universal Normalizer Item Expander
  */
 function expandNormalizerTargetLLMs(input, triggerSource = 'webhook') {
+  const rawPrompts = Array.isArray(input.prompts)
+    ? input.prompts.map(p => String(p || '').trim()).filter(Boolean)
+    : [];
   const prompt = (input.prompt || '').trim();
+  const promptList = rawPrompts.length > 0 ? rawPrompts : [prompt];
   const brandName = (input.brand_name || '').trim();
   const brandDomains = Array.isArray(input.brand_domains) ? input.brand_domains : [];
   const competitors = Array.isArray(input.competitors) ? input.competitors : [];
   const searchEnabled = input.search_enabled !== undefined ? Boolean(input.search_enabled) : true;
-  const targetLLMs = Array.isArray(input.target_llms) && input.target_llms.length > 0 ? input.target_llms : ['openai', 'gemini'];
+  const rawTargetLLMs = Array.isArray(input.target_llms) && input.target_llms.length > 0
+    ? input.target_llms
+    : ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'];
+
+  const seenSpecs = new Set();
+  const specs = [];
+  for (const token of rawTargetLLMs) {
+    const spec = resolveModelSpec(String(token || ''));
+    if (spec && spec.id && !seenSpecs.has(spec.id)) {
+      seenSpecs.add(spec.id);
+      specs.push(spec);
+    }
+  }
+  if (specs.length === 0) {
+    specs.push(
+      resolveModelSpec('openai/gpt-6-luna'),
+      resolveModelSpec('gemini/models/gemini-3.5-flash')
+    );
+  }
+
   const responseMode = input.response_mode || (triggerSource === 'chat' ? 'sync' : (triggerSource === 'webhook' ? 'sync' : 'async'));
   const configId = input.config_id || null;
   const runId = input.run_id || ('run_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9));
+  const createdAt = new Date().toISOString();
 
-  return targetLLMs.map(provider => {
-    let model = 'gpt-4o';
-    if (provider === 'anthropic') model = 'claude-3-5-sonnet-20241022';
-    if (provider === 'gemini') model = 'gemini-1.5-flash';
-
-    return {
-      run_id: runId,
-      config_id: configId,
-      trigger_source: triggerSource,
-      response_mode: responseMode,
-      prompt,
-      brand_name: brandName,
-      brand_domains: brandDomains,
-      competitors: competitors.map(c => typeof c === 'string' ? { name: c, domain: '' } : c),
-      provider,
-      model,
-      search_enabled: searchEnabled,
-      locale: input.locale || 'de-DE',
-      created_at: new Date().toISOString()
-    };
-  });
+  const items = [];
+  for (let pIdx = 0; pIdx < promptList.length; pIdx++) {
+    for (const spec of specs) {
+      items.push({
+        run_id: runId,
+        prompt_index: pIdx,
+        config_id: configId,
+        trigger_source: triggerSource,
+        response_mode: responseMode,
+        prompt: promptList[pIdx],
+        brand_name: brandName,
+        brand_domains: brandDomains,
+        competitors: competitors.map(c => typeof c === 'string' ? { name: c, domain: '' } : c),
+        provider: spec.provider,
+        selected_provider: spec.provider,
+        model: spec.model,
+        model_key: spec.id,
+        eu_hosted: spec.eu_hosted,
+        is_eu_hosted: spec.eu_hosted,
+        search_enabled: searchEnabled,
+        locale: input.locale || 'de-DE',
+        created_at: createdAt
+      });
+    }
+  }
+  return items;
 }
 
 /**
@@ -403,6 +529,7 @@ module.exports = {
   evaluateGEODiagnostic,
   calculateMetrics,
   parseNormalizerShorthand,
+  resolveModelSpec,
   expandNormalizerTargetLLMs,
   validateWorkEmail
 };

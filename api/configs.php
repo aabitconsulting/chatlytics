@@ -417,18 +417,12 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
 
     // 5. target_llms
     if (isset($data['target_llms'])) {
-        $rawLLMs = $data['target_llms'];
-        if (is_string($rawLLMs)) {
-            $rawLLMs = explode(',', $rawLLMs);
-        }
-        if (!is_array($rawLLMs) || empty($rawLLMs)) {
-            $rawLLMs = ['openai/gpt-4o', 'anthropic/claude-3-5-sonnet', 'google/gemini-1.5-pro'];
-        }
-        $targetLLMs = array_values(array_filter(array_map('trim', $rawLLMs)));
+        $targetLLMs = normalizeTargetLlmsList($data['target_llms']);
     } elseif ($isUpdate && $existing) {
-        $targetLLMs = json_decode($existing['target_llms'] ?: '[]', true) ?? ['openai/gpt-4o'];
+        $existingLLMs = json_decode($existing['target_llms'] ?: '[]', true);
+        $targetLLMs = normalizeTargetLlmsList(is_array($existingLLMs) ? $existingLLMs : []);
     } else {
-        $targetLLMs = ['openai/gpt-4o', 'anthropic/claude-3-5-sonnet', 'google/gemini-1.5-pro'];
+        $targetLLMs = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'];
     }
 
     // 6. schedule_interval

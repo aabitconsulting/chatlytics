@@ -10,6 +10,40 @@
 
 import { apiClient } from './api-client.js';
 
+export const LLM_CATALOG = [
+  { id: 'openai/gpt-6-luna', provider: 'openai', model: 'gpt-6-luna', label: 'OpenAI · GPT-6 Luna', euHosted: false, defaultChecked: true },
+  { id: 'gemini/models/gemini-3.5-flash', provider: 'gemini', model: 'models/gemini-3.5-flash', label: 'Google · Gemini 3.5 Flash', euHosted: false, defaultChecked: true },
+  { id: 'mistral/mistral-medium-latest', provider: 'mistral', model: 'mistral-medium-latest', label: 'Mistral Medium Latest', euHosted: true, defaultChecked: true },
+  { id: 'mistral/mistral-large-latest', provider: 'mistral', model: 'mistral-large-latest', label: 'Mistral Large Latest', euHosted: true, defaultChecked: false },
+  { id: 'mistral/zai-glm-5-3', provider: 'mistral', model: 'zai-glm-5-3', label: 'Z.ai GLM 5.3 (Mistral EU)', euHosted: true, defaultChecked: true },
+  { id: 'mistral/zai-glm-5-3-flash', provider: 'mistral', model: 'zai-glm-5-3-flash', label: 'Z.ai GLM 5.3 Flash (Mistral EU)', euHosted: true, defaultChecked: false }
+];
+
+const DEFAULT_FALLBACK_LLMS = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'];
+const DEFAULT_SELECTED_LLMS = LLM_CATALOG.filter(m => m.defaultChecked).map(m => m.id);
+
+export function mapSavedTokenToCatalogId(token) {
+  const clean = String(token || '').trim().toLowerCase();
+  if (!clean) return '';
+  if (clean === 'openai' || clean.startsWith('openai/')) return 'openai/gpt-6-luna';
+  if (clean === 'gemini' || clean === 'google' || clean.startsWith('gemini/') || clean.startsWith('google/') || clean.startsWith('models/gemini')) {
+    return 'gemini/models/gemini-3.5-flash';
+  }
+  if (clean === 'mistral' || clean === 'mistral/mistral-medium-latest' || clean === 'mistral-medium-latest') {
+    return 'mistral/mistral-medium-latest';
+  }
+  if (clean === 'mistral/mistral-large-latest' || clean === 'mistral-large-latest') {
+    return 'mistral/mistral-large-latest';
+  }
+  if (clean === 'glm' || clean === 'mistral/zai-glm-5-3' || clean === 'zai-glm-5-3') {
+    return 'mistral/zai-glm-5-3';
+  }
+  if (clean === 'mistral/zai-glm-5-3-flash' || clean === 'zai-glm-5-3-flash') {
+    return 'mistral/zai-glm-5-3-flash';
+  }
+  return clean;
+}
+
 /**
  * Sanitizes comma-separated domain string into clean hostname array.
  * Strictly adheres to tests/tier1_features/f29_client_js_modules.test.js:
@@ -128,7 +162,7 @@ export class ConfigManager {
       brand_domains: Array.isArray(formData.brand_domains) ? formData.brand_domains : sanitizeDomains(formData.brand_domains || ''),
       keywords_prompts: Array.isArray(formData.prompts) ? formData.prompts : parsePrompts(formData.prompts || ''),
       competitors: Array.isArray(formData.competitors) ? formData.competitors : parseCompetitors(formData.competitors || ''),
-      target_llms: formData.target_llms || ['openai', 'gemini'],
+      target_llms: (Array.isArray(formData.target_llms) && formData.target_llms.length > 0) ? formData.target_llms : DEFAULT_FALLBACK_LLMS,
       search_enabled: formData.search_enabled !== undefined ? Boolean(formData.search_enabled) : true,
       schedule_interval: formData.schedule_interval || 'daily',
       status: formData.status || 'active'
@@ -158,6 +192,18 @@ export class ConfigManager {
 
     const openBtns = document.querySelectorAll('#btn-new-config, [data-open-modal="new-config"]');
 
+    const applyModelAndSearchFields = (selectedLlms, searchEnabled) => {
+      const normalized = new Set((selectedLlms || []).map(mapSavedTokenToCatalogId).filter(Boolean));
+      const checkboxes = form.querySelectorAll('.cfg-llm-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = normalized.has(cb.value);
+      });
+      const searchToggle = document.getElementById('cfg-search-enabled');
+      if (searchToggle) {
+        searchToggle.checked = searchEnabled !== undefined ? Boolean(Number(searchEnabled) || searchEnabled === true) : true;
+      }
+    };
+
     const showModal = (config = null) => {
       if (errBox) errBox.textContent = '';
       if (config) {
@@ -169,10 +215,15 @@ export class ConfigManager {
         document.getElementById('cfg-prompts').value = (config.keywords_prompts || config.prompts || []).join('\n');
         document.getElementById('cfg-competitors').value = (config.competitors || []).map(c => c.name || c).join(', ');
         document.getElementById('cfg-interval').value = config.schedule_interval || 'daily';
+        const savedLlms = Array.isArray(config.target_llms) && config.target_llms.length > 0
+          ? config.target_llms
+          : DEFAULT_FALLBACK_LLMS;
+        applyModelAndSearchFields(savedLlms, config.search_enabled !== undefined ? config.search_enabled : true);
       } else {
         if (titleEl) titleEl.textContent = 'Neue Tracking-Konfiguration anlegen';
         delete form.dataset.configId;
         form.reset();
+        applyModelAndSearchFields(DEFAULT_SELECTED_LLMS, true);
       }
       modal.classList.remove('modal-hidden');
       modal.setAttribute('aria-hidden', 'false');
@@ -230,6 +281,20 @@ export class ConfigManager {
         return;
       }
 
+      const selectedLlms = Array.from(form.querySelectorAll('.cfg-llm-checkbox:checked')).map(cb => cb.value);
+      if (selectedLlms.length === 0) {
+        if (errBox) {
+          const msg = (typeof window !== 'undefined' && window.i18n && typeof window.i18n.t === 'function')
+            ? window.i18n.t('config.llms_required', 'Bitte wählen Sie mindestens ein Ziel-KI-Modell aus.')
+            : 'Bitte wählen Sie mindestens ein Ziel-KI-Modell aus.';
+          errBox.textContent = msg;
+        }
+        return;
+      }
+
+      const searchToggle = document.getElementById('cfg-search-enabled');
+      const searchEnabled = searchToggle ? Boolean(searchToggle.checked) : true;
+
       try {
         if (submitBtn) submitBtn.disabled = true;
         const saved = await this.saveConfig({
@@ -238,6 +303,8 @@ export class ConfigManager {
           brand_domains: domains,
           prompts,
           competitors: rawCompetitors,
+          target_llms: selectedLlms,
+          search_enabled: searchEnabled,
           schedule_interval: interval
         }, configId);
 
@@ -263,11 +330,16 @@ if (typeof window !== 'undefined') {
   window.configs = configs;
   window.ConfigManager = ConfigManager;
   window.sanitizeDomains = sanitizeDomains;
+  window.LLM_CATALOG = LLM_CATALOG;
 }
 
 // CommonJS compatibility export for test runners
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    LLM_CATALOG,
+    DEFAULT_FALLBACK_LLMS,
+    DEFAULT_SELECTED_LLMS,
+    mapSavedTokenToCatalogId,
     sanitizeDomains,
     parsePrompts,
     parseCompetitors,

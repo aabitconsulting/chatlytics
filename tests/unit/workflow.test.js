@@ -138,13 +138,14 @@ describe('n8n Universal Worker Workflow & Code Node Unit Tests', () => {
   // =========================================================================
   // Helper: Sandboxed Execution Runner
   // =========================================================================
-  function executeNodeJsCode(jsCode, inputItems, customEnv = {}) {
+  function executeNodeJsCode(jsCode, inputItems, customEnv = {}, nodeMocks = null) {
     const sandbox = {
       $input: {
         all: () => inputItems,
         first: () => inputItems[0] || { json: {} },
         item: inputItems[0] || { json: {} }
       },
+      $: nodeMocks ? (nodeName) => nodeMocks[nodeName] : undefined,
       $env: {
         CHATLYTICS_API_BASE_URL: 'http://localhost:8000',
         CHATLYTICS_INGEST_KEY: 'test_ingest_key',
@@ -752,58 +753,161 @@ SEARCH: true`;
       assert.ok(evalKey.length >= 16, 'Ingest key must be at least 16 characters long');
     });
 
-    it('should evaluate Call OpenAI parameters and jsonBody with clean Bearer auth and messages array', () => {
-      const openAiNode = workflow.nodes.find(n => n.name === 'Call OpenAI');
-      assert.ok(openAiNode, 'Call OpenAI node must exist');
+    it('should evaluate native OpenAI v2.3 Search Enabled and No Search nodes cleanly', () => {
+      const openAiSearchNode = workflow.nodes.find(n => n.name === 'Call OpenAI (Search Enabled)');
+      const openAiNoSearchNode = workflow.nodes.find(n => n.name === 'Call OpenAI (No Search)');
+      assert.ok(openAiSearchNode, 'Call OpenAI (Search Enabled) node must exist');
+      assert.ok(openAiNoSearchNode, 'Call OpenAI (No Search) node must exist');
+      assert.equal(openAiSearchNode.type, '@n8n/n8n-nodes-langchain.openAi');
+      assert.equal(openAiSearchNode.typeVersion, 2.3);
+      assert.equal(openAiSearchNode.parameters.simplify, false);
+      assert.equal(openAiSearchNode.onError, 'continueRegularOutput');
+      assert.ok(openAiSearchNode.parameters.builtInTools?.webSearch, 'Search variant must enable builtInTools.webSearch');
+      assert.deepEqual(openAiNoSearchNode.parameters.builtInTools, {}, 'No-search variant must have empty builtInTools');
 
-      const authParam = openAiNode.parameters.headerParameters?.parameters?.find(p => p.name === 'Authorization');
-      assert.ok(authParam, 'Authorization header must exist');
-      const authVal = evaluateN8nExpression(authParam.value, { json: { prompt: 'Test' } });
-      assert.ok(!authVal.includes('Bearer ='), 'Authorization header must not contain "Bearer =" stray prefix');
-      assert.ok(authVal.startsWith('Bearer '), 'Authorization header must begin with "Bearer "');
-
-      const evalBody = evaluateN8nExpression(openAiNode.parameters.jsonBody, { json: { prompt: 'Beste Software', model: 'gpt-4o' } });
-      assert.ok(!evalBody.startsWith('='));
-      assert.ok(!evalBody.includes('[object Object]'));
-
-      const parsed = JSON.parse(evalBody);
-      assert.equal(parsed.model, 'gpt-4o');
-      assert.ok(Array.isArray(parsed.messages), 'messages must serialize as genuine array');
-      assert.equal(parsed.messages.length, 2);
-      assert.equal(parsed.messages[0].role, 'system');
-      assert.equal(parsed.messages[1].role, 'user');
-      assert.equal(parsed.messages[1].content, 'Beste Software');
+      const evalModel = evaluateN8nExpression(openAiSearchNode.parameters.modelId.value, { json: { model: 'gpt-6-luna' } });
+      assert.equal(evalModel, 'gpt-6-luna');
+      const evalPrompt = evaluateN8nExpression(openAiSearchNode.parameters.responses.values[1].content, { json: { prompt: 'Beste Software' } });
+      assert.equal(evalPrompt, 'Beste Software');
     });
 
-    it('should evaluate Call Anthropic Claude and Call Google Gemini parameters cleanly', () => {
-      const claudeNode = workflow.nodes.find(n => n.name === 'Call Anthropic Claude');
-      assert.ok(claudeNode, 'Call Anthropic Claude node must exist');
-      const claudeBody = evaluateN8nExpression(claudeNode.parameters.jsonBody, { json: { prompt: 'Claude Prompt' } });
-      const parsedClaude = JSON.parse(claudeBody);
-      assert.ok(Array.isArray(parsedClaude.messages));
-      assert.equal(parsedClaude.messages[0].content, 'Claude Prompt');
-      assert.ok(!claudeBody.includes('[object Object]'));
+    it('should evaluate native Gemini v1.2, Mistral EU HTTP, and Optional Anthropic Fallback nodes cleanly', () => {
+      const geminiSearchNode = workflow.nodes.find(n => n.name === 'Call Google Gemini (Search Enabled)');
+      const geminiNoSearchNode = workflow.nodes.find(n => n.name === 'Call Google Gemini (No Search)');
+      assert.ok(geminiSearchNode && geminiNoSearchNode, 'Both Gemini Search and No-Search nodes must exist');
+      assert.equal(geminiSearchNode.type, '@n8n/n8n-nodes-langchain.googleGemini');
+      assert.equal(geminiSearchNode.typeVersion, 1.2);
+      assert.equal(geminiSearchNode.parameters.simplify, false);
+      assert.equal(geminiSearchNode.onError, 'continueRegularOutput');
+      assert.ok(geminiSearchNode.parameters.builtInTools?.googleSearch !== undefined, 'Gemini Search must configure googleSearch');
+      assert.deepEqual(geminiNoSearchNode.parameters.builtInTools, {}, 'Gemini No-Search must leave builtInTools empty');
 
-      const geminiNode = workflow.nodes.find(n => n.name === 'Call Google Gemini');
-      assert.ok(geminiNode, 'Call Google Gemini node must exist');
+      const evalGemModelNoPrefix = evaluateN8nExpression(geminiSearchNode.parameters.modelId.value, { json: { model: 'gemini-3.5-flash' } });
+      assert.equal(evalGemModelNoPrefix, 'models/gemini-3.5-flash');
+      const evalGemModelWithPrefix = evaluateN8nExpression(geminiSearchNode.parameters.modelId.value, { json: { model: 'models/gemini-3.5-flash' } });
+      assert.equal(evalGemModelWithPrefix, 'models/gemini-3.5-flash');
 
-      const rawUrl = geminiNode.parameters.url;
-      assert.ok(!rawUrl.startsWith('='), 'Gemini URL parameter must not have leading stray "="');
-      const evalGeminiUrl = evaluateN8nExpression(rawUrl, { json: { model: 'gemini-1.5-flash' } });
-      assert.ok(!evalGeminiUrl.startsWith('='));
-      assert.ok(evalGeminiUrl.includes('generativelanguage.googleapis.com'));
+      const mistralNode = workflow.nodes.find(n => n.name === 'Call Mistral EU (Mistral & GLM)');
+      assert.ok(mistralNode, 'Call Mistral EU node must exist');
+      assert.equal(mistralNode.type, 'n8n-nodes-base.httpRequest');
+      assert.equal(mistralNode.parameters.url, 'https://api.eu.mistral.ai/v1/chat/completions');
+      assert.equal(mistralNode.parameters.authentication, 'predefinedCredentialType');
+      assert.equal(mistralNode.parameters.nodeCredentialType, 'mistralCloudApi');
+      assert.equal(mistralNode.parameters.options?.response?.response?.neverError, true);
+      const mistralBody = evaluateN8nExpression(mistralNode.parameters.jsonBody, { json: { prompt: 'GLM EU Test', model: 'zai-glm-5-3' } });
+      const parsedMistral = JSON.parse(mistralBody);
+      assert.equal(parsedMistral.model, 'zai-glm-5-3');
+      assert.equal(parsedMistral.messages[1].content, 'GLM EU Test');
 
-      const evalGeminiSearchTrue = evaluateN8nExpression(geminiNode.parameters.jsonBody, { json: { prompt: 'Gemini Prompt', search_enabled: true } });
-      const parsedTrue = JSON.parse(evalGeminiSearchTrue);
-      assert.ok(Array.isArray(parsedTrue.tools));
-      assert.equal(parsedTrue.tools.length, 1);
-      assert.deepEqual(parsedTrue.tools[0], { googleSearch: {} });
-      assert.ok(!evalGeminiSearchTrue.includes('[object Object]'));
+      const claudeFallback = workflow.nodes.find(n => n.name === 'Call Anthropic Claude (Optional Fallback)');
+      assert.ok(claudeFallback, 'Optional Anthropic fallback node must exist');
+      assert.equal(claudeFallback.disabled, true, 'Optional Anthropic fallback route must be disabled by default');
+    });
 
-      const evalGeminiSearchFalse = evaluateN8nExpression(geminiNode.parameters.jsonBody, { json: { prompt: 'Gemini Prompt', search_enabled: false } });
-      const parsedFalse = JSON.parse(evalGeminiSearchFalse);
-      assert.ok(Array.isArray(parsedFalse.tools));
-      assert.equal(parsedFalse.tools.length, 0);
+    it('should evaluate Dispatch Ingest API updated payload fields including run_id, status, eu_hosted, and cost_credits', () => {
+      const ingestNode = workflow.nodes.find(n => n.name === 'Dispatch Ingest API');
+      const evalBody = evaluateN8nExpression(ingestNode.parameters.jsonBody, {
+        json: {
+          run_id: 'run_eu_1',
+          config_id: 101,
+          user_id: 5,
+          prompt: 'EU Mistral Test',
+          provider: 'mistral',
+          model: 'zai-glm-5-3',
+          eu_hosted: true,
+          search_enabled: true,
+          status: 'failed',
+          error_message: 'Model unavailable',
+          cost_credits: 0,
+          brand_name: 'Personio',
+          brand_mentioned: 0,
+          mece_category: '4_GENERIC',
+          geo_quadrant: 'NONE',
+          raw_response_text: 'ERROR: Model unavailable'
+        }
+      });
+      const parsed = JSON.parse(evalBody);
+      assert.equal(parsed.run_id, 'run_eu_1');
+      assert.equal(parsed.provider, 'mistral');
+      assert.equal(parsed.model, 'zai-glm-5-3');
+      assert.equal(parsed.eu_hosted, true);
+      assert.equal(parsed.status, 'failed');
+      assert.equal(parsed.error_message, 'Model unavailable');
+      assert.equal(parsed.cost_credits, 0);
+    });
+
+    it('should expand Mistral + GLM models with eu_hosted flag, multi-prompts, and extract OpenAI Responses citations & error states cleanly', () => {
+      const normalizer = workflow.nodes.find(n => n.name === 'Universal Normalizer');
+      const extractor = workflow.nodes.find(n => n.name === 'Secondary Extractor');
+      const calc = workflow.nodes.find(n => n.name === 'Metric & MECE Calculator');
+      const formatter = workflow.nodes.find(n => n.name === 'Format Chat Response');
+
+      const normItems = executeNodeJsCode(normalizer.parameters.jsCode, [{
+        json: {
+          body: {
+            run_id: 'run_multi_1',
+            config_id: 55,
+            prompts: ['Prompt A', 'Prompt B'],
+            brand_name: 'Personio',
+            target_llms: ['mistral/mistral-medium-latest', 'mistral/zai-glm-5-3', 'glm', 'openai', 'gemini']
+          }
+        }
+      }]);
+      // Notice 'glm' resolves cleanly to 'mistral/zai-glm-5-3' and deduplicates against explicit 'mistral/zai-glm-5-3' -> 4 unique models * 2 prompts = 8 items
+      assert.equal(normItems.length, 8);
+      const glmItems = normItems.filter(it => it.json.model === 'zai-glm-5-3');
+      assert.equal(glmItems.length, 2);
+      assert.equal(glmItems[0].json.provider, 'mistral');
+      assert.equal(glmItems[0].json.eu_hosted, true);
+
+      // Extract native OpenAI Responses API payload with url_citation annotations
+      const respApiItem = executeNodeJsCode(extractor.parameters.jsCode, [{
+        json: {
+          output: [
+            { type: 'web_search_call', id: 'ws_1' },
+            {
+              type: 'message',
+              content: [{
+                type: 'output_text',
+                text: 'Personio ist marktführend für KMU HR.',
+                annotations: [{ type: 'url_citation', url: 'https://www.personio.de/hr/', title: 'Personio HR' }]
+              }]
+            }
+          ]
+        }
+      }], {}, {
+        'Universal Normalizer': {
+          first: () => ({ json: { provider: 'openai', model: 'gpt-6-luna', brand_name: 'Personio', brand_domains: ['personio.de'], eu_hosted: false } }),
+          itemMatching: () => ({ json: { provider: 'openai', model: 'gpt-6-luna', brand_name: 'Personio', brand_domains: ['personio.de'], eu_hosted: false } })
+        }
+      });
+      assert.equal(respApiItem[0].json.status, 'completed');
+      assert.ok(respApiItem[0].json.raw_response_text.includes('Personio'));
+      assert.equal(respApiItem[0].json.citations.length, 1);
+      assert.equal(respApiItem[0].json.citations[0].is_brand_domain, true);
+      assert.equal(respApiItem[0].json.citations[0].source_type, 'openai_web_search');
+
+      // Extract Mistral error object -> status: 'failed' -> Calculator preserves failed status & 0 credits
+      const failedExt = executeNodeJsCode(extractor.parameters.jsCode, [{
+        json: { object: 'error', message: 'Invalid model: zai-glm-unknown', type: 'invalid_request_error' }
+      }], {}, {
+        'Universal Normalizer': {
+          first: () => ({ json: { provider: 'mistral', model: 'zai-glm-5-3', brand_name: 'Personio', eu_hosted: true } }),
+          itemMatching: () => ({ json: { provider: 'mistral', model: 'zai-glm-5-3', brand_name: 'Personio', eu_hosted: true } })
+        }
+      });
+      assert.equal(failedExt[0].json.status, 'failed');
+      assert.equal(failedExt[0].json.error_message, 'Invalid model: zai-glm-unknown');
+
+      const failedCalc = executeNodeJsCode(calc.parameters.jsCode, failedExt);
+      assert.equal(failedCalc[0].json.status, 'failed');
+      assert.equal(failedCalc[0].json.cost_credits, 0);
+      assert.equal(failedCalc[0].json.brand_mentioned, 0);
+      assert.equal(failedCalc[0].json.mece_category, '4_GENERIC');
+
+      const formattedFail = executeNodeJsCode(formatter.parameters.jsCode, failedCalc);
+      assert.ok(formattedFail[0].json.output.includes('EU-Hosted'));
+      assert.ok(formattedFail[0].json.output.includes('failed'));
     });
 
     it('should verify Fast Async Response returns valid JSON string without literal newlines or stray "="', () => {

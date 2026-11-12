@@ -9,35 +9,38 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseNormalizerShorthand, expandNormalizerTargetLLMs } = require('../helpers/reference_engine');
 
-test('Combination 3.1: Chat shorthand input expands into 3 routed provider items', () => {
+test('Combination 3.1: Chat shorthand input expands into routed provider items including Mistral EU & GLM', () => {
   const shorthand = `PROMPT: Welche Cloud-ERP Lösung empfiehlt sich für Startups?
 BRAND: Xentral
 DOMAINS: xentral.com
 COMPETITORS: SAP, Weclapp (weclapp.com)
-LLMS: openai, anthropic, gemini
+LLMS: openai, gemini, mistral/mistral-medium-latest, mistral/zai-glm-5-3
 SEARCH: true`;
 
   const parsed = parseNormalizerShorthand(shorthand);
   const routedItems = expandNormalizerTargetLLMs(parsed, 'chat');
 
-  assert.equal(routedItems.length, 3);
+  assert.equal(routedItems.length, 4);
 
-  // Port 0: OpenAI
+  // Port 0: OpenAI (Native v2.3)
   const openAiItem = routedItems.find(i => i.provider === 'openai');
   assert.ok(openAiItem);
-  assert.equal(openAiItem.model, 'gpt-4o');
+  assert.equal(openAiItem.model, 'gpt-6-luna');
+  assert.equal(openAiItem.eu_hosted, false);
   assert.equal(openAiItem.brand_name, 'Xentral');
 
-  // Port 1: Anthropic
-  const anthropicItem = routedItems.find(i => i.provider === 'anthropic');
-  assert.ok(anthropicItem);
-  assert.equal(anthropicItem.model, 'claude-3-5-sonnet-20241022');
-
-  // Port 2: Gemini
+  // Port 1: Gemini (Native v1.2)
   const geminiItem = routedItems.find(i => i.provider === 'gemini');
   assert.ok(geminiItem);
-  assert.equal(geminiItem.model, 'gemini-1.5-flash');
+  assert.equal(geminiItem.model, 'models/gemini-3.5-flash');
   assert.equal(geminiItem.search_enabled, true);
+
+  // Port 2: Mistral EU (Mistral + Mistral-hosted Z.ai GLM)
+  const mistralItems = routedItems.filter(i => i.provider === 'mistral');
+  assert.equal(mistralItems.length, 2);
+  assert.equal(mistralItems[0].model, 'mistral-medium-latest');
+  assert.equal(mistralItems[1].model, 'zai-glm-5-3');
+  assert.equal(mistralItems[1].eu_hosted, true);
 });
 
 test('Combination 3.2: Webhook JSON body normalization routes to single targeted provider', () => {
