@@ -15,7 +15,15 @@
   <header class="navbar">
     <div class="container navbar-inner">
       <a href="index.html" class="logo" aria-label="Chatlytics.de Startseite">
-        Chatlytics<span class="logo-tld">.de</span>
+        <svg class="logo-mark" width="26" height="26" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+          <g fill="currentColor">
+            <path d="M0 0H49V25H25V49H0Z"/>
+            <path d="M0 51H25V75H49V100H0Z"/>
+            <path d="M51 75H75V51H100V100H51Z"/>
+          </g>
+          <path fill="#10B981" fill-rule="evenodd" d="M51 0H100V49H51ZM88.6 3.2H96.8V11.4Z"/>
+        </svg>
+        <span>Chatlytics<span class="logo-tld">.de</span></span>
       </a>
 
       <nav class="nav-links" aria-label="Hauptnavigation">
@@ -31,7 +39,7 @@
           <span id="current-lang-label">EN</span>
         </button>
         <a href="#login" id="btn-open-login" class="nav-login-link" data-open-modal="auth" data-auth-mode="login" data-i18n="nav.login">Login</a>
-        <button id="btn-open-signup" type="button" class="btn btn-light btn-sm" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="nav.signup">Kostenloses Audit starten</button>
+        <button id="btn-open-signup" type="button" class="btn btn-primary btn-sm" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="nav.signup">Kostenloses Audit starten</button>
 
         <button id="btn-mobile-menu" type="button" class="btn-mobile-menu" aria-label="Menü öffnen" aria-expanded="false" aria-controls="mobile-nav-drawer">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
@@ -50,7 +58,7 @@
         <a href="#faq" class="nav-link" data-i18n="nav.faq">FAQ</a>
         <button id="btn-mobile-report" type="button" class="btn btn-dark-outline btn-block" data-i18n="hero.cta_secondary">Beispiel-Vorstandsreport ansehen →</button>
         <button type="button" class="btn btn-dark-outline btn-block" data-open-modal="auth" data-auth-mode="login" data-i18n="nav.login">Login</button>
-        <button type="button" class="btn btn-light btn-block" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="nav.signup">Kostenloses Audit starten</button>
+        <button type="button" class="btn btn-primary btn-block" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="nav.signup">Kostenloses Audit starten</button>
       </nav>
     </div>
   </header>
@@ -66,7 +74,7 @@
         </p>
 
         <div class="hero-cta-row">
-          <button id="hero-btn-signup" type="button" class="btn btn-light btn-lg" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="hero.cta_primary">Eigene Marke kostenlos prüfen (40 Live-Abfragen)</button>
+          <button id="hero-btn-signup" type="button" class="btn btn-primary btn-lg" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="hero.cta_primary">Eigene Marke kostenlos prüfen (40 Live-Abfragen)</button>
           <button id="btn-open-report" type="button" class="btn btn-dark-outline btn-lg" data-i18n="hero.cta_secondary">Beispiel-Vorstandsreport ansehen →</button>
         </div>
 
@@ -600,7 +608,7 @@
               <li data-i18n="pricing.managed.feat_4">Quartalsweises Executive Briefing mit Geschäftsführung</li>
               <li data-i18n="pricing.managed.feat_5">Dedizierter GEO-Stratege im DACH-Raum</li>
             </ul>
-            <button id="btn-open-strategy" type="button" class="btn btn-light btn-block" data-i18n="pricing.managed.cta">Strategiegespräch anfragen →</button>
+            <button id="btn-open-strategy" type="button" class="btn btn-primary btn-block" data-i18n="pricing.managed.cta">Strategiegespräch anfragen →</button>
           </article>
         </div>
       </div>
@@ -808,7 +816,7 @@
           Vereinbaren Sie ein vertrauliches Erstgespräch mit unserem GEO-Team im DACH-Raum. Alternativ erreichen Sie uns direkt unter <a href="mailto:kontakt@chatlytics.de">kontakt@chatlytics.de</a>.
         </p>
 
-        <div id="strategy-success" class="text-sm" style="margin-bottom: 12px; color: var(--status-win-text);" aria-live="polite"></div>
+        <div id="strategy-success" class="text-sm" style="margin-bottom: 12px; color: var(--color-success-text);" aria-live="polite"></div>
 
         <div class="form-group">
           <label for="strat-name" class="form-label">Ihr Name &amp; Funktion</label>

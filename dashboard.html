@@ -28,7 +28,15 @@
     <div class="container-fluid navbar-inner">
       <div class="header-left">
         <a href="index.html" class="logo" aria-label="Chatlytics.de Startseite">
-          Chatlytics<span class="logo-tld">.de</span>
+          <svg class="logo-mark" width="26" height="26" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+            <g fill="currentColor">
+              <path d="M0 0H49V25H25V49H0Z"/>
+              <path d="M0 51H25V75H49V100H0Z"/>
+              <path d="M51 75H75V51H100V100H51Z"/>
+            </g>
+            <path fill="#10B981" fill-rule="evenodd" d="M51 0H100V49H51ZM88.6 3.2H96.8V11.4Z"/>
+          </svg>
+          <span>Chatlytics<span class="logo-tld">.de</span></span>
         </a>
 
         <!-- Config Switcher Dropdown -->
@@ -56,7 +64,7 @@
 
       <div class="header-right">
         <!-- Instant Run Trigger Button -->
-        <button id="btn-trigger-run" type="button" class="btn btn-light btn-sm btn-trigger-run">
+        <button id="btn-trigger-run" type="button" class="btn btn-primary btn-sm btn-trigger-run">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
             <polygon points="2,1 11,6 2,11"/>
           </svg>
@@ -329,23 +337,23 @@
               <svg id="geo-svg-matrix" class="geo-svg-matrix" viewBox="0 0 280 156" role="img" aria-label="2x2 GEO Ursachen-Matrix">
                 <!-- Q1: Gekaperte Vorlage -->
                 <rect id="geo-cell-hijack" class="geo-svg-cell" x="4" y="4" width="132" height="70"/>
-                <text x="12" y="24" fill="#991B1B" font-family="sans-serif" font-weight="bold" font-size="9">1. GEKAPERTE VORLAGE</text>
-                <text x="12" y="40" fill="#525866" font-family="sans-serif" font-size="8">Zitiert · Konkurrent führt</text>
+                <text x="12" y="24" class="geo-svg-title-loss" font-family="sans-serif" font-weight="bold" font-size="9">1. GEKAPERTE VORLAGE</text>
+                <text x="12" y="40" class="geo-svg-subtitle" font-family="sans-serif" font-size="8">Zitiert · Konkurrent führt</text>
 
                 <!-- Q2: Stummes Quell-Zitat -->
                 <rect id="geo-cell-blindspot" class="geo-svg-cell" x="144" y="4" width="132" height="70"/>
-                <text x="152" y="24" fill="#991B1B" font-family="sans-serif" font-weight="bold" font-size="9">2. STUMMES QUELL-ZITAT</text>
-                <text x="152" y="40" fill="#525866" font-family="sans-serif" font-size="8">Zitiert · Marke fehlt</text>
+                <text x="152" y="24" class="geo-svg-title-loss" font-family="sans-serif" font-weight="bold" font-size="9">2. STUMMES QUELL-ZITAT</text>
+                <text x="152" y="40" class="geo-svg-subtitle" font-family="sans-serif" font-size="8">Zitiert · Marke fehlt</text>
 
                 <!-- Q3: Ewige Zweitnennung -->
                 <rect id="geo-cell-trap" class="geo-svg-cell" x="4" y="82" width="132" height="70"/>
-                <text x="12" y="102" fill="#92400E" font-family="sans-serif" font-weight="bold" font-size="9">3. EWIGE ZWEITNENNUNG</text>
-                <text x="12" y="118" fill="#525866" font-family="sans-serif" font-size="8">Im Windschatten (Platz 2)</text>
+                <text x="12" y="102" class="geo-svg-title-halo" font-family="sans-serif" font-weight="bold" font-size="9">3. EWIGE ZWEITNENNUNG</text>
+                <text x="12" y="118" class="geo-svg-subtitle" font-family="sans-serif" font-size="8">Im Windschatten (Platz 2)</text>
 
                 <!-- Q4: Versteckter Gewinner -->
                 <rect id="geo-cell-buried" class="geo-svg-cell" x="144" y="82" width="132" height="70"/>
-                <text x="152" y="102" fill="#92400E" font-family="sans-serif" font-weight="bold" font-size="9">4. VERSTECKTER GEWINNER</text>
-                <text x="152" y="118" fill="#525866" font-family="sans-serif" font-size="8">Späte Nennung (&gt; 50 %)</text>
+                <text x="152" y="102" class="geo-svg-title-halo" font-family="sans-serif" font-weight="bold" font-size="9">4. VERSTECKTER GEWINNER</text>
+                <text x="152" y="118" class="geo-svg-subtitle" font-family="sans-serif" font-size="8">Späte Nennung (&gt; 50 %)</text>
               </svg>
             </div>
 
@@ -398,7 +406,7 @@
         </strong>
       </div>
       <div class="cta-actions">
-        <a href="index.html?auth=signup" class="btn btn-light btn-sm" data-i18n="audit.cta_btn">
+        <a href="index.html?auth=signup" class="btn btn-primary btn-sm" data-i18n="audit.cta_btn">
           Jetzt kostenlos registrieren (40 Abfragen)
         </a>
       </div>
