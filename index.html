@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Chatlytics.de — Share-of-Model & Generative Engine Optimization (GEO) Analyse-Plattform für Marken, Mittelstand und Beratungen im DACH-Raum.">
+  <title>Chatlytics.de — Share-of-Model & GEO Intelligence</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Direkt zum Inhalt springen</a>
+
+  <!-- Sticky Navigation (Obsidian #0B0D10) -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <a href="index.html" class="logo" aria-label="Chatlytics.de Startseite">
+        Chatlytics<span class="logo-tld">.de</span>
+      </a>
+
+      <nav class="nav-links" aria-label="Hauptnavigation">
+        <a href="#dossier" class="nav-link" data-i18n="nav.dossier">Modell-Vergleich</a>
+        <a href="#pruefstand" class="nav-link" data-i18n="nav.workbench">Antwort-Prüfstand</a>
+        <a href="#matrix" class="nav-link" data-i18n="nav.matrix">Ursachen-Matrix</a>
+        <a href="#preise" class="nav-link" data-i18n="nav.pricing">Preise</a>
+        <a href="#faq" class="nav-link" data-i18n="nav.faq">FAQ</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button id="btn-lang-toggle" type="button" class="lang-toggle-btn" aria-label="Sprache wechseln">
+          <span id="current-lang-label">EN</span>
+        </button>
+        <a href="#login" id="btn-open-login" class="nav-login-link" data-open-modal="auth" data-auth-mode="login" data-i18n="nav.login">Login</a>
+        <button id="btn-open-signup" type="button" class="btn btn-light btn-sm" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="nav.signup">Kostenloses Audit starten</button>
+
+        <button id="btn-mobile-menu" type="button" class="btn-mobile-menu" aria-label="Menü öffnen" aria-expanded="false" aria-controls="mobile-nav-drawer">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+            <path d="M3 5h14M3 10h14M3 15h14"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="mobile-nav-drawer" class="mobile-nav-drawer" aria-hidden="true">
+      <nav class="mobile-drawer-links container" aria-label="Mobile Navigation">
+        <a href="#dossier" class="nav-link" data-i18n="nav.dossier">Modell-Vergleich</a>
+        <a href="#pruefstand" class="nav-link" data-i18n="nav.workbench">Antwort-Prüfstand</a>
+        <a href="#matrix" class="nav-link" data-i18n="nav.matrix">Ursachen-Matrix</a>
+        <a href="#preise" class="nav-link" data-i18n="nav.pricing">Preise</a>
+        <a href="#faq" class="nav-link" data-i18n="nav.faq">FAQ</a>
+        <button id="btn-mobile-report" type="button" class="btn btn-dark-outline btn-block" data-i18n="hero.cta_secondary">Beispiel-Vorstandsreport ansehen →</button>
+        <button type="button" class="btn btn-dark-outline btn-block" data-open-modal="auth" data-auth-mode="login" data-i18n="nav.login">Login</button>
+        <button type="button" class="btn btn-light btn-block" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="nav.signup">Kostenloses Audit starten</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <!-- SECTION 1: HERO STAGE (Obsidian #0B0D10) -->
+    <section class="hero-stage">
+      <div class="container hero-inner">
+        <p class="section-eyebrow" data-i18n="hero.eyebrow">SHARE-OF-MODEL &amp; GEO ANALYTICS FÜR MARKEN, MITTELSTAND &amp; BERATUNGEN</p>
+        <h1 class="hero-title" data-i18n="hero.title">Wen empfiehlt die KI, wenn Ihre Kunden nach dem Marktführer fragen?</h1>
+        <p class="hero-subhead" data-i18n="hero.subtitle">
+          Zehn blaue Google-Links gehören der Vergangenheit an. Ob Hautpflege-Routine, Handwerkstechnik, B2B-Software oder Strategieberatung: Kunden treffen ihre Vorauswahl heute direkt in ChatGPT (GPT-6.1 Sol &amp; Terra, GPT-6 Astra &amp; Luna), Claude 5.5 (Opus, Sonnet, Haiku) und Google Gemini (Hydrogen, Carbon, Argon, 3.8 Flash). Chatlytics misst Zeichen für Zeichen, ob Ihre Marke als Spitzenreiter empfohlen wird, im Windschatten der Konkurrenz landet oder trotz eigener Ratgeber-Artikel komplett verschwiegen wird.
+        </p>
+
+        <div class="hero-cta-row">
+          <button id="hero-btn-signup" type="button" class="btn btn-light btn-lg" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="hero.cta_primary">Eigene Marke kostenlos prüfen (40 Live-Abfragen)</button>
+          <button id="btn-open-report" type="button" class="btn btn-dark-outline btn-lg" data-i18n="hero.cta_secondary">Beispiel-Vorstandsreport ansehen →</button>
+        </div>
+
+        <!-- Interactive Switcher Bar controlling Section 2 in real time -->
+        <div class="hero-switcher">
+          <div class="hero-switcher-header">
+            <span class="hero-switcher-label" data-i18n="hero.switcher_label">Live-Markenduell wählen:</span>
+            <span class="hero-switcher-note" data-i18n="hero.switcher_note">Interaktive Beispieldaten über 5 Branchen</span>
+          </div>
+          <div class="industry-tabs" role="tablist" aria-label="Branchen-Beispiele für den Modell-Vergleich">
+            <button type="button" role="tab" aria-selected="true" class="industry-tab is-active" data-duel-tab="kosmetik">1. Kosmetik: Nøva Skin vs. La Roche-Derma</button>
+            <button type="button" role="tab" aria-selected="false" class="industry-tab" data-duel-tab="food">2. Food &amp; Health: Biovena One vs. AthleticOne</button>
+            <button type="button" role="tab" aria-selected="false" class="industry-tab" data-duel-tab="software">3. B2B-Software: Personia vs. WorkforceDay</button>
+            <button type="button" role="tab" aria-selected="false" class="industry-tab" data-duel-tab="mittelstand">4. Mittelstand D2C: KärchWerk vs. Dysonix</button>
+            <button type="button" role="tab" aria-selected="false" class="industry-tab" data-duel-tab="consulting">5. Consulting: Berger &amp; Kucher vs. McKinsley</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: DAS INTERAKTIVE MARKEN-DOSSIER (#dossier) -->
+    <section id="dossier" class="dossier-section">
+      <div class="container">
+        <div class="dossier-card">
+          <header class="dossier-header">
+            <div class="dossier-title-row">
+              <div>
+                <p class="section-eyebrow" data-i18n="dossier.eyebrow">DER MODELL-VERGLEICH</p>
+                <h2 class="section-title" data-i18n="dossier.title">Eine Einkäufer-Frage. Drei Sprachmodelle. Drei völlig andere Marktführer.</h2>
+              </div>
+              <span id="dossier-active-duel" class="badge badge-neutral">Nøva Skin vs. La Roche-Derma</span>
+            </div>
+
+            <div class="dossier-controls-bar">
+              <div class="dossier-prompt-box">
+                <div class="dossier-prompt-kicker" data-i18n="dossier.prompt_label">Untersuchte Einkäufer-Frage (Beispieldaten)</div>
+                <div id="dossier-prompt-text" class="dossier-prompt-text">„Welches Barrier-Serum ohne Duftstoffe eignet sich am besten bei empfindlicher Haut und Rötungen?“</div>
+              </div>
+
+              <div class="dossier-scrubber-box">
+                <div class="scrubber-label-row">
+                  <label for="dossier-scrubber" class="scrubber-label" data-i18n="dossier.scrubber_label">Lesefortschritt prüfen</label>
+                  <span id="dossier-scrubber-pct" class="scrubber-pct">100 %</span>
+                </div>
+                <input id="dossier-scrubber" type="range" class="dossier-range" min="0" max="100" step="1" value="100" aria-label="Lesefortschritt der Modellantworten von 0 bis 100 Prozent">
+                <span class="scrubber-hint" data-i18n="dossier.scrubber_hint">Ziehen Sie den Regler von 0 % bis 100 % für die zeichengenaue Auswertung.</span>
+              </div>
+            </div>
+          </header>
+
+          <!-- 3-Column Model Comparison -->
+          <div class="model-grid">
+            <!-- OpenAI GPT-6.1 Sol -->
+            <article class="model-col">
+              <div class="model-col-head">
+                <div>
+                  <h3 id="model-name-openai" class="model-name">OpenAI GPT-6.1 Sol</h3>
+                  <div id="model-sub-openai" class="model-sub" data-i18n="dossier.openai_sub">Parametrische Synthese</div>
+                </div>
+                <span id="model-badge-openai" class="status-badge status-win">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <span>Platz 1 · Erste Wahl</span>
+                </span>
+              </div>
+
+              <div id="model-text-openai" class="model-response-box">
+                „Bei geschwächter Hautbarriere ist <mark class="mark-brand">Nøva Skin</mark> mit seinem Ceramid-Komplex die erste Empfehlung in deutschen Drogerien. Als Apotheken-Alternative gilt <mark class="mark-comp">La Roche-Derma</mark>.“
+              </div>
+
+              <table class="model-metrics-table">
+                <tbody>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_first">Erstnennung</th>
+                    <td id="model-first-openai">Zeichen 35</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" id="model-delta-head-openai" data-i18n="dossier.col_delta">Vorsprung / Rückstand</th>
+                    <td id="model-delta-openai">+113 Zeichen vor La Roche-Derma (Zeichen 148)</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_rel">Position im Text (%)</th>
+                    <td id="model-rel-openai">21,3 %</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_diag">Diagnose</th>
+                    <td id="model-diag-openai">Optimal (Spitzenreiter)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </article>
+
+            <!-- Anthropic Claude Sonnet 5.5 -->
+            <article class="model-col">
+              <div class="model-col-head">
+                <div>
+                  <h3 id="model-name-claude" class="model-name">Anthropic Claude Sonnet 5.5</h3>
+                  <div id="model-sub-claude" class="model-sub" data-i18n="dossier.claude_sub">Konservative Gewichtung</div>
+                </div>
+                <span id="model-badge-claude" class="status-badge status-halo">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <span>Platz 2 · Im Windschatten</span>
+                </span>
+              </div>
+
+              <div id="model-text-claude" class="model-response-box">
+                „Dermatologen empfehlen bei Rötungen primär <mark class="mark-comp">La Roche-Derma</mark> sowie <mark class="mark-comp">Paula’s Lab</mark>. Als preiswerte D2C-Marke aus Deutschland wird zudem häufig <mark class="mark-brand">Nøva Skin</mark> genannt.“
+              </div>
+
+              <table class="model-metrics-table">
+                <tbody>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_first">Erstnennung</th>
+                    <td id="model-first-claude">Zeichen 138</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" id="model-delta-head-claude" data-i18n="dossier.col_delta">Vorsprung / Rückstand</th>
+                    <td id="model-delta-claude">-94 Zeichen hinter La Roche-Derma (Zeichen 44)</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_rel">Position im Text (%)</th>
+                    <td id="model-rel-claude">86,2 %</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_diag">Diagnose</th>
+                    <td id="model-diag-claude">Ewige Zweitnennung</td>
+                  </tr>
+                </tbody>
+              </table>
+            </article>
+
+            <!-- Google Gemini 3.8 Flash -->
+            <article class="model-col">
+              <div class="model-col-head">
+                <div>
+                  <h3 id="model-name-gemini" class="model-name">Google Gemini 3.8 Flash</h3>
+                  <div id="model-sub-gemini" class="model-sub" data-i18n="dossier.gemini_sub">Google Search Grounding aktiv</div>
+                </div>
+                <span id="model-badge-gemini" class="status-badge status-loss">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <span>Verdrängt · Stummes Quell-Zitat</span>
+                </span>
+              </div>
+
+              <div id="model-text-gemini" class="model-response-box">
+                „Für empfindliche Haut sollten Sie auf Niacinamide und Panthenol achten. Marktführer in dieser Kategorie sind <mark class="mark-comp">La Roche-Derma</mark> und <mark class="mark-comp">Paula’s Lab</mark>.“
+              </div>
+
+              <table class="model-metrics-table">
+                <tbody>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_first">Erstnennung</th>
+                    <td id="model-first-gemini">— (Ausgelassen)</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" id="model-delta-head-gemini" data-i18n="dossier.col_source">Zitierte Quelle</th>
+                    <td id="model-delta-gemini">novaskin.de/hautbarriere-ratgeber</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_rel">Position im Text (%)</th>
+                    <td id="model-rel-gemini">0 %</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" data-i18n="dossier.col_diag">Diagnose</th>
+                    <td id="model-diag-gemini">Stummes Quell-Zitat (Ratgeber zitiert, Marke fehlt)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </article>
+          </div>
+
+          <!-- Synchronized Character Timeline (0..200 based on OpenAI GPT-6.1 Sol) -->
+          <div class="dossier-timeline">
+            <div class="timeline-top-row">
+              <span class="timeline-heading" data-i18n="dossier.timeline_title">Zeichen-Zeitleiste (OpenAI GPT-6.1 Sol · Zeichen 0 bis 200)</span>
+              <span id="timeline-lead-pill" class="timeline-lead-pill">+113 Zeichen Vorsprung</span>
+            </div>
+
+            <div class="timeline-track-wrap">
+              <div class="timeline-track">
+                <div id="timeline-progress-fill" class="timeline-progress-fill" style="width: 82%;"></div>
+
+                <div id="timeline-bracket" class="timeline-bracket" style="left: 17.5%; width: 56.5%;">
+                  <span id="timeline-bracket-label" class="timeline-bracket-label">+113 Zeichen Vorsprung</span>
+                </div>
+
+                <div id="timeline-pin-brand" class="timeline-pin timeline-pin-brand" style="left: 17.5%;">
+                  <span id="timeline-pin-brand-label" class="timeline-pin-tag">Zeichen 35: Nøva Skin</span>
+                </div>
+
+                <div id="timeline-pin-comp" class="timeline-pin timeline-pin-comp" style="left: 74%;">
+                  <span id="timeline-pin-comp-label" class="timeline-pin-tag">Zeichen 148: La Roche-Derma</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="timeline-scale-ticks">
+              <span>0</span>
+              <span>50</span>
+              <span>100</span>
+              <span>150</span>
+              <span>200</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: LIVE-ANTWORT-PRÜFSTAND (#pruefstand) -->
+    <section id="pruefstand" class="section-light section-paper">
+      <div class="container">
+        <div class="section-header">
+          <p class="section-eyebrow" data-i18n="workbench.eyebrow">INTERAKTIVER ANTWORT-PRÜFSTAND</p>
+          <h2 class="section-title" data-i18n="workbench.title">Was die 4 Empfehlungs-Stufen in der Praxis bedeuten</h2>
+          <p class="section-subhead" data-i18n="workbench.subtitle">
+            Testen Sie eine echte GPT-6.1-, Claude-5.5- oder Gemini-Antwort (Hydrogen / 3.8 Flash) mit Ihrem eigenen Markennamen. Der Prüfstand erkennt deutsche Schreibweisen, Rechtsformen und Umlaute und ermittelt die exakte Positionierung gegenüber Ihren Wettbewerbern.
+          </p>
+        </div>
+
+        <div class="workbench-card">
+          <div class="preset-bar">
+            <span class="preset-bar-label" data-i18n="workbench.presets_label">Schnell-Szenarien (Klick zum Testen):</span>
+            <button type="button" class="preset-btn is-active" data-preset="s1" data-i18n="workbench.preset_1">Szenario 1: Spitzenreiter</button>
+            <button type="button" class="preset-btn" data-preset="s2" data-i18n="workbench.preset_2">Szenario 2: Im Windschatten</button>
+            <button type="button" class="preset-btn" data-preset="s3" data-i18n="workbench.preset_3">Szenario 3: Wettbewerbs-Übernahme</button>
+            <button type="button" class="preset-btn" data-preset="s4" data-i18n="workbench.preset_4">Szenario 4: Markenfreie Antwort</button>
+          </div>
+
+          <div class="workbench-grid">
+            <!-- Left Side: Inputs -->
+            <div class="workbench-inputs">
+              <div class="form-group">
+                <label for="wb-brand" class="form-label" data-i18n="workbench.brand_label">Ihre Marken-Varianten (kommagetrennt)</label>
+                <input id="wb-brand" type="text" class="form-input" value="Müller Holzbau, Mueller Holzbau GmbH">
+              </div>
+
+              <div class="form-group">
+                <label for="wb-competitors" class="form-label" data-i18n="workbench.competitors_label">Wettbewerber (kommagetrennt)</label>
+                <input id="wb-competitors" type="text" class="form-input" value="WeberHaus, SchwörerHaus">
+              </div>
+
+              <div class="form-group">
+                <label for="wb-text" class="form-label" data-i18n="workbench.text_label">KI-Antworttext (frei editierbar)</label>
+                <textarea id="wb-text" class="form-textarea" rows="6">Im süddeutschen Gewerbebau gilt die Mueller Holzbau GmbH als erste Adresse für hybride Holz-Beton-Konstruktionen. Alternativen wie WeberHaus bedienen vor allem den privaten Hausbau.</textarea>
+              </div>
+            </div>
+
+            <!-- Right Side: Live Output -->
+            <div class="workbench-output">
+              <div class="output-top">
+                <div class="output-kicker" data-i18n="workbench.result_label">Deterministische Klassifikation</div>
+                <div>
+                  <span id="wb-badge" class="status-badge status-win">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    <span>Platz 1 · Erste Wahl</span>
+                  </span>
+                </div>
+                <h3 id="wb-result-title" class="result-title">Platz 1 · Erste Wahl</h3>
+                <p id="wb-result-desc" class="result-desc">Ihre Marke wird vor jedem Wettbewerber empfohlen und besetzt den entscheidenden ersten Anker.</p>
+              </div>
+
+              <div class="pos-bar-panel">
+                <div class="pos-bar-head">
+                  <span data-i18n="workbench.pos_bar_label">Position im Antworttext (0 % bis 100 %)</span>
+                  <span id="wb-text-length">182 Zeichen gesamt</span>
+                </div>
+                <div class="pos-bar-track">
+                  <div id="wb-pin-brand" class="pos-pin pos-pin-brand" style="left: 24%;" title="Eigene Marke"></div>
+                  <div id="wb-pin-comp" class="pos-pin pos-pin-comp" style="left: 77%;" title="Erster Wettbewerber"></div>
+                </div>
+                <div class="pos-bar-legend">
+                  <span><i class="legend-dot-inline" style="background: var(--status-win-dot);" aria-hidden="true"></i> <span data-i18n="workbench.legend_brand">Eigene Marke</span></span>
+                  <span><i class="legend-dot-inline" style="background: var(--status-loss-dot);" aria-hidden="true"></i> <span data-i18n="workbench.legend_comp">Erster Wettbewerber</span></span>
+                </div>
+              </div>
+
+              <div class="metrics-4-grid">
+                <div class="metric-box">
+                  <div class="metric-box-label" data-i18n="workbench.metric_char">Erstnennung (Zeichen)</div>
+                  <div id="wb-char" class="metric-box-val">39</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-box-label" data-i18n="workbench.metric_word">Erstnennung (Wort-Nr.)</div>
+                  <div id="wb-word" class="metric-box-val">6</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-box-label" data-i18n="workbench.metric_rel">Position im Text (%)</div>
+                  <div id="wb-rel" class="metric-box-val">21,4 %</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-box-label" data-i18n="workbench.metric_comp">Erster Wettbewerber</div>
+                  <div id="wb-comp" class="metric-box-val">138</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: DIE 4-QUADRANTEN URSACHEN- & MASSNAHMEN-MATRIX (#matrix) -->
+    <section id="matrix" class="section-light section-alabaster">
+      <div class="container">
+        <div class="section-header">
+          <p class="section-eyebrow" data-i18n="matrix.eyebrow">DIE GEO URSACHEN-MATRIX</p>
+          <h2 class="section-title" data-i18n="matrix.title">Warum Sprachmodelle Ihren Content nutzen — aber andere empfehlen</h2>
+          <p class="section-subhead" data-i18n="matrix.subtitle">
+            Chatlytics trennt strikt zwischen Ihrer <strong>Quellen-Autorität</strong> (Wird Ihre Website als Quelle zitiert?) und Ihrer <strong>Marken-Prominenz</strong> (Wird Ihr Markenname im sichtbaren Antworttext genannt?). Aus dieser Kombination entstehen vier eindeutige Handlungsfelder.
+          </p>
+        </div>
+
+        <div class="matrix-coordinate-frame">
+          <!-- Y Axis -->
+          <div class="matrix-y-axis">
+            <span class="axis-tick-label" data-i18n="matrix.y_high">Quelle zitiert (Hoch)</span>
+            <span class="axis-main-title-y" data-i18n="matrix.y_title">Quellen-Autorität</span>
+            <span class="axis-tick-label" data-i18n="matrix.y_low">Keine Quelle (Tief)</span>
+          </div>
+
+          <!-- 2x2 Quadrant Grid -->
+          <div class="matrix-2x2-grid">
+            <!-- Q1 (Top Left: High Citation Authority / Low Text Prominence) -->
+            <article class="matrix-quad">
+              <div class="quad-title">
+                <span class="status-badge status-loss">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <span data-i18n="matrix.q1_badge">Priorität Kritisch</span>
+                </span>
+              </div>
+              <h3 class="quad-title" data-i18n="matrix.q1_title">1. Die gekaperte Vorlage</h3>
+              <div>
+                <span class="quad-block-label" data-i18n="matrix.label_problem">Befund</span>
+                <p class="quad-text" data-i18n="matrix.q1_problem">
+                  Google Gemini oder OpenAI Search zitiert Ihren Ratgeber als vertrauenswürdige Quelle, empfiehlt im Antworttext aber an erster Stelle den Wettbewerber. Sie liefern dem Konkurrenten die fachliche Grundlage.
+                </p>
+              </div>
+              <div class="quad-lever">
+                <span class="quad-block-label" data-i18n="matrix.label_lever">Chatlytics-Hebel</span>
+                <p class="quad-text" data-i18n="matrix.q1_lever">
+                  Eigene Marken-Entität (Schema.org Product/Organization, Vergleichstabellen, Marken-Anchors) untrennbar in die zitierten Absätze einweben.
+                </p>
+              </div>
+            </article>
+
+            <!-- Q2 (Top Right: High Citation / Zero Brand Mention) -->
+            <article class="matrix-quad">
+              <div class="quad-title">
+                <span class="status-badge status-loss">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <span data-i18n="matrix.q2_badge">Priorität Hoch</span>
+                </span>
+              </div>
+              <h3 class="quad-title" data-i18n="matrix.q2_title">2. Das stumme Quell-Zitat</h3>
+              <div>
+                <span class="quad-block-label" data-i18n="matrix.label_problem">Befund</span>
+                <p class="quad-text" data-i18n="matrix.q2_problem">
+                  Ihre Domain liefert die technische Definition für die Suche im Hintergrund, Ihr Markenname fällt in der Antwort jedoch überhaupt nicht (0 % Nennung).
+                </p>
+              </div>
+              <div class="quad-lever">
+                <span class="quad-block-label" data-i18n="matrix.label_lever">Chatlytics-Hebel</span>
+                <p class="quad-text" data-i18n="matrix.q2_lever">
+                  Markenname direkt mit Problemlösung und Kategorie-Begriff in Überschriften, Listen und Zusammenfassungen verknüpfen.
+                </p>
+              </div>
+            </article>
+
+            <!-- Q3 (Bottom Left: Competitor Always First) -->
+            <article class="matrix-quad">
+              <div class="quad-title">
+                <span class="status-badge status-halo">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <span data-i18n="matrix.q3_badge">Priorität Mittel</span>
+                </span>
+              </div>
+              <h3 class="quad-title" data-i18n="matrix.q3_title">3. Die ewige Zweitnennung</h3>
+              <div>
+                <span class="quad-block-label" data-i18n="matrix.label_problem">Befund</span>
+                <p class="quad-text" data-i18n="matrix.q3_problem">
+                  Die KI nennt Sie fast immer – allerdings erst als Alternative nach dem Marktführer. Im Einkauf entscheidet meist der erste genannte Anbieter über den Klick oder die Shortlist.
+                </p>
+              </div>
+              <div class="quad-lever">
+                <span class="quad-block-label" data-i18n="matrix.label_lever">Chatlytics-Hebel</span>
+                <p class="quad-text" data-i18n="matrix.q3_lever">
+                  Präzise „Marke X vs. Wettbewerber“-Vergleichsseiten, Zertifizierungen und verifizierte Branchen-Benchmarks aufbauen.
+                </p>
+              </div>
+            </article>
+
+            <!-- Q4 (Bottom Right: Late Offset) -->
+            <article class="matrix-quad">
+              <div class="quad-title">
+                <span class="status-badge status-halo">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <span data-i18n="matrix.q4_badge">Optimierung</span>
+                </span>
+              </div>
+              <h3 class="quad-title" data-i18n="matrix.q4_title">4. Der versteckte Gewinner</h3>
+              <div>
+                <span class="quad-block-label" data-i18n="matrix.label_problem">Befund</span>
+                <p class="quad-text" data-i18n="matrix.q4_problem">
+                  Sie sind formal der einzig genannte Anbieter, erscheinen aber erst in der zweiten Texthälfte nach langen allgemeinen Einleitungen (Position &gt; 50 %).
+                </p>
+              </div>
+              <div class="quad-lever">
+                <span class="quad-block-label" data-i18n="matrix.label_lever">Chatlytics-Hebel</span>
+                <p class="quad-text" data-i18n="matrix.q4_lever">
+                  Kernaussagen an den Textanfang ziehen (BLUF-Prinzip), damit Einkäufer Ihre Marke bereits im ersten Absatz erfassen.
+                </p>
+              </div>
+            </article>
+          </div>
+
+          <!-- X Axis -->
+          <div class="matrix-x-axis">
+            <span class="axis-tick-label" data-i18n="matrix.x_low">Tief / Spät (Verdrängt)</span>
+            <span class="axis-main-title-x" data-i18n="matrix.x_title">Marken-Prominenz im Antworttext</span>
+            <span class="axis-tick-label" data-i18n="matrix.x_high">Hoch / Früh (Erste Wahl)</span>
+          </div>
+        </div>
+
+        <!-- 3 Trust & Infrastructure Pillars -->
+        <div class="trust-pillars-grid">
+          <div class="trust-pillar">
+            <h3 class="trust-pillar-title" data-i18n="pillar.1_title">Gehostet auf dedizierter Infrastruktur in Frankfurt am Main</h3>
+            <p class="trust-pillar-desc" data-i18n="pillar.1_desc">
+              Volle DSGVO-Konformität ohne US-Analytics-Tracker oder externe Font-CDNs. Ihre Prompt-Strategien bleiben strikt in Deutschland.
+            </p>
+          </div>
+          <div class="trust-pillar">
+            <h3 class="trust-pillar-title" data-i18n="pillar.2_title">DACH-Marken- &amp; Rechtsform-Erkennung</h3>
+            <p class="trust-pillar-desc" data-i18n="pillar.2_desc">
+              Zuverlässige Erfassung von GmbH, AG, Mittelstands-Markennamen, Bindestrich-Komposita und Umlauten (ä, ö, ü, ß).
+            </p>
+          </div>
+          <div class="trust-pillar">
+            <h3 class="trust-pillar-title" data-i18n="pillar.3_title">Dedizierte Multi-LLM-Abruf-Infrastruktur</h3>
+            <p class="trust-pillar-desc" data-i18n="pillar.3_desc">
+              Deterministische, zeichengenaue Messreihen über OpenAI (GPT-6.1 Sol, GPT-6.1 Terra, GPT-6 Astra, GPT-6 Luna), Anthropic (Claude Opus 5.5, Claude Sonnet 5.5, Claude Haiku 5.5), Google (Gemini Hydrogen, Gemini Carbon, Gemini Argon, Gemini 3.8 Flash) sowie EU-gehostetes Mistral &amp; GLM 5.3 statt vager Schätzwerte.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: PREISMODELL & MANDATE (#preise) -->
+    <section id="preise" class="section-light section-paper">
+      <div class="container">
+        <div class="section-header">
+          <p class="section-eyebrow" data-i18n="pricing.eyebrow">PREISMODELL &amp; MANDATE</p>
+          <h2 class="section-title" data-i18n="pricing.title">Transparente Analyse-Pakete für Marketing-Teams und Geschäftsführung</h2>
+          <p class="section-subhead" data-i18n="pricing.subtitle">
+            Starten Sie kostenlos mit 40 Live-Abfragen für den direkten Wettbewerbsvergleich. Ohne Kreditkarte, sofort aktiv.
+          </p>
+        </div>
+
+        <div class="pricing-grid">
+          <!-- Tier 1: Free -->
+          <article class="pricing-card">
+            <div class="tier-top-badge">&nbsp;</div>
+            <h3 class="tier-name" data-i18n="pricing.free.name">Free</h3>
+            <p class="tier-sub" data-i18n="pricing.free.desc">Für den ersten Realitätscheck Ihrer Marke.</p>
+            <div class="tier-price-row">
+              <span class="tier-price-val">0 €</span>
+              <span class="tier-price-period" data-i18n="pricing.free.period">einmalig</span>
+            </div>
+            <ul class="pricing-features">
+              <li data-i18n="pricing.free.feat_1">40 Live-Abfragen (Lifetime)</li>
+              <li data-i18n="pricing.free.feat_2">1 Marken-Profil</li>
+              <li data-i18n="pricing.free.feat_3">2 Wettbewerber im Direktvergleich (GPT-6.1 Sol &amp; Gemini 3.8 Flash)</li>
+              <li data-i18n="pricing.free.feat_4">Basis-Ergebnis nach Empfehlungs-Stufen</li>
+              <li data-i18n="pricing.free.feat_5">Zugang über geschäftliche E-Mail-Adresse</li>
+            </ul>
+            <button type="button" class="btn btn-outline btn-block" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="pricing.free.cta">Kostenlos starten (40 Abfragen)</button>
+          </article>
+
+          <!-- Tier 2: Starter -->
+          <article class="pricing-card">
+            <div class="tier-top-badge">&nbsp;</div>
+            <h3 class="tier-name" data-i18n="pricing.starter.name">Starter</h3>
+            <p class="tier-sub" data-i18n="pricing.starter.desc">Für wachsende Marken und SEO-/Content-Teams.</p>
+            <div class="tier-price-row">
+              <span class="tier-price-val">149 €</span>
+              <span class="tier-price-period" data-i18n="pricing.per_month">/ Monat</span>
+            </div>
+            <ul class="pricing-features">
+              <li data-i18n="pricing.starter.feat_1">500 Live-Abfragen pro Monat</li>
+              <li data-i18n="pricing.starter.feat_2">3 Marken-Profile oder Produktlinien</li>
+              <li data-i18n="pricing.starter.feat_3">Bis zu 5 Wettbewerber pro Profil</li>
+              <li data-i18n="pricing.starter.feat_4">OpenAI GPT-6.1 / 6, Claude 5.5, Gemini, Mistral &amp; GLM 5.3 (ohne Live-Websuche)</li>
+              <li data-i18n="pricing.starter.feat_5">Volle Ursachen- &amp; Maßnahmen-Matrix</li>
+              <li data-i18n="pricing.starter.feat_6">CSV-/JSON-Export für eigenes Reporting</li>
+            </ul>
+            <button type="button" class="btn btn-outline btn-block" data-open-modal="auth" data-auth-mode="signup" data-tier="starter" data-i18n="pricing.starter.cta">Starter testen</button>
+          </article>
+
+          <!-- Tier 3: Growth (Featured) -->
+          <article class="pricing-card pricing-card-featured">
+            <div class="tier-top-badge" data-i18n="pricing.growth.badge">Empfehlung</div>
+            <h3 class="tier-name" data-i18n="pricing.growth.name">Growth</h3>
+            <p class="tier-sub" data-i18n="pricing.growth.desc">Für ambitionierte D2C-Brands und B2B-Teams.</p>
+            <div class="tier-price-row">
+              <span class="tier-price-val">399 €</span>
+              <span class="tier-price-period" data-i18n="pricing.per_month">/ Monat</span>
+            </div>
+            <ul class="pricing-features">
+              <li data-i18n="pricing.growth.feat_1">2.000 Live-Abfragen pro Monat</li>
+              <li data-i18n="pricing.growth.feat_2">10 Marken-Profile / Märkte</li>
+              <li data-i18n="pricing.growth.feat_3">Bis zu 10 Wettbewerber pro Profil</li>
+              <li data-i18n="pricing.growth.feat_4">Alle Frontier-Modelle inkl. Google Gemini Search Grounding (Live-Zitate)</li>
+              <li data-i18n="pricing.growth.feat_5">Schreibgeschützte Vorstandsreports per Link</li>
+              <li data-i18n="pricing.growth.feat_6">Historischer Sichtbarkeits-Trend über alle Modelle</li>
+              <li data-i18n="pricing.growth.feat_7">Priorisierte Content- &amp; Schema.org-Maßnahmen</li>
+            </ul>
+            <button type="button" class="btn btn-primary btn-block" data-open-modal="auth" data-auth-mode="signup" data-tier="growth" data-i18n="pricing.growth.cta">Growth wählen</button>
+          </article>
+
+          <!-- Tier 4: Managed GEO & Pipeline Defense (Obsidian Contrast) -->
+          <article class="pricing-card pricing-card-obsidian">
+            <div class="tier-top-badge" data-i18n="pricing.managed.badge">Full-Service Mandat</div>
+            <h3 class="tier-name" data-i18n="pricing.managed.name">Managed GEO &amp; Pipeline Defense</h3>
+            <p class="tier-sub" data-i18n="pricing.managed.desc">Wir finden nicht nur Lücken — wir schließen sie gemeinsam mit Ihrem Team.</p>
+            <div class="tier-price-row">
+              <span class="tier-price-val">1.950 €+</span>
+              <span class="tier-price-period" data-i18n="pricing.per_month">/ Monat</span>
+            </div>
+            <ul class="pricing-features">
+              <li data-i18n="pricing.managed.feat_1">10.000+ Live-Abfragen pro Monat (Multi-Region)</li>
+              <li data-i18n="pricing.managed.feat_2">Monatlicher Editorial- &amp; Schema.org-Umsetzungsplan</li>
+              <li data-i18n="pricing.managed.feat_3">Direkte Content-Optimierung gegen gekaperte Vorlagen</li>
+              <li data-i18n="pricing.managed.feat_4">Quartalsweises Executive Briefing mit Geschäftsführung</li>
+              <li data-i18n="pricing.managed.feat_5">Dedizierter GEO-Stratege im DACH-Raum</li>
+            </ul>
+            <button id="btn-open-strategy" type="button" class="btn btn-light btn-block" data-i18n="pricing.managed.cta">Strategiegespräch anfragen →</button>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: FAQ & TRUST-ABSCHLUSS (#faq) -->
+    <section id="faq" class="section-light section-alabaster">
+      <div class="container">
+        <div class="section-header">
+          <p class="section-eyebrow" data-i18n="faq.eyebrow">HÄUFIGE FRAGEN</p>
+          <h2 class="section-title" data-i18n="faq.title">Was Entscheider und SEO-Leads vor dem Start wissen möchten</h2>
+        </div>
+
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span data-i18n="faq.q1">Wie unterscheidet sich Chatlytics von klassischen SEO-Rank-Trackern?</span>
+              <span class="faq-chevron" aria-hidden="true">+</span>
+            </summary>
+            <div class="faq-answer" data-i18n="faq.a1">
+              Klassische SEO-Tools messen Positionen in blauen Linklisten. Chatlytics misst generative Antworten: Ob eine KI Ihre Marke überhaupt empfiehlt, an welcher exakten Zeichen-Position sie im Text steht und ob Ihre eigene Website womöglich den Konkurrenten als Quelle füttert.
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span data-i18n="faq.q2">Warum sind zeichengenaue Positionen besser als einfache Sentiment-Scores?</span>
+              <span class="faq-chevron" aria-hidden="true">+</span>
+            </summary>
+            <div class="faq-answer" data-i18n="faq.a2">
+              Subjektive „Tonalitäts-Scores“ von 1 bis 100 lassen sich kaum reproduzieren. Chatlytics nutzt deterministische Zeichen-Indizes: Es zählt allein, ob Ihre Marke vor Wettbewerber B auftritt und ob Ihre Domain in der Websuche zitiert wird.
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span data-i18n="faq.q3">Warum ist eine geschäftliche E-Mail-Adresse für die Registrierung erforderlich?</span>
+              <span class="faq-chevron" aria-hidden="true">+</span>
+            </summary>
+            <div class="faq-answer" data-i18n="faq.a3">
+              Jeder Test-Account verbraucht echte Rechenkapazität über offizielle Schnittstellen für OpenAI (GPT-6.1 / 6), Anthropic (Claude 5.5), Google (Gemini) und EU-gehostetes Mistral. Die Verifizierung über Firmendomains verhindert Missbrauch und sichert dauerhaft schnelle Analyse-Zeiten für unsere Unternehmenskunden.
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span data-i18n="faq.q4">Wie hilft Chatlytics, wenn meine Marke zwar in den Quellen steht, aber im Text fehlt?</span>
+              <span class="faq-chevron" aria-hidden="true">+</span>
+            </summary>
+            <div class="faq-answer" data-i18n="faq.a4">
+              Unser Modul markiert diesen Fall automatisch als „Stummes Quell-Zitat“ oder „Gekaperte Vorlage“. Sie erhalten eine präzise Liste der betroffenen URLs Ihrer Website und klare Strukturempfehlungen, um Ihre Marke direkt mit dem Antwortkern zu verknüpfen.
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER (Obsidian #0B0D10) -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>
+        <div class="footer-brand" data-i18n="footer.copyright">© 2026 Chatlytics.de — Share-of-Model &amp; GEO Intelligence</div>
+        <div class="footer-infra" data-i18n="footer.infra">Gehostet auf dedizierter Infrastruktur in Frankfurt am Main · Keine externen Font-CDNs oder Drittanbieter-Tracker.</div>
+      </div>
+
+      <nav class="footer-links" aria-label="Rechtliche Hinweise">
+        <button type="button" data-open-legal="privacy" data-i18n="footer.privacy">Datenschutz</button>
+        <button type="button" data-open-legal="imprint" data-i18n="footer.imprint">Impressum</button>
+        <button type="button" data-open-legal="terms" data-i18n="footer.terms">AGB</button>
+      </nav>
+    </div>
+  </footer>
+
+  <!-- AUTHENTICATION MODAL (Preserves all JS IDs in auth.js) -->
+  <div id="auth-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="tab-signup">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <div class="modal-tabs" role="tablist">
+          <button id="tab-signup" type="button" class="tab-btn active" role="tab" data-i18n="auth.tab_signup">Kostenlos starten (40 Abfragen)</button>
+          <button id="tab-login" type="button" class="tab-btn" role="tab" data-i18n="auth.tab_login">Anmelden</button>
+        </div>
+        <button id="modal-close" type="button" class="btn-close" aria-label="Dialog schließen">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="auth-tier-context" class="tier-context-banner hidden"></div>
+
+        <!-- Signup Form -->
+        <form id="form-signup" novalidate>
+          <p class="text-sm text-muted" style="margin-bottom: 16px;" data-i18n="auth.signup_sub">
+            Starten Sie mit 40 Live-Abfragen über GPT-6.1 Sol, Claude Sonnet 5.5 und Gemini 3.8 Flash — ohne Kreditkarte.
+          </p>
+          <div id="signup-error" class="alert alert-error hidden" role="alert"></div>
+
+          <div class="form-group">
+            <label for="signup-email" class="form-label" data-i18n="auth.work_email">Geschäftliche E-Mail-Adresse</label>
+            <input id="signup-email" type="email" class="form-input" autocomplete="email" placeholder="vorname.nachname@unternehmen.de" required>
+            <span class="form-hint" data-i18n="auth.email_hint">Keine Freemail-Adressen (Gmail, Web.de, GMX) zulässig.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="signup-password" class="form-label" data-i18n="auth.password">Passwort (min. 8 Zeichen)</label>
+            <input id="signup-password" type="password" class="form-input" autocomplete="new-password" minlength="8" required>
+          </div>
+
+          <div class="form-group">
+            <label for="signup-company" class="form-label" data-i18n="auth.company">Unternehmen / Marke</label>
+            <input id="signup-company" type="text" class="form-input" autocomplete="organization" placeholder="Muster GmbH">
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.btn_signup">Konto erstellen &amp; 40 Abfragen sichern</button>
+        </form>
+
+        <!-- Login Form -->
+        <form id="form-login" class="hidden" novalidate>
+          <p class="text-sm text-muted" style="margin-bottom: 16px;" data-i18n="auth.login_sub">
+            Melden Sie sich in Ihrem Chatlytics Workspace an.
+          </p>
+          <div id="login-error" class="alert alert-error hidden" role="alert"></div>
+
+          <div class="form-group">
+            <label for="login-email" class="form-label" data-i18n="auth.email">E-Mail-Adresse</label>
+            <input id="login-email" type="email" class="form-input" autocomplete="email" required>
+          </div>
+
+          <div class="form-group">
+            <label for="login-password" class="form-label" data-i18n="auth.password">Passwort</label>
+            <input id="login-password" type="password" class="form-input" autocomplete="current-password" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.btn_login">Anmelden</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAMPLE BOARD REPORT MODAL (#report-modal) -->
+  <div id="report-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="report-modal-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog modal-dialog-wide card">
+      <div class="modal-header">
+        <h3 id="report-modal-title" class="modal-title">Beispiel-Vorstandsreport (Schreibgeschützte Ansicht)</h3>
+        <button type="button" class="btn-close" aria-label="Dialog schließen">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-sm text-muted" style="margin-bottom: 16px;">
+          Auszug aus einem schreibgeschützten Chatlytics-Report für Geschäftsführung und Marketing-Leitung (Beispieldaten des aktuell gewählten Branchen-Duells).
+        </p>
+
+        <div class="report-summary-grid">
+          <div class="report-kpi">
+            <div class="report-kpi-label">Untersuchtes Duell</div>
+            <div id="report-preview-brand" class="report-kpi-val" style="font-size: 1rem;">Nøva Skin vs. La Roche-Derma</div>
+          </div>
+          <div class="report-kpi">
+            <div class="report-kpi-label">Share-of-Model</div>
+            <div class="report-kpi-val font-mono">33,3 %</div>
+          </div>
+          <div class="report-kpi">
+            <div class="report-kpi-label">Vorsprung (GPT-6.1 Sol)</div>
+            <div class="report-kpi-val font-mono">+113 Z.</div>
+          </div>
+        </div>
+
+        <div class="dossier-prompt-box" style="margin-bottom: 16px;">
+          <div class="dossier-prompt-kicker">Einkäufer-Frage im Report</div>
+          <div id="report-preview-prompt" class="dossier-prompt-text">„Welches Barrier-Serum ohne Duftstoffe eignet sich am besten bei empfindlicher Haut und Rötungen?“</div>
+        </div>
+
+        <table class="model-metrics-table">
+          <tbody>
+            <tr>
+              <th scope="row">Kritischster Befund (Gemini 3.8 Flash Search)</th>
+              <td id="report-preview-diag">Stummes Quell-Zitat (Ratgeber zitiert, Marke fehlt)</td>
+            </tr>
+            <tr>
+              <th scope="row">Betroffene Quell-URL</th>
+              <td id="report-preview-source">novaskin.de/hautbarriere-ratgeber</td>
+            </tr>
+            <tr>
+              <th scope="row">Empfohlene Maßnahme</th>
+              <td>Markennamen und Produkt-Schema direkt in den Definitionsblock und Vergleichstabellen der zitierten Ratgeberseite integrieren.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button id="report-cta-signup" type="button" class="btn btn-primary">Eigenen Vorstandsreport kostenlos erzeugen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STRATEGY CONSULTATION MODAL (#strategy-modal) -->
+  <div id="strategy-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="strategy-modal-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <h3 id="strategy-modal-title" class="modal-title">Managed GEO &amp; Pipeline Defense anfragen</h3>
+        <button type="button" class="btn-close" aria-label="Dialog schließen">&times;</button>
+      </div>
+      <form id="form-strategy" class="modal-body">
+        <p class="text-sm text-muted" style="margin-bottom: 16px;">
+          Vereinbaren Sie ein vertrauliches Erstgespräch mit unserem GEO-Team im DACH-Raum. Alternativ erreichen Sie uns direkt unter <a href="mailto:kontakt@chatlytics.de">kontakt@chatlytics.de</a>.
+        </p>
+
+        <div id="strategy-success" class="text-sm" style="margin-bottom: 12px; color: var(--status-win-text);" aria-live="polite"></div>
+
+        <div class="form-group">
+          <label for="strat-name" class="form-label">Ihr Name &amp; Funktion</label>
+          <input id="strat-name" type="text" class="form-input" placeholder="Dr. Anna Weber, Leitung Marketing" required>
+        </div>
+        <div class="form-group">
+          <label for="strat-email" class="form-label">Geschäftliche E-Mail-Adresse</label>
+          <input id="strat-email" type="email" class="form-input" placeholder="anna.weber@unternehmen.de" required>
+        </div>
+        <div class="form-group">
+          <label for="strat-company" class="form-label">Unternehmen &amp; Branche</label>
+          <input id="strat-company" type="text" class="form-input" placeholder="Beispiel AG · B2B-Industrie" required>
+        </div>
+        <div class="form-group">
+          <label for="strat-focus" class="form-label">Wichtigste Kernprodukte / Kauf-Prompts</label>
+          <textarea id="strat-focus" class="form-textarea" rows="3" placeholder="Welche Produkte und Wettbewerber sollen zuerst geprüft werden?"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Anfrage per E-Mail vorbereiten →</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- LEGAL MODAL (#legal-modal) -->
+  <div id="legal-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="legal-modal-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog modal-dialog-wide card">
+      <div class="modal-header">
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn active" role="tab" data-legal-tab="privacy">Datenschutz</button>
+          <button type="button" class="tab-btn" role="tab" data-legal-tab="imprint">Impressum</button>
+          <button type="button" class="tab-btn" role="tab" data-legal-tab="terms">AGB</button>
+        </div>
+        <button id="legal-modal-close" type="button" class="btn-close" aria-label="Dialog schließen">&times;</button>
+      </div>
+      <div class="modal-body legal-prose">
+        <div data-legal-panel="privacy">
+          <h4 id="legal-modal-title">Datenschutzhinweise (DSGVO)</h4>
+          <p>
+            Chatlytics.de verarbeitet personenbezogene Daten ausschließlich zum Betrieb der Analyse-Plattform sowie zur Authentifizierung über geschäftliche E-Mail-Adressen. Die Webanwendung wird auf dedizierter Infrastruktur in Frankfurt am Main betrieben und lädt keinerlei externe Schriftarten, Tracking-Skripte oder Drittanbieter-CDNs.
+          </p>
+          <p>
+            Im Browser werden ausschließlich funktional notwendige Sitzungsinformationen und Ihre Sprachpräferenz lokal gespeichert. Auskunfts-, Berichtigungs- und Löschanfragen richten Sie bitte an <a href="mailto:kontakt@chatlytics.de">kontakt@chatlytics.de</a>.
+          </p>
+        </div>
+
+        <div data-legal-panel="imprint" class="hidden">
+          <h4>Impressum</h4>
+          <p>
+            <strong>Anbieter:</strong> Aabit Consulting / Chatlytics.de<br>
+            <strong>Kontakt:</strong> <a href="mailto:kontakt@chatlytics.de">kontakt@chatlytics.de</a><br>
+            <strong>Hinweis:</strong> Vollständige Postanschrift, Vertretungsberechtigte und Handelsregister-/USt-IdNr.-Angaben werden vor dem produktiven Go-Live gemäß § 5 DDG an dieser Stelle ergänzt.
+          </p>
+        </div>
+
+        <div data-legal-panel="terms" class="hidden">
+          <h4>Allgemeine Geschäftsbedingungen (Überblick)</h4>
+          <p>
+            Chatlytics.de richtet sich ausschließlich an Unternehmer im Sinne des § 14 BGB. Kostenlose Testkonten umfassen 40 Abfrage-Credits; bezahlte Pakete (Starter, Growth, Managed GEO) werden auf monatlicher Basis gemäß individuellem Leistungsschein abgerechnet.
+          </p>
+          <p>
+            Alle ermittelten Zeichen-Indizes und Quell-Zitate basieren auf zum Abrufzeitpunkt reproduzierbaren Abfragen der jeweiligen Sprachmodelle und dienen der strategischen Content- und GEO-Steuerung.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modules -->
+  <script type="module">
+    import { i18n } from './assets/js/i18n.js';
+    import { auth } from './assets/js/auth.js';
+    import { dossierStage } from './assets/js/dossier-stage.js';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      i18n.init();
+      auth.initModal();
+      dossierStage.init();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,930 @@
+{
+  "name": "Chatlytics Universal Worker",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatlytics-run",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "6c088878-88b9-44b5-8594-560674804497",
+      "name": "Universal API Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        512,
+        448
+      ],
+      "webhookId": "9c1d0f2a-7e3b-4c5d-8a1f-0b2c3d4e5f60"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "55f60580-bad1-4ed8-9dd8-67ca5608c7de",
+      "name": "Interactive Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        272
+      ],
+      "webhookId": "8ba3a514-af31-4223-afe1-7e730c836408"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "bc86bcb6-d4d8-41a0-9714-029439d1f969",
+      "name": "Schedule Poller Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        512,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATLYTICS_API_BASE_URL || 'http://localhost:8000' }}/api/n8n_queue.php?action=poll",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chatlytics-Cron-Key",
+              "value": "={{ $env.CHATLYTICS_QUEUE_SECRET || 'chatlytics_queue_auth_secret' }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "2b3e8292-a98d-416d-ba98-97dabbf77674",
+      "name": "Poll Backend Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond_async_mode",
+              "leftValue": "={{ ($json.body?.response_mode === \"async\" || $json.response_mode === \"async\" || $json.body?.is_async === true || $json.body?.is_async === \"true\" || $json.is_async === true || $json.is_async === \"true\") ? \"async\" : ($json.body?.response_mode || $json.response_mode || \"sync\") }}",
+              "rightValue": "async",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fc19be3e-064c-40c6-89f8-4ff6ed2236de",
+      "name": "Check Async Mode",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  \"status\": \"queued\",\n  \"run_id\": $json.body?.run_id || $json.run_id || (\"run_\" + Date.now() + \"_\" + Math.random().toString(36).substring(2, 9)),\n  \"timestamp\": new Date().toISOString(),\n  \"message\": \"Dispatched to worker pipeline\"\n}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f782ad88-1441-4ffb-998e-79e0eab9c844",
+      "name": "Fast Async Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        368
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst normalizedItems = [];\n\nfunction resolveModelSpec(rawToken) {\n  const clean = String(rawToken || '').trim();\n  if (!clean) return null;\n  const lower = clean.toLowerCase();\n  let provider = '';\n  let model = '';\n\n  if (clean.includes('/')) {\n    const slashIdx = clean.indexOf('/');\n    const rawProv = clean.slice(0, slashIdx).trim().toLowerCase();\n    const modelTrim = clean.slice(slashIdx + 1).trim();\n\n    if (rawProv === 'models' && modelTrim.toLowerCase().startsWith('gemini')) {\n      provider = 'gemini';\n      model = 'models/' + modelTrim;\n    } else if (rawProv === 'gemini' || rawProv === 'google') {\n      provider = 'gemini';\n      if (!modelTrim) {\n        model = 'models/gemini-3.5-flash';\n      } else {\n        model = modelTrim.toLowerCase().startsWith('models/')\n          ? 'models/' + modelTrim.slice(7)\n          : 'models/' + modelTrim;\n      }\n    } else if (rawProv === 'openai') {\n      provider = 'openai';\n      model = modelTrim || 'gpt-6-luna';\n    } else if (rawProv === 'mistral' || rawProv === 'mistralai' || rawProv === 'eu-mistral') {\n      provider = 'mistral';\n      model = modelTrim || 'mistral-medium-latest';\n    } else if (rawProv === 'glm' || rawProv === 'zai' || rawProv === 'z.ai') {\n      provider = 'mistral';\n      model = modelTrim || 'zai-glm-5-3';\n    } else if (rawProv === 'anthropic') {\n      provider = 'anthropic';\n      model = modelTrim || 'claude-3-5-sonnet-20241022';\n    } else {\n      provider = rawProv;\n      model = modelTrim;\n    }\n  } else {\n    if (lower === 'openai') {\n      provider = 'openai';\n      model = 'gpt-6-luna';\n    } else if (lower.startsWith('gpt-') || /^o[134](-|$)/.test(lower)) {\n      provider = 'openai';\n      model = clean;\n    } else if (lower === 'gemini' || lower === 'google') {\n      provider = 'gemini';\n      model = 'models/gemini-3.5-flash';\n    } else if (lower.startsWith('gemini-')) {\n      provider = 'gemini';\n      model = 'models/' + clean;\n    } else if (lower === 'mistral' || lower === 'mistralai') {\n      provider = 'mistral';\n      model = 'mistral-medium-latest';\n    } else if (\n      lower.startsWith('mistral-')\n      || lower.startsWith('pixtral-')\n      || lower.startsWith('codestral-')\n      || lower.startsWith('ministral-')\n    ) {\n      provider = 'mistral';\n      model = clean;\n    } else if (lower === 'glm' || lower === 'glm-5-3') {\n      provider = 'mistral';\n      model = 'zai-glm-5-3';\n    } else if (lower === 'glm-5-3-flash') {\n      provider = 'mistral';\n      model = 'zai-glm-5-3-flash';\n    } else if (lower.startsWith('zai-glm') || lower.startsWith('glm-')) {\n      provider = 'mistral';\n      model = clean;\n    } else if (lower === 'anthropic') {\n      provider = 'anthropic';\n      model = 'claude-3-5-sonnet-20241022';\n    } else if (lower.startsWith('claude-')) {\n      provider = 'anthropic';\n      model = clean;\n    } else {\n      provider = lower;\n      model = clean;\n    }\n  }\n\n  return {\n    id: model ? (provider + '/' + model) : provider,\n    provider,\n    model,\n    eu_hosted: provider === 'mistral'\n  };\n}\n\nfunction parseShorthand(text) {\n  const result = {\n    prompt: '',\n    brand_name: '',\n    brand_domains: [],\n    competitors: [],\n    target_llms: ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'],\n    search_enabled: true\n  };\n  if (!text || typeof text !== 'string') return result;\n\n  const lines = text.split(/[\\n|]/);\n  for (const line of lines) {\n    const colonIdx = line.indexOf(':');\n    if (colonIdx === -1) {\n      if (!result.prompt && line.trim()) result.prompt = line.trim();\n      continue;\n    }\n    const key = line.slice(0, colonIdx).trim().toUpperCase();\n    const val = line.slice(colonIdx + 1).trim();\n    if (key === 'PROMPT') {\n      result.prompt = val;\n    } else if (key === 'BRAND') {\n      result.brand_name = val;\n    } else if (key === 'DOMAINS') {\n      result.brand_domains = val.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);\n    } else if (key === 'COMPETITORS') {\n      result.competitors = val.split(',').map(c => {\n        const match = c.match(/^(.*?)(?:\\s*\\((.*?)\\))?$/);\n        return {\n          name: match ? match[1].trim() : c.trim(),\n          domain: match && match[2] ? match[2].trim().toLowerCase() : ''\n        };\n      }).filter(c => c.name);\n    } else if (key === 'LLMS') {\n      const parsedLlms = val.split(',').map(l => l.trim()).filter(Boolean);\n      if (parsedLlms.length > 0) result.target_llms = parsedLlms;\n    } else if (key === 'SEARCH') {\n      result.search_enabled = val.toLowerCase() === 'true' || val === '1';\n    }\n  }\n  return result;\n}\n\nfunction expandTargetLLMs(input, triggerSource, inputIdx) {\n  if (!input || typeof input !== 'object') return [];\n  const rawPrompts = Array.isArray(input.prompts)\n    ? input.prompts.map(p => String(p || '').trim()).filter(Boolean)\n    : [];\n  const primaryPrompt = String(input.prompt || '').trim();\n  const promptList = rawPrompts.length > 0 ? rawPrompts : [primaryPrompt];\n\n  const brandName = String(input.brand_name || '').trim();\n  const brandDomains = Array.isArray(input.brand_domains) ? input.brand_domains.filter(Boolean) : [];\n  const competitors = (Array.isArray(input.competitors) ? input.competitors : []).map(c => {\n    if (typeof c === 'string') return { name: c.trim(), domain: '' };\n    if (c && typeof c === 'object') {\n      return {\n        name: String(c.name || c.competitor_name || '').trim(),\n        domain: String(c.domain || c.competitor_domain || '').trim().toLowerCase()\n      };\n    }\n    return null;\n  }).filter(c => c && c.name);\n\n  let searchEnabled = true;\n  if (input.search_enabled !== undefined) {\n    searchEnabled = typeof input.search_enabled === 'string'\n      ? (input.search_enabled.toLowerCase() === 'true' || input.search_enabled === '1')\n      : Boolean(input.search_enabled);\n  }\n\n  let rawTargetLLMs = input.target_llms;\n  if (typeof rawTargetLLMs === 'string') {\n    rawTargetLLMs = rawTargetLLMs.split(',').map(s => s.trim()).filter(Boolean);\n  }\n  if (!Array.isArray(rawTargetLLMs) || rawTargetLLMs.length === 0) {\n    rawTargetLLMs = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'];\n  }\n\n  const seenSpecs = new Set();\n  const specs = [];\n  for (const token of rawTargetLLMs) {\n    if (token === null || token === undefined) continue;\n    const spec = resolveModelSpec(String(token));\n    if (spec && spec.id && !seenSpecs.has(spec.id)) {\n      seenSpecs.add(spec.id);\n      specs.push(spec);\n    }\n  }\n  if (specs.length === 0) {\n    specs.push(\n      resolveModelSpec('openai/gpt-6-luna'),\n      resolveModelSpec('gemini/models/gemini-3.5-flash')\n    );\n  }\n\n  const responseMode = input.response_mode || ((input.is_async === true || input.is_async === 'true') ? 'async' : (triggerSource === 'chat' ? 'sync' : (triggerSource === 'webhook' ? 'sync' : 'async')));\n  const configId = input.config_id || null;\n  const userId = input.user_id || null;\n  const runId = input.run_id || ('run_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9));\n  const createdAt = new Date().toISOString();\n\n  const expanded = [];\n  for (let pIdx = 0; pIdx < promptList.length; pIdx++) {\n    const promptText = promptList[pIdx];\n    for (const spec of specs) {\n      expanded.push({\n        json: {\n          run_id: runId,\n          prompt_index: pIdx,\n          config_id: configId,\n          user_id: userId,\n          trigger_source: triggerSource,\n          response_mode: responseMode,\n          prompt: promptText,\n          brand_name: brandName,\n          brand_domains: brandDomains,\n          competitors,\n          provider: spec.provider,\n          selected_provider: spec.provider,\n          model: spec.model,\n          model_key: spec.id,\n          eu_hosted: spec.eu_hosted,\n          is_eu_hosted: spec.eu_hosted,\n          search_enabled: searchEnabled,\n          locale: input.locale || 'de-DE',\n          created_at: createdAt\n        },\n        pairedItem: { item: inputIdx }\n      });\n    }\n  }\n  return expanded;\n}\n\nfor (let idx = 0; idx < items.length; idx++) {\n  const item = items[idx];\n  let raw = item && item.json ? item.json : {};\n  if (!raw || typeof raw !== 'object') raw = {};\n  let triggerSource = 'webhook';\n  let inputData = {};\n\n  if (raw.chatInput !== undefined) {\n    triggerSource = 'chat';\n    const text = String(raw.chatInput).trim();\n    if (text.startsWith('{') && text.endsWith('}')) {\n      try {\n        inputData = JSON.parse(text);\n      } catch (e) {\n        inputData = parseShorthand(text);\n      }\n    } else {\n      inputData = parseShorthand(text);\n    }\n  } else if (raw.jobs && Array.isArray(raw.jobs)) {\n    triggerSource = 'schedule_queue';\n    for (const job of (raw.jobs || []).filter(Boolean)) {\n      if (job && typeof job === 'object') {\n        normalizedItems.push(...expandTargetLLMs(job, triggerSource, idx));\n      }\n    }\n    continue;\n  } else if (raw.status === 'error' || raw.error) {\n    continue;\n  } else {\n    inputData = (raw.body && typeof raw.body === 'object') ? raw.body : raw;\n    triggerSource = 'webhook';\n  }\n\n  normalizedItems.push(...expandTargetLLMs(inputData, triggerSource, idx));\n}\n\nreturn normalizedItems;"
+      },
+      "id": "41f600fa-f875-46ea-a8dc-fe31ea6b0865",
+      "name": "Universal Normalizer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.selected_provider || $json.provider }}",
+                    "rightValue": "openai",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.selected_provider || $json.provider }}",
+                    "rightValue": "gemini",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.selected_provider || $json.provider }}",
+                    "rightValue": "mistral",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.selected_provider || $json.provider }}",
+                    "rightValue": "anthropic",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "f59b7815-7c1b-4f86-9f64-28fd33f00110",
+      "name": "Provider Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1424,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond_openai_search",
+              "leftValue": "={{ $json.search_enabled !== false && $json.search_enabled !== \"false\" && $json.search_enabled !== 0 && $json.search_enabled !== \"0\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4a00-8000-000000000101",
+      "name": "OpenAI Search Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "={{ $json.model || 'gpt-6-luna' }}",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Du bist ein präziser, neutraler Recherche- und Empfehlungs-Assistent. Antworte in der Sprache des Prompts, nenne konkrete Anbieter, Marken, Produktserien und offizielle Webseiten/URLs."
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "builtInTools": {
+          "webSearch": {
+            "searchContextSize": "medium"
+          }
+        },
+        "options": {}
+      },
+      "id": "04360af6-c6e6-49a4-a355-351748802901",
+      "name": "Call OpenAI (Search Enabled)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1952,
+        0
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "IjtHdO52yhvnyNmO",
+          "name": "OpenAI - Chatlytics - Chatlytics-dev-1"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "={{ $json.model || 'gpt-6-luna' }}",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Du bist ein präziser, neutraler Recherche- und Empfehlungs-Assistent. Antworte in der Sprache des Prompts, nenne konkrete Anbieter, Marken, Produktserien und offizielle Webseiten/URLs."
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4a00-8000-000000000102",
+      "name": "Call OpenAI (No Search)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1952,
+        144
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "IjtHdO52yhvnyNmO",
+          "name": "OpenAI - Chatlytics - Chatlytics-dev-1"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond_gemini_search",
+              "leftValue": "={{ $json.search_enabled !== false && $json.search_enabled !== \"false\" && $json.search_enabled !== 0 && $json.search_enabled !== \"0\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4a00-8000-000000000201",
+      "name": "Gemini Search Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "={{ ($json.model || 'models/gemini-3.5-flash').startsWith('models/') ? ($json.model || 'models/gemini-3.5-flash') : 'models/' + $json.model }}",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "builtInTools": {
+          "googleSearch": {}
+        },
+        "options": {
+          "systemMessage": "Du bist ein präziser, neutraler Recherche- und Empfehlungs-Assistent. Antworte in der Sprache des Prompts, nenne konkrete Anbieter, Marken, Produktserien und offizielle Webseiten/URLs."
+        }
+      },
+      "id": "3ef9d8ae-5a7f-4a47-8483-5396aa260901",
+      "name": "Call Google Gemini (Search Enabled)",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1952,
+        272
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "QtVXVXsW9pz6q8nv",
+          "name": "Google_AI Studio - Chatlytics - Chatlytics-dev-1"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "={{ ($json.model || 'models/gemini-3.5-flash').startsWith('models/') ? ($json.model || 'models/gemini-3.5-flash') : 'models/' + $json.model }}",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "Du bist ein präziser, neutraler Recherche- und Empfehlungs-Assistent. Antworte in der Sprache des Prompts, nenne konkrete Anbieter, Marken, Produktserien und offizielle Webseiten/URLs."
+        }
+      },
+      "id": "a1b2c3d4-0001-4a00-8000-000000000202",
+      "name": "Call Google Gemini (No Search)",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1952,
+        416
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "QtVXVXsW9pz6q8nv",
+          "name": "Google_AI Studio - Chatlytics - Chatlytics-dev-1"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.eu.mistral.ai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "mistralCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.model || 'mistral-medium-latest',\n  messages: [\n    {\n      role: 'system',\n      content: 'Du bist ein präziser, neutraler Recherche- und Empfehlungs-Assistent. Antworte in der Sprache des Prompts, nenne konkrete Anbieter, Marken, Produktserien und offizielle Webseiten/URLs.'\n    },\n    {\n      role: 'user',\n      content: $json.prompt || ''\n    }\n  ],\n  temperature: 0.2\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 45000
+        }
+      },
+      "id": "a1b2c3d4-0001-4a00-8000-000000000301",
+      "name": "Call Mistral EU (Mistral & GLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1808,
+        560
+      ],
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "cqJErZzvZka0iI1p",
+          "name": "Mistral - Chatlytics - Chatlytics-dev-1"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Strict EU inference endpoint (https://api.eu.mistral.ai/v1/chat/completions) for Mistral & Mistral-hosted Z.ai GLM 5.3 models."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.anthropicApi?.apiKey || $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.model || 'claude-3-5-sonnet-20241022',\n  max_tokens: 2048,\n  system: 'Du bist ein präziser, neutraler Recherche- und Empfehlungs-Assistent für den deutschen Markt. Nenne konkrete Anbieter, Marken, Produktserien und offizielle Webseiten/URLs.',\n  messages: [\n    {\n      role: 'user',\n      content: $json.prompt\n    }\n  ]\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "0f2a1b3c-8d4e-5f6a-9d2c-1e3f4a5b6c7d",
+      "name": "Call Anthropic Claude (Optional Fallback)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1808,
+        720
+      ],
+      "disabled": true,
+      "onError": "continueRegularOutput",
+      "notes": "Optional disabled fallback route. Enable and attach Anthropic credentials if Claude runs are needed."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfunction extractDomainFromUrl(urlOrDomain) {\n  if (!urlOrDomain || typeof urlOrDomain !== 'string') return '';\n  let clean = urlOrDomain.trim();\n  try {\n    clean = decodeURIComponent(clean);\n  } catch (_) {\n    clean = clean.replace(/%2f/gi, '/').replace(/%3a/gi, ':').replace(/%40/gi, '@');\n  }\n  clean = clean.toLowerCase().replace(/^https?:\\/\\//i, '');\n  const atIdx = clean.indexOf('@');\n  const firstSlash = clean.indexOf('/');\n  if (atIdx !== -1 && (firstSlash === -1 || atIdx < firstSlash)) {\n    clean = clean.slice(atIdx + 1);\n  }\n  clean = clean.replace(/^www\\./i, '');\n  for (const sep of ['/', ':', '?', '#']) {\n    const idx = clean.indexOf(sep);\n    if (idx !== -1) clean = clean.slice(0, idx);\n  }\n  return clean.trim();\n}\n\nfunction matchesDomain(candidateDomain, registeredDomains) {\n  if (!candidateDomain || !registeredDomains) return false;\n  const regList = Array.isArray(registeredDomains) ? registeredDomains : [registeredDomains];\n  const cleanCand = extractDomainFromUrl(String(candidateDomain));\n  if (!cleanCand) return false;\n  return regList.some(reg => {\n    const cleanReg = extractDomainFromUrl(String(reg));\n    return cleanReg && (cleanCand === cleanReg || cleanCand.endsWith('.' + cleanReg));\n  });\n}\n\nfunction extractErrorInfo(data, meta) {\n  if (!data || typeof data !== 'object') return null;\n\n  if (data.error !== null && data.error !== undefined) {\n    if (typeof data.error === 'string' && data.error.trim()) {\n      return data.error.trim();\n    }\n    if (typeof data.error === 'object') {\n      const msg = data.error.message || data.error.msg || data.error.description;\n      if (msg) return String(msg).trim();\n      return JSON.stringify(data.error);\n    }\n  }\n\n  if (data.object === 'error') {\n    return String(data.message || data.detail || 'Provider returned error object').trim();\n  }\n\n  if (typeof data.errorMessage === 'string' && data.errorMessage.trim()) {\n    return data.errorMessage.trim();\n  }\n\n  if (data.detail && !data.choices && !data.candidates && !data.output && !data.content) {\n    if (Array.isArray(data.detail)) {\n      return data.detail.map(d => (d && d.msg ? d.msg : JSON.stringify(d))).join('; ');\n    }\n    return String(data.detail).trim();\n  }\n\n  if (typeof data.statusCode === 'number' && data.statusCode >= 400) {\n    return String(data.message || data.statusMessage || ('HTTP ' + data.statusCode));\n  }\n\n  if (data.status === 'failed' || data.status === 'error') {\n    return String(data.message || data.incomplete_details?.reason || 'LLM provider returned failed status');\n  }\n\n  if (\n    typeof data.message === 'string'\n    && data.message.trim()\n    && !data.choices\n    && !data.candidates\n    && !data.output\n    && !data.content\n    && !data.raw_response_text\n    && !data.raw_response\n    && !data.text\n    && !data.prompt\n  ) {\n    return data.message.trim();\n  }\n\n  const cand0 = Array.isArray(data.candidates) ? data.candidates[0] : null;\n  if (\n    cand0\n    && ['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII'].includes(String(cand0.finishReason || ''))\n    && (!cand0.content || !Array.isArray(cand0.content.parts) || cand0.content.parts.every(p => !p || !p.text))\n  ) {\n    return 'Gemini response blocked (' + cand0.finishReason + ')';\n  }\n\n  const isUntouchedDisabledAnthropic = (\n    (meta.provider || data.provider) === 'anthropic'\n    && data.trigger_source !== undefined\n    && !data.content\n    && !data.choices\n    && !data.output\n    && !data.candidates\n    && !data.raw_response_text\n    && !data.raw_response\n    && !data.text\n  );\n  if (isUntouchedDisabledAnthropic) {\n    return 'Anthropic fallback node is disabled in n8n workflow.';\n  }\n\n  return null;\n}\n\nfunction joinPartsText(parts) {\n  if (!Array.isArray(parts)) return '';\n  const nonThought = parts\n    .filter(p => p && !p.thought && typeof p.text === 'string')\n    .map(p => p.text);\n  if (nonThought.length > 0) return nonThought.join('');\n  return parts\n    .filter(p => p && typeof p.text === 'string')\n    .map(p => p.text)\n    .join('');\n}\n\nfunction extractResponseText(data) {\n  if (!data || typeof data !== 'object') return '';\n\n  // 1. OpenAI Chat Completions & Mistral EU / Z.ai GLM\n  if (data.choices && Array.isArray(data.choices) && data.choices[0]?.message?.content !== undefined) {\n    const content = data.choices[0].message.content;\n    if (typeof content === 'string') return content;\n    if (Array.isArray(content)) {\n      return content\n        .map(part => {\n          if (typeof part === 'string') return part;\n          if (part && typeof part.text === 'string' && (!part.type || part.type === 'text' || part.type === 'output_text')) {\n            return part.text;\n          }\n          return '';\n        })\n        .join('');\n    }\n  }\n\n  // 2. OpenAI Native Responses API (simplify: false)\n  if (Array.isArray(data.output)) {\n    const chunks = [];\n    for (const block of data.output) {\n      if (!block) continue;\n      if (typeof block === 'string') {\n        chunks.push(block);\n      } else if (Array.isArray(block.content)) {\n        for (const part of block.content) {\n          if (typeof part === 'string') {\n            chunks.push(part);\n          } else if (part && typeof part.text === 'string') {\n            chunks.push(part.text);\n          }\n        }\n      } else if (typeof block.text === 'string') {\n        chunks.push(block.text);\n      }\n    }\n    if (chunks.length > 0) return chunks.join('\\n').trim();\n  }\n  if (typeof data.output_text === 'string' && data.output_text) {\n    return data.output_text;\n  }\n  if (typeof data.output === 'string' && data.output) {\n    return data.output;\n  }\n\n  // 3. Google Gemini Native (simplify: false -> candidates[0].content.parts, or unwrapped content.parts)\n  if (data.candidates && Array.isArray(data.candidates) && data.candidates[0]?.content?.parts) {\n    return joinPartsText(data.candidates[0].content.parts);\n  }\n  if (data.content && !Array.isArray(data.content) && Array.isArray(data.content.parts)) {\n    return joinPartsText(data.content.parts);\n  }\n\n  // 4. Anthropic Messages API (content[].text)\n  if (data.content && Array.isArray(data.content)) {\n    const texts = data.content\n      .filter(c => c && typeof c.text === 'string')\n      .map(c => c.text);\n    if (texts.length > 0) return texts.join('');\n  }\n\n  // 5. Simplified / Direct Text Pass-through\n  if (data.raw_response_text !== undefined && data.raw_response_text !== null) return String(data.raw_response_text);\n  if (data.raw_response !== undefined && data.raw_response !== null) return String(data.raw_response);\n  if (data.text !== undefined && data.text !== null) return String(data.text);\n\n  return '';\n}\n\nfunction addCitation(citations, seenUrls, url, title, sourceType) {\n  const cleanUrl = String(url || '').trim();\n  if (!cleanUrl || seenUrls.has(cleanUrl)) return;\n  seenUrls.add(cleanUrl);\n  const domain = extractDomainFromUrl(cleanUrl);\n  const cleanTitle = title ? String(title).trim() : 'Untitled';\n  citations.push({\n    citation_url: cleanUrl,\n    citation_domain: domain,\n    domain,\n    citation_title: cleanTitle || 'Untitled',\n    title: cleanTitle || 'Untitled',\n    source_type: sourceType\n  });\n}\n\nfunction extractCitations(data, rawText, brandDomains, competitorList) {\n  const citations = [];\n  const seenUrls = new Set();\n  const safeCompList = (Array.isArray(competitorList) ? competitorList : []).filter(Boolean);\n\n  // 1. Gemini Grounding Metadata Chunks (raw or unwrapped)\n  const geminiChunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks\n    || data.groundingMetadata?.groundingChunks;\n  if (Array.isArray(geminiChunks)) {\n    for (const chunk of geminiChunks) {\n      if (chunk && chunk.web && chunk.web.uri) {\n        addCitation(citations, seenUrls, chunk.web.uri, chunk.web.title, 'grounding_metadata');\n      }\n    }\n  }\n\n  // 2. OpenAI Responses API url_citation annotations (and Chat Completions annotations)\n  const collectAnnotations = (annotations) => {\n    if (!Array.isArray(annotations)) return;\n    for (const ann of annotations) {\n      if (!ann || typeof ann !== 'object') continue;\n      if (ann.type === 'url_citation' || ann.url_citation || ann.url) {\n        const citUrl = ann.url || ann.url_citation?.url;\n        const citTitle = ann.title || ann.url_citation?.title || 'Untitled';\n        if (citUrl) addCitation(citations, seenUrls, citUrl, citTitle, 'openai_web_search');\n      }\n    }\n  };\n  if (Array.isArray(data.output)) {\n    for (const block of data.output) {\n      if (block && Array.isArray(block.content)) {\n        for (const part of block.content) {\n          if (part && Array.isArray(part.annotations)) {\n            collectAnnotations(part.annotations);\n          }\n        }\n      }\n    }\n  }\n  collectAnnotations(data.choices?.[0]?.message?.annotations);\n\n  // 3. Markdown Links in Text\n  if (rawText && typeof rawText === 'string') {\n    const mdRegex = /\\[(.*?)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g;\n    let match;\n    while ((match = mdRegex.exec(rawText)) !== null) {\n      addCitation(citations, seenUrls, match[2], match[1], 'markdown_link');\n    }\n\n    // 4. Bare URLs\n    const textWithoutMd = rawText.replace(/\\[(.*?)\\]\\(https?:\\/\\/[^\\s)]+\\)/g, ' ');\n    const bareRegex = /https?:\\/\\/(?:[a-zA-Z0-9_.-]+(?::[a-zA-Z0-9_.-]+)?@)?[a-zA-Z0-9.-]+(?::\\d+)?(?:\\/[^\\s)]*)?/g;\n    const bareMatches = textWithoutMd.match(bareRegex) || [];\n    for (const rawUrl of bareMatches) {\n      const cleanUrl = rawUrl.replace(/[.,;:!\\])]+$/, '');\n      addCitation(citations, seenUrls, cleanUrl, 'Untitled', 'bare_url');\n    }\n  }\n\n  return citations.map((c, idx) => {\n    const isBrand = matchesDomain(c.citation_domain, brandDomains);\n    const isComp = safeCompList.some(comp => {\n      const cDomain = (comp && typeof comp === 'object') ? (comp.domain || comp.competitor_domain || '') : (typeof comp === 'string' ? comp : '');\n      return cDomain && matchesDomain(c.citation_domain, cDomain);\n    });\n    return {\n      citation_index: idx + 1,\n      citation_url: c.citation_url,\n      citation_domain: c.citation_domain,\n      domain: c.citation_domain,\n      citation_title: c.citation_title,\n      title: c.citation_title,\n      is_brand_domain: isBrand,\n      is_competitor_domain: isComp,\n      source_type: c.source_type\n    };\n  });\n}\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const rawPayload = (item && item.json && typeof item.json === 'object') ? item.json : {};\n  let meta = {};\n\n  try {\n    if (typeof $ === 'function') {\n      const normalizerNode = $('Universal Normalizer');\n      if (normalizerNode) {\n        meta = (normalizerNode.itemMatching && normalizerNode.itemMatching(i)?.json)\n          || (normalizerNode.item && normalizerNode.item.json)\n          || (normalizerNode.all && normalizerNode.all()[i]?.json)\n          || (normalizerNode.first && normalizerNode.first()?.json)\n          || {};\n      }\n    }\n  } catch (_) {}\n\n  const resolvedProvider = meta.provider || meta.selected_provider || rawPayload.provider || rawPayload.selected_provider || 'openai';\n  const resolvedModel = meta.model || rawPayload.model || rawPayload.modelVersion || 'gpt-6-luna';\n  const resolvedEuHosted = meta.eu_hosted !== undefined\n    ? Boolean(meta.eu_hosted)\n    : (resolvedProvider === 'mistral' || String(resolvedModel).includes('zai-glm'));\n\n  const errorMessage = extractErrorInfo(rawPayload, meta);\n  let rawText = extractResponseText(rawPayload);\n  let status = 'completed';\n  let isError = false;\n\n  if (errorMessage) {\n    isError = true;\n    status = 'failed';\n    rawText = 'ERROR: ' + errorMessage;\n  }\n\n  const brandDomains = meta.brand_domains || rawPayload.brand_domains || [];\n  const competitors = meta.competitors || rawPayload.competitors || [];\n  const extractedCitations = isError\n    ? []\n    : extractCitations(rawPayload, rawText, brandDomains, competitors);\n\n  results.push({\n    json: {\n      ...meta,\n      ...rawPayload,\n      run_id: meta.run_id || rawPayload.run_id,\n      config_id: meta.config_id ?? rawPayload.config_id,\n      user_id: meta.user_id ?? rawPayload.user_id,\n      prompt: meta.prompt !== undefined ? meta.prompt : rawPayload.prompt,\n      brand_name: meta.brand_name !== undefined ? meta.brand_name : rawPayload.brand_name,\n      brand_domains: brandDomains,\n      provider: resolvedProvider,\n      selected_provider: resolvedProvider,\n      model: resolvedModel,\n      model_name: resolvedModel,\n      eu_hosted: resolvedEuHosted,\n      is_eu_hosted: resolvedEuHosted,\n      search_enabled: meta.search_enabled !== undefined ? Boolean(meta.search_enabled) : Boolean(rawPayload.search_enabled),\n      status,\n      is_error: isError,\n      error_message: errorMessage || null,\n      raw_response: rawText,\n      raw_response_text: rawText,\n      text: rawText,\n      citations: extractedCitations,\n      competitors: (Array.isArray(competitors) ? competitors : []).filter(Boolean).map(c => typeof c === 'string' ? { name: c, domain: '' } : c)\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "8d0e9f1a-6b2c-3d4e-7b0a-9c1d2e3f4a5b",
+      "name": "Secondary Extractor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Chatlytics.de — Deterministic Unicode Metric & Classification Engine\n * File: n8n/lib/metrics_engine.js\n * \n * Pure, deterministic JavaScript for execution in n8n 2.44.5 Code Nodes (V8 isolate)\n * and Node.js (CommonJS / ES) unit tests. Zero external dependencies.\n */\n\n/**\n * Escapes special regex characters in a string.\n * \n * @param {string} str\n * @returns {string}\n */\nfunction escapeRegex(str) {\n  if (!str) return '';\n  return String(str).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n}\n\n/**\n * Normalizes text to Unicode NFC and extracts whitespace-separated words.\n * Returns empty array for empty or whitespace-only strings (no ['']).\n * \n * @param {string} text\n * @returns {string[]}\n */\nfunction getWords(text) {\n  if (text === null || text === undefined || typeof text !== 'string') {\n    return [];\n  }\n  const trimmed = text.normalize('NFC').trim();\n  if (trimmed.length === 0) return [];\n  return trimmed.split(/\\s+/);\n}\n\n/**\n * Counts total words in text.\n * \n * @param {string} text\n * @returns {number}\n */\nfunction countWords(text) {\n  return getWords(text).length;\n}\n\n/**\n * Counts total UTF-16 characters in normalized NFC text.\n * \n * @param {string} text\n * @returns {number}\n */\nfunction countChars(text) {\n  if (text === null || text === undefined) return 0;\n  const str = typeof text === 'string' ? text : String(text);\n  return str.normalize('NFC').length;\n}\n\n/**\n * Performs German Unicode lowercase normalization and transliteration (DIN 5007-2).\n * Maps umlauts to ASCII digraphs and sharp S to double-s.\n * \n * @param {string} str\n * @returns {string}\n */\nfunction normalizeGermanText(str) {\n  if (!str) return '';\n  return String(str)\n    .normalize('NFC')\n    .toLocaleLowerCase('de-DE')\n    .replace(/ä/g, 'ae')\n    .replace(/ö/g, 'oe')\n    .replace(/ü/g, 'ue')\n    .replace(/ß/g, 'ss')\n    .replace(/\\u1E9E/g, 'ss');\n}\n\n/**\n * Normalizes a URL or domain string into a clean root/hostname string.\n * Strips protocols, www prefixes, ports, and sub-paths.\n * \n * @param {string} urlOrDomain\n * @returns {string}\n */\nfunction extractDomainFromUrl(urlOrDomain) {\n  if (!urlOrDomain || typeof urlOrDomain !== 'string') return '';\n  let clean = urlOrDomain.trim();\n\n  // Decode percent-encoded components (%2F -> '/', %3A -> ':', etc.)\n  try {\n    clean = decodeURIComponent(clean);\n  } catch (_) {\n    // Resilient fallback for malformed URI byte sequences\n    clean = clean\n      .replace(/%2f/gi, '/')\n      .replace(/%3a/gi, ':')\n      .replace(/%40/gi, '@')\n      .replace(/%3f/gi, '?')\n      .replace(/%23/gi, '#');\n  }\n\n  clean = clean.toLowerCase();\n  clean = clean.replace(/^https?:\\/\\//i, '');\n\n  // Strip userinfo (e.g. user:pass@host)\n  const atIdx = clean.indexOf('@');\n  const firstSlash = clean.indexOf('/');\n  if (atIdx !== -1 && (firstSlash === -1 || atIdx < firstSlash)) {\n    clean = clean.slice(atIdx + 1);\n  }\n\n  clean = clean.replace(/^www\\./i, '');\n\n  const slashIdx = clean.indexOf('/');\n  if (slashIdx !== -1) clean = clean.slice(0, slashIdx);\n\n  const colonIdx = clean.indexOf(':');\n  if (colonIdx !== -1) clean = clean.slice(0, colonIdx);\n\n  const queryIdx = clean.indexOf('?');\n  if (queryIdx !== -1) clean = clean.slice(0, queryIdx);\n\n  const hashIdx = clean.indexOf('#');\n  if (hashIdx !== -1) clean = clean.slice(0, hashIdx);\n\n  return clean.trim();\n}\n\n/**\n * Checks whether a candidate domain matches any registered domain (including subdomains).\n * \n * @param {string} candidateDomain\n * @param {string[]|string} registeredDomains\n * @returns {boolean}\n */\nfunction matchesDomain(candidateDomain, registeredDomains) {\n  if (!candidateDomain || !registeredDomains) return false;\n  const regList = Array.isArray(registeredDomains) ? registeredDomains : [registeredDomains];\n  if (regList.length === 0) return false;\n\n  const cleanCandidate = extractDomainFromUrl(String(candidateDomain));\n  if (!cleanCandidate) return false;\n\n  return regList.some(reg => {\n    if (!reg) return false;\n    const cleanReg = extractDomainFromUrl(String(reg));\n    if (!cleanReg) return false;\n    return cleanCandidate === cleanReg || cleanCandidate.endsWith('.' + cleanReg);\n  });\n}\n\n/**\n * Compiles a Unicode-aware regular expression with German transliteration alternations\n * and Unicode letter/number lookaround boundaries.\n * \n * This prevents whole-text index shifting and accurately matches German umlauts,\n * capital sharp S (ẞ / U+1E9E), standard sharp S (ß), and ASCII digraphs (ae, oe, ue, ss).\n * \n * @param {string} entityName\n * @returns {RegExp|null}\n */\nfunction buildGermanRegex(entityName) {\n  if (!entityName || typeof entityName !== 'string') return null;\n  const norm = entityName.normalize('NFC').trim();\n  if (!norm) return null;\n\n  const wordTokens = norm.split(/\\s+/);\n  const wordPatterns = wordTokens.map(w => {\n    const tokenized = w\n      .replace(/ae|ä/gi, '@@AE@@')\n      .replace(/oe|ö/gi, '@@OE@@')\n      .replace(/ue|ü/gi, '@@UE@@')\n      .replace(/ss|ß|\\u1E9E/gi, '@@SS@@');\n\n    const escaped = escapeRegex(tokenized);\n    return escaped\n      .replace(/@@AE@@/g, '(?:[äÄ]|ae)')\n      .replace(/@@OE@@/g, '(?:[öÖ]|oe)')\n      .replace(/@@UE@@/g, '(?:[üÜ]|ue)')\n      .replace(/@@SS@@/g, '(?:[ß\\u1E9E]|ss)');\n  });\n\n  const fullPattern = wordPatterns.join('\\\\s+');\n  return new RegExp(`(?<![\\\\p{L}\\\\p{N}])${fullPattern}(?![\\\\p{L}\\\\p{N}])`, 'iu');\n}\n\n/**\n * Locates an entity within text using tiered resolution:\n * Tier 1: German Unicode transliteration regex with lookaround boundaries.\n * Tier 2: Domain text fallback if registered domains are provided.\n * \n * @param {string} text\n * @param {string} entityName\n * @param {string[]} [domains=[]]\n * @returns {{ found: boolean, charIndex: number|null, wordIndex: number|null, matchType: string, matchedText: string|null }}\n */\nfunction findBrandUnicode(text, entityName, domains = []) {\n  if (text === null || text === undefined || !entityName) {\n    return { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n  }\n\n  const rawText = typeof text === 'string' ? text : String(text);\n  const normText = rawText.normalize('NFC');\n  const target = typeof entityName === 'string' ? entityName.normalize('NFC').trim() : String(entityName).trim();\n  if (!target) {\n    return { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n  }\n\n  const regex = buildGermanRegex(target);\n  if (regex) {\n    const match = regex.exec(normText);\n    if (match) {\n      const charIndex = match.index;\n      const prefix = normText.slice(0, charIndex);\n      const endsWithWhitespace = /\\s$/.test(prefix);\n      const wordIndex = (!prefix || endsWithWhitespace)\n        ? getWords(prefix).length + 1\n        : Math.max(1, getWords(prefix).length);\n      const matchedText = match[0];\n      const isExact = matchedText.normalize('NFC').toLocaleLowerCase('de-DE') === target.toLocaleLowerCase('de-DE');\n      return {\n        found: true,\n        charIndex,\n        wordIndex,\n        matchType: isExact ? 'unicode_exact' : 'german_transliterated',\n        matchedText\n      };\n    }\n  }\n\n  // Tier 2: Domain mention fallback in text\n  const domList = Array.isArray(domains) ? domains : (domains ? [domains] : []);\n  for (const d of domList) {\n    if (!d) continue;\n    const cleanDom = extractDomainFromUrl(String(d));\n    if (!cleanDom) continue;\n    const domRegex = new RegExp(`(?<![\\\\p{L}\\\\p{N}])${escapeRegex(cleanDom)}(?![\\\\p{L}\\\\p{N}])`, 'iu');\n    const dm = domRegex.exec(normText);\n    if (dm) {\n      const charIndex = dm.index;\n      const prefix = normText.slice(0, charIndex);\n      const endsWithWhitespace = /\\s$/.test(prefix);\n      const wordIndex = (!prefix || endsWithWhitespace)\n        ? getWords(prefix).length + 1\n        : Math.max(1, getWords(prefix).length);\n      return {\n        found: true,\n        charIndex,\n        wordIndex,\n        matchType: 'domain_mention',\n        matchedText: dm[0]\n      };\n    }\n  }\n\n  return { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n}\n\n/**\n * Classifies evaluation results into strict 4-state MECE categories.\n * \n * Supports both positional invocation:\n *   classifyMECE(brandMentioned, competitorsMentioned, brandEarliness, minCompetitorEarliness, brandSentiment)\n * and single options object:\n *   classifyMECE({ brandMentioned, competitorsMentioned, brandEarliness, minCompetitorEarliness, brandSentiment })\n * \n * @param {boolean|object} arg1\n * @param {boolean} [argCompetitorsMentioned]\n * @param {number|null} [argBrandEarliness]\n * @param {number|null} [argMinCompetitorEarliness]\n * @param {string} [argBrandSentiment='neutral']\n * @returns {'1_DIRECT_WIN'|'2_BRAND_HALO'|'3_COMPETITOR_TAKEOVER'|'4_GENERIC'}\n */\nfunction classifyMECE(arg1, argCompetitorsMentioned, argBrandEarliness, argMinCompetitorEarliness, argBrandSentiment) {\n  let brandMentioned = false;\n  let competitorsMentioned = false;\n  let brandEarliness = null;\n  let minCompetitorEarliness = null;\n  let brandSentiment = 'neutral';\n\n  if (arg1 && typeof arg1 === 'object') {\n    brandMentioned = Boolean(arg1.brandMentioned || arg1.brand_mentioned);\n    competitorsMentioned = Boolean(arg1.competitorsMentioned || arg1.competitorFound || arg1.competitors_mentioned);\n    brandEarliness = arg1.brandEarliness !== undefined ? arg1.brandEarliness : (arg1.brand_earliness !== undefined ? arg1.brand_earliness : null);\n    minCompetitorEarliness = arg1.minCompetitorEarliness !== undefined ? arg1.minCompetitorEarliness : (arg1.min_competitor_earliness !== undefined ? arg1.min_competitor_earliness : null);\n    brandSentiment = arg1.brandSentiment || arg1.brand_sentiment || 'neutral';\n  } else {\n    brandMentioned = Boolean(arg1);\n    competitorsMentioned = Boolean(argCompetitorsMentioned);\n    brandEarliness = argBrandEarliness !== undefined ? argBrandEarliness : null;\n    minCompetitorEarliness = argMinCompetitorEarliness !== undefined ? argMinCompetitorEarliness : null;\n    brandSentiment = argBrandSentiment || 'neutral';\n  }\n\n  const isNegative = String(brandSentiment).toLowerCase() === 'negative';\n\n  // Branch 1: Neither brand nor competitor present\n  if (!brandMentioned && !competitorsMentioned) {\n    return '4_GENERIC';\n  }\n\n  // Branch 2: Competitor present, brand omitted\n  if (!brandMentioned && competitorsMentioned) {\n    return '3_COMPETITOR_TAKEOVER';\n  }\n\n  // Branch 3: Brand present, no competitors present\n  if (brandMentioned && !competitorsMentioned) {\n    if (isNegative) return '4_GENERIC';\n    return '1_DIRECT_WIN';\n  }\n\n  // Branch 4: Both brand and at least one competitor present\n  if (isNegative) {\n    return '3_COMPETITOR_TAKEOVER';\n  }\n\n  if (\n    brandEarliness !== null &&\n    minCompetitorEarliness !== null &&\n    brandEarliness <= minCompetitorEarliness\n  ) {\n    return '1_DIRECT_WIN';\n  }\n\n  return '2_BRAND_HALO';\n}\n\n/**\n * Diagnoses Generative Engine Optimization (GEO) 4-Quadrant state.\n * \n * States:\n * - 1_CITATION_HIJACK: Brand mentioned in text but not cited, while citations exist; or brand cited but competitor recommended.\n * - 2_PARAMETRIC_BLINDSPOT: Brand domain cited but brand omitted from text; or competitor recommended with zero citations.\n * - 3_BRAND_HALO_TRAP: Brand mentioned in secondary halo position behind competitor without citation dominance.\n * - 4_BURIED_WINNER: Brand recommended #1, but buried late (>50% relative position or word earliness > 50).\n * - NONE: Clean direct win with early mention and citation authority, or generic overview.\n * \n * @param {object} params\n * @returns {'1_CITATION_HIJACK'|'2_PARAMETRIC_BLINDSPOT'|'3_BRAND_HALO_TRAP'|'4_BURIED_WINNER'|'NONE'}\n */\nfunction evaluateGeoQuadrant({\n  brandMentioned,\n  brandInText,\n  brandRecommended,\n  competitorRecommended,\n  competitorInText,\n  brandDomainCited,\n  brandCited,\n  competitorCited,\n  competitorDomainCited,\n  citationsCount,\n  hasCitations,\n  relativePositionPct,\n  brandRelativePos,\n  wordEarliness,\n  brandEarlinessWord,\n  minCompetitorPos,\n  meceCategory\n} = {}) {\n  const isBrandMentioned = Boolean(brandMentioned ?? brandInText);\n  const isBrandRecommended = Boolean(brandRecommended || meceCategory === '1_DIRECT_WIN');\n  const isCompetitorRecommended = Boolean(competitorRecommended || meceCategory === '3_COMPETITOR_TAKEOVER');\n  const isBrandCited = Boolean(brandDomainCited ?? brandCited);\n  const totalCitations = typeof citationsCount === 'number' ? citationsCount : (hasCitations ? 1 : 0);\n  const anyCitations = totalCitations > 0;\n  const relPos = relativePositionPct !== undefined ? relativePositionPct : (brandRelativePos !== undefined ? brandRelativePos : null);\n  const wordEarly = wordEarliness !== undefined ? wordEarliness : (brandEarlinessWord !== undefined ? brandEarlinessWord : null);\n\n  // Quadrant 4: Buried Winner (Brand won, but appears in bottom half / late)\n  if (isBrandRecommended && ((relPos !== null && relPos > 50.0) || (wordEarly !== null && wordEarly > 50))) {\n    return '4_BURIED_WINNER';\n  }\n\n  // Quadrant 1: Citation Hijack\n  // Case A: Brand domain cited in grounding, but competitor is recommended in text\n  if (isBrandCited && isCompetitorRecommended && !isBrandRecommended) {\n    return '1_CITATION_HIJACK';\n  }\n\n  // Quadrant 3: Brand Halo Trap\n  // Brand trapped behind competitor in halo position (2_BRAND_HALO)\n  // Evaluated BEFORE Citation Hijack Case B and Parametric Blindspot Case B so that Brand Halo\n  // evaluates consistently regardless of whether grounding citations exist.\n  if (isBrandMentioned && (meceCategory === '2_BRAND_HALO' || (minCompetitorPos !== null && relPos !== null && relPos > minCompetitorPos))) {\n    return '3_BRAND_HALO_TRAP';\n  }\n\n  // Quadrant 1: Citation Hijack\n  // Case B: Brand mentioned in text, but brand domain not cited while external citations exist\n  if (isBrandMentioned && !isBrandCited && anyCitations) {\n    return '1_CITATION_HIJACK';\n  }\n\n  // Quadrant 2: Parametric Blindspot\n  // Case A: Brand domain cited in grounding, but brand completely omitted from synthesized text\n  if (isBrandCited && !isBrandMentioned) {\n    return '2_PARAMETRIC_BLINDSPOT';\n  }\n\n  // Case B: Competitor recommended without any grounding citations when brand is omitted from text\n  if (isCompetitorRecommended && !isBrandMentioned && !anyCitations) {\n    return '2_PARAMETRIC_BLINDSPOT';\n  }\n\n  return 'NONE';\n}\n\n/**\n * Master calculation engine: processes LLM response text, brand config,\n * competitors, and grounding citations to produce standardized metrics.\n * \n * Supports both positional parameters:\n *   calculateMetrics(text, brandName, brandDomains, competitors, citations, options)\n * and single options object:\n *   calculateMetrics({ text, brandName, brandDomains, competitors, citations, options })\n * \n * @param {string|object} arg1 - Raw text or options object\n * @param {string} [argBrandName]\n * @param {string[]} [argBrandDomains]\n * @param {Array<string|object>} [argCompetitors]\n * @param {Array<string|object>} [argCitations]\n * @param {object} [argOptions]\n * @returns {object} Standardized Chatlytics metrics payload\n */\nfunction calculateMetrics(arg1, argBrandName, argBrandDomains, argCompetitors, argCitations, argOptions) {\n  let text = '';\n  let brandName = '';\n  let brandDomains = [];\n  let competitors = [];\n  let citations = [];\n  let runOptions = {};\n\n  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1)) {\n    text = arg1.text || arg1.raw_response || arg1.response_text || '';\n    brandName = arg1.brandName || arg1.brand_name || '';\n    brandDomains = arg1.brandDomains || arg1.brand_domains || [];\n    competitors = arg1.competitors || [];\n    citations = arg1.citations || [];\n    runOptions = arg1.options || {};\n  } else {\n    text = arg1 != null ? (typeof arg1 === 'string' ? arg1 : String(arg1)) : '';\n    brandName = argBrandName || '';\n    brandDomains = argBrandDomains || [];\n    competitors = argCompetitors || [];\n    citations = argCitations || [];\n    runOptions = argOptions || {};\n  }\n\n  const rawText = text != null ? (typeof text === 'string' ? text : String(text)) : '';\n  const normText = rawText.normalize('NFC');\n  const totalChars = normText.length;\n  const words = getWords(normText);\n  const totalWords = words.length;\n\n  const targetBrand = brandName != null && typeof brandName === 'string' ? brandName.normalize('NFC').trim() : (brandName ? String(brandName).trim() : '');\n\n  const normBrandDomains = (Array.isArray(brandDomains) ? brandDomains : (brandDomains ? [brandDomains] : []))\n    .map(d => extractDomainFromUrl(String(d)))\n    .filter(d => d.length > 0);\n\n  // Normalize competitors\n  const normCompetitors = (Array.isArray(competitors) ? competitors : []).map(c => {\n    if (typeof c === 'string') {\n      return { name: c.trim(), domains: [] };\n    }\n    if (c && typeof c === 'object') {\n      const name = (c.name || c.competitor_name || '').trim();\n      const doms = [];\n      if (c.domain || c.competitor_domain) doms.push(extractDomainFromUrl(c.domain || c.competitor_domain));\n      if (Array.isArray(c.domains)) doms.push(...c.domains.map(extractDomainFromUrl));\n      return { name, domains: doms.filter(d => d.length > 0) };\n    }\n    return { name: '', domains: [] };\n  }).filter(c => c.name.length > 0);\n\n  // Normalize citations (with null guard and percent-decoding resilience)\n  let brandDomainCited = false;\n  let competitorDomainCited = false;\n\n  const rawCitationsList = Array.isArray(citations) ? citations : (citations && typeof citations === 'object' ? [citations] : []);\n  const safeCitations = rawCitationsList.filter(cit => cit !== null && cit !== undefined && (typeof cit === 'string' || typeof cit === 'object'));\n\n  const normCitations = safeCitations.map((cit, idx) => {\n    const isString = typeof cit === 'string';\n    const isObj = cit !== null && typeof cit === 'object';\n    const rawUrl = isString ? cit : (isObj ? (cit.citation_url || cit.url || '') : '');\n    let rawDomain = isString\n      ? extractDomainFromUrl(cit)\n      : (isObj ? (cit.citation_domain || cit.domain || extractDomainFromUrl(rawUrl)) : extractDomainFromUrl(rawUrl));\n    rawDomain = extractDomainFromUrl(rawDomain);\n    const title = (isObj && (cit.citation_title || cit.title)) ? String(cit.citation_title || cit.title) : '';\n\n    let isBrand = false;\n    if (isObj && typeof cit.is_brand_domain === 'boolean') {\n      isBrand = cit.is_brand_domain;\n    } else {\n      isBrand = matchesDomain(rawDomain, normBrandDomains);\n    }\n    if (isBrand) brandDomainCited = true;\n\n    let isComp = false;\n    if (isObj && typeof cit.is_competitor_domain === 'boolean') {\n      isComp = cit.is_competitor_domain;\n    } else {\n      isComp = normCompetitors.some(c => matchesDomain(rawDomain, c.domains));\n    }\n    if (isComp) competitorDomainCited = true;\n\n    return {\n      citation_index: idx + 1,\n      url: rawUrl,\n      citation_url: rawUrl,\n      domain: rawDomain,\n      citation_domain: rawDomain,\n      title: title,\n      citation_title: title,\n      is_brand_domain: isBrand,\n      is_competitor_domain: isComp\n    };\n  });\n\n  const hasCitations = normCitations.length > 0;\n\n  // Evaluate brand match\n  let brandMatch = { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n  if (targetBrand.length > 0 && totalChars > 0) {\n    brandMatch = findBrandUnicode(normText, targetBrand, normBrandDomains);\n  }\n\n  const brandMentioned = brandMatch.found;\n  const brandCharEarliness = brandMatch.charIndex;\n  const brandWordEarliness = brandMatch.wordIndex;\n\n  let brandRelPosPct = null;\n  if (brandMentioned && brandCharEarliness !== null && totalChars > 0) {\n    brandRelPosPct = Math.round((brandCharEarliness / totalChars) * 10000) / 100;\n  }\n\n  // Evaluate competitor matches\n  let minCompetitorEarliness = null;\n  let anyCompFound = false;\n\n  const evaluatedCompetitors = normCompetitors.map(comp => {\n    let compMatch = { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };\n    if (totalChars > 0) {\n      compMatch = findBrandUnicode(normText, comp.name, comp.domains);\n    }\n    let compRelPosPct = null;\n\n    if (compMatch.found && compMatch.charIndex !== null) {\n      anyCompFound = true;\n      if (minCompetitorEarliness === null || compMatch.charIndex < minCompetitorEarliness) {\n        minCompetitorEarliness = compMatch.charIndex;\n      }\n      compRelPosPct = totalChars > 0 ? Math.round((compMatch.charIndex / totalChars) * 10000) / 100 : 0.0;\n    }\n\n    return {\n      competitor_name: comp.name,\n      competitor_domain: comp.domains[0] || null,\n      mentioned: compMatch.found,\n      char_earliness: compMatch.charIndex,\n      word_earliness: compMatch.wordIndex,\n      relative_position_pct: compRelPosPct,\n      relative_pos: compRelPosPct,\n      match_type: compMatch.matchType,\n      recommended: false\n    };\n  });\n\n  const meceCategory = classifyMECE({\n    brandMentioned,\n    competitorsMentioned: anyCompFound,\n    brandEarliness: brandCharEarliness,\n    minCompetitorEarliness,\n    brandSentiment: runOptions.brandSentiment || 'neutral'\n  });\n\n  const brandRecommended = meceCategory === '1_DIRECT_WIN';\n  const competitorRecommended = meceCategory === '3_COMPETITOR_TAKEOVER' || meceCategory === '2_BRAND_HALO';\n\n  // Mark leading competitor(s) recommended if competitor takeover/halo applies\n  if (competitorRecommended && anyCompFound && minCompetitorEarliness !== null) {\n    for (const comp of evaluatedCompetitors) {\n      if (comp.mentioned && comp.char_earliness === minCompetitorEarliness) {\n        comp.recommended = true;\n      }\n    }\n  }\n\n  const geoQuadrant = evaluateGeoQuadrant({\n    brandMentioned,\n    brandRecommended,\n    competitorRecommended,\n    brandDomainCited,\n    competitorCited: competitorDomainCited,\n    citationsCount: normCitations.length,\n    hasCitations,\n    relativePositionPct: brandRelPosPct,\n    wordEarliness: brandWordEarliness,\n    meceCategory\n  });\n\n  return {\n    // Lengths\n    total_chars: totalChars,\n    character_count: totalChars,\n    total_words: totalWords,\n    word_count: totalWords,\n\n    // Brand Metrics\n    brand_name: targetBrand,\n    brand_mentioned: brandMentioned,\n    brand_recommended: brandRecommended,\n    char_earliness: brandCharEarliness,\n    brand_earliness_char: brandCharEarliness,\n    word_earliness: brandWordEarliness,\n    brand_earliness_word: brandWordEarliness,\n    relative_position_pct: brandRelPosPct,\n    brand_relative_pos: brandRelPosPct,\n    brand_match_type: brandMatch.matchType,\n\n    // MECE & GEO\n    mece_category: meceCategory,\n    geo_quadrant: geoQuadrant,\n\n    // Citations\n    has_citations: hasCitations,\n    brand_domain_cited: brandDomainCited,\n    brand_cited: brandDomainCited,\n    competitor_cited: competitorDomainCited,\n\n    // Detailed diagnostics breakdown\n    diagnostics: {\n      primary_quadrant: geoQuadrant,\n      is_citation_hijack: geoQuadrant === '1_CITATION_HIJACK',\n      is_parametric_blindspot: geoQuadrant === '2_PARAMETRIC_BLINDSPOT',\n      is_brand_halo_trap: geoQuadrant === '3_BRAND_HALO_TRAP',\n      is_buried_winner: geoQuadrant === '4_BURIED_WINNER'\n    },\n\n    // Collections\n    competitors: evaluatedCompetitors,\n    citations: normCitations\n  };\n}\n\n// Universal module export pattern\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const d = item.json;\n  const text = d.raw_response_text || d.raw_response || d.response_text || d.text || '';\n  const isFailed = d.status === 'failed' || d.is_error === true;\n  const metrics = isFailed\n    ? {\n        total_chars: text.length,\n        character_count: text.length,\n        total_words: countWords(text),\n        word_count: countWords(text),\n        brand_name: d.brand_name || '',\n        brand_mentioned: false,\n        brand_recommended: false,\n        char_earliness: null,\n        brand_earliness_char: null,\n        word_earliness: null,\n        brand_earliness_word: null,\n        relative_position_pct: null,\n        brand_relative_pos: null,\n        brand_match_type: 'none',\n        mece_category: '4_GENERIC',\n        geo_quadrant: 'NONE',\n        has_citations: false,\n        brand_domain_cited: false,\n        brand_cited: false,\n        competitor_cited: false,\n        diagnostics: {\n          primary_quadrant: 'NONE',\n          is_citation_hijack: false,\n          is_parametric_blindspot: false,\n          is_brand_halo_trap: false,\n          is_buried_winner: false\n        },\n        competitors: [],\n        citations: []\n      }\n    : calculateMetrics(text, d.brand_name || '', d.brand_domains || [], d.competitors || [], d.citations || []);\n\n  const totalChars = metrics.character_count;\n  const totalWords = metrics.word_count;\n  const brandMentioned = (!isFailed && metrics.brand_mentioned) ? 1 : 0;\n  const charEarliness = metrics.brand_earliness_char;\n  const wordEarliness = metrics.brand_earliness_word;\n  const relPosPct = metrics.brand_relative_pos;\n  const brandDomainCited = (!isFailed && metrics.brand_domain_cited) ? 1 : 0;\n  const competitorCited = (!isFailed && metrics.competitor_cited) ? 1 : 0;\n  const meceCategory = metrics.mece_category;\n  const geoQuadrant = metrics.geo_quadrant;\n  const brandRecommended = !isFailed && meceCategory === '1_DIRECT_WIN';\n  const resolvedProvider = d.provider || d.selected_provider || 'openai';\n  const resolvedModel = d.model || 'gpt-6-luna';\n  const euHosted = d.eu_hosted !== undefined\n    ? Boolean(d.eu_hosted)\n    : (resolvedProvider === 'mistral' || String(resolvedModel).includes('zai-glm'));\n\n  results.push({\n    json: {\n      ...d,\n      ...metrics,\n      config_id: d.config_id || 101,\n      user_id: d.user_id || 5,\n      prompt: d.prompt || '',\n      prompt_text: d.prompt || '',\n      provider: resolvedProvider,\n      model: resolvedModel,\n      model_name: resolvedModel,\n      eu_hosted: euHosted,\n      is_eu_hosted: euHosted,\n      status: isFailed ? 'failed' : 'completed',\n      error_message: isFailed ? (d.error_message || text || 'LLM execution failed') : null,\n      cost_credits: isFailed ? 0 : (d.cost_credits !== undefined ? d.cost_credits : 1),\n      brand_name: d.brand_name || metrics.brand_name || '',\n      brand_mentioned: brandMentioned,\n      brand_recommended: brandRecommended,\n      brand_prominence_rank: brandRecommended ? 1 : (brandMentioned ? 2 : null),\n      char_earliness: charEarliness,\n      brand_earliness_char: charEarliness,\n      word_earliness: wordEarliness,\n      brand_earliness_word: wordEarliness,\n      relative_position_pct: relPosPct,\n      brand_relative_pos: relPosPct,\n      total_chars: totalChars,\n      character_count: totalChars,\n      total_words: totalWords,\n      word_count: totalWords,\n      mece_category: meceCategory,\n      geo_quadrant: geoQuadrant,\n      has_citations: !isFailed && (metrics.citations || []).length > 0 ? 1 : 0,\n      brand_domain_cited: brandDomainCited,\n      brand_cited: brandDomainCited,\n      competitor_cited: competitorCited,\n      raw_response_text: text,\n      raw_response: text,\n      run_duration_ms: d.run_duration_ms || 1150,\n      competitors: (metrics.competitors || []).map(c => ({\n        competitor_name: c.competitor_name || c.name || '',\n        competitor_domain: c.competitor_domain || c.domain || null,\n        mentioned: c.mentioned ? 1 : 0,\n        is_mentioned: c.mentioned ? 1 : 0,\n        is_cited: c.is_cited ? 1 : 0,\n        char_earliness: c.char_earliness !== undefined ? c.char_earliness : null,\n        earliness_char: c.char_earliness !== undefined ? c.char_earliness : null,\n        word_earliness: c.word_earliness !== undefined ? c.word_earliness : null,\n        earliness_word: c.word_earliness !== undefined ? c.word_earliness : null,\n        relative_position_pct: c.relative_position_pct !== undefined ? c.relative_position_pct : null,\n        relative_pos: c.relative_position_pct !== undefined ? c.relative_position_pct : null\n      })),\n      citations: metrics.citations || []\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "id": "7c9d8e0f-5a1b-2c3d-6a9f-8b0c1d2e3f4a",
+      "name": "Metric & MECE Calculator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATLYTICS_API_BASE_URL || 'http://localhost:8000' }}/api/ingest.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Chatlytics-Ingest-Key",
+              "value": "={{ $env.CHATLYTICS_INGEST_KEY || 'chatlytics_dev_secret_key_2026' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  run_id: $json.run_id,\n  config_id: $json.config_id || 101,\n  user_id: $json.user_id || 5,\n  prompt: $json.prompt,\n  prompt_text: $json.prompt_text || $json.prompt,\n  provider: $json.provider,\n  model: $json.model,\n  model_name: $json.model_name || $json.model,\n  eu_hosted: Boolean($json.eu_hosted),\n  search_enabled: Boolean($json.search_enabled),\n  status: $json.status || 'completed',\n  error_message: $json.error_message || null,\n  cost_credits: $json.cost_credits !== undefined ? $json.cost_credits : ($json.status === 'failed' ? 0 : 1),\n  brand_name: $json.brand_name,\n  brand_mentioned: $json.brand_mentioned,\n  brand_recommended: $json.brand_recommended,\n  brand_prominence_rank: $json.brand_prominence_rank,\n  char_earliness: $json.char_earliness,\n  word_earliness: $json.word_earliness,\n  relative_position_pct: $json.relative_position_pct,\n  total_chars: $json.total_chars,\n  total_words: $json.total_words,\n  mece_category: $json.mece_category,\n  geo_quadrant: $json.geo_quadrant,\n  has_citations: $json.has_citations,\n  brand_cited: $json.brand_cited,\n  competitor_cited: $json.competitor_cited,\n  raw_response_text: $json.raw_response_text || $json.raw_response,\n  raw_response: $json.raw_response || $json.raw_response_text,\n  run_duration_ms: $json.run_duration_ms,\n  competitors: $json.competitors || [],\n  citations: $json.citations || []\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "6b8c7d9e-4f0a-1b2c-5f8e-7a9b0c1d2e3f",
+      "name": "Dispatch Ingest API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2736,
+        128
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst output = [];\n\nfor (const item of items) {\n  const d = item.json;\n  const isFailed = d.status === 'failed' || d.is_error === true;\n  const euTag = d.eu_hosted ? ' [EU-Hosted · api.eu.mistral.ai]' : '';\n\n  let meceBadge = '⚪';\n  if (isFailed) meceBadge = '❌ (Failed Run — Excluded from KPIs)';\n  else if (d.mece_category === '1_DIRECT_WIN') meceBadge = '🏆 (Direct Win)';\n  else if (d.mece_category === '2_BRAND_HALO') meceBadge = '🟣 (Brand Halo)';\n  else if (d.mece_category === '3_COMPETITOR_TAKEOVER') meceBadge = '🔴 (Competitor Takeover)';\n  else if (d.mece_category === '4_GENERIC') meceBadge = '⚪ (Generic / Neutral)';\n\n  let geoBadge = isFailed ? 'Execution failed' : 'Clean Visibility';\n  if (!isFailed) {\n    if (d.geo_quadrant === '1_CITATION_HIJACK') geoBadge = '⚠️ 1_CITATION_HIJACK (Brand in text, competitor cited)';\n    else if (d.geo_quadrant === '2_PARAMETRIC_BLINDSPOT') geoBadge = '⚠️ 2_PARAMETRIC_BLINDSPOT (Domain cited, brand omitted)';\n    else if (d.geo_quadrant === '3_BRAND_HALO_TRAP') geoBadge = '⚠️ 3_BRAND_HALO_TRAP (Trapped behind competitor)';\n    else if (d.geo_quadrant === '4_BURIED_WINNER') geoBadge = '⚠️ 4_BURIED_WINNER (Won, but buried >50% deep)';\n  }\n\n  const brandDomains = Array.isArray(d.brand_domains) ? d.brand_domains.join(', ') : (d.brand_domains || 'N/A');\n  const earlinessStr = d.brand_mentioned === 1\n    ? `Wort #${d.word_earliness || d.brand_earliness_word} (${d.relative_position_pct || d.brand_relative_pos}% im Text, Zeichen #${d.char_earliness || d.brand_earliness_char})`\n    : 'Nicht im Antworttext genannt';\n\n  const citationStr = d.brand_domain_cited === 1 || d.brand_cited === 1\n    ? '✅ Offizielle Domain zitiert'\n    : (d.has_citations === 1 ? '❌ Nur Fremddomains zitiert' : 'Keine Quellenlinks');\n\n  const compMentions = (d.competitors || []).filter(c => c.mentioned === 1 || c.is_mentioned === 1);\n  const compStr = compMentions.length > 0\n    ? compMentions.map(c => `${c.competitor_name || c.name} (Wort #${c.word_earliness || c.earliness_word})`).join(', ')\n    : 'Keine getrackten Wettbewerber gefunden';\n\n  const rows = [\n    isFailed ? '### ⚠️ Chatlytics AI Visibility Audit (Run Failed)' : '### 📊 Chatlytics AI Visibility Audit',\n    '| Metric | Value |',\n    '|---|---|',\n    `| **Query** | *${d.prompt || ''}* |`,\n    `| **Brand** | **${d.brand_name || ''}** |`,\n    `| **Getrackte Marke** | **${d.brand_name || ''}** (${brandDomains}) |`,\n    `| **Provider** | ${d.provider || ''}${euTag} |`,\n    `| **Modell / Provider** | ${d.provider || ''} (${d.model || ''})${euTag} |`,\n    `| **Execution Status** | ${d.status || 'completed'} |`,\n    `| **MECE Status** | ${d.mece_category} ${meceBadge} |`,\n    `| **MECE-Status** | ${d.mece_category} ${meceBadge} |`,\n    `| **GEO Diagnostic** | ${d.geo_quadrant} |`,\n    `| **GEO-Diagnostik** | ${d.geo_quadrant} — ${geoBadge} |`,\n    `| **Brand Earliness** | ${earlinessStr} |`,\n    `| **Grounding Citation** | ${citationStr} |`,\n    `| **Wettbewerber** | ${compStr} |`\n  ];\n\n  if (isFailed && d.error_message) {\n    rows.push(`| **Error** | ${d.error_message} |`);\n  }\n\n  rows.push('');\n  rows.push(`*Antwortlänge: ${d.total_words || 0} Wörter (${d.total_chars || 0} Zeichen) • Ausführungszeit: ${d.run_duration_ms || 0}ms*`);\n\n  const markdown = rows.join('\\n');\n\n  output.push({\n    json: {\n      ...d,\n      output: markdown,\n      text: markdown,\n      response: markdown,\n      message: markdown\n    }\n  });\n}\n\nreturn output;"
+      },
+      "id": "5a7b6c8d-3e9f-0a1b-4e7d-6f8a9b0c1d2e",
+      "name": "Format Chat Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2736,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4f6a5b7c-2d8e-9f0a-3d6c-5e7f8a9b0c1d",
+      "name": "Respond Webhook Sync",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2736,
+        464
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Schedule Poller Trigger": {
+      "main": [
+        [
+          {
+            "node": "Poll Backend Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Backend Queue": {
+      "main": [
+        [
+          {
+            "node": "Universal Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interactive Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Universal Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Universal API Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Async Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Async Mode": {
+      "main": [
+        [
+          {
+            "node": "Fast Async Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Universal Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fast Async Response": {
+      "main": [
+        [
+          {
+            "node": "Universal Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Universal Normalizer": {
+      "main": [
+        [
+          {
+            "node": "Provider Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider Router": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Search Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini Search Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Mistral EU (Mistral & GLM)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Anthropic Claude (Optional Fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Search Router": {
+      "main": [
+        [
+          {
+            "node": "Call OpenAI (Search Enabled)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call OpenAI (No Search)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenAI (Search Enabled)": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenAI (No Search)": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Search Router": {
+      "main": [
+        [
+          {
+            "node": "Call Google Gemini (Search Enabled)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Google Gemini (No Search)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Google Gemini (Search Enabled)": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Google Gemini (No Search)": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Mistral EU (Mistral & GLM)": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Anthropic Claude (Optional Fallback)": {
+      "main": [
+        [
+          {
+            "node": "Secondary Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secondary Extractor": {
+      "main": [
+        [
+          {
+            "node": "Metric & MECE Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Metric & MECE Calculator": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Ingest API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Chat Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond Webhook Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "a91f4c7e-6d20-4b88-9c31-7e5f2014c802",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "713aa8de7d2a6fee4a78c6f977fc9d28db44159683cd387c94af76a48b86d377"
+  },
+  "id": "chatlytics_universal_worker",
+  "tags": [
+    {
+      "name": "chatlytics"
+    },
+    {
+      "name": "ai-visibility"
+    },
+    {
+      "name": "som"
+    }
+  ],
+  "pinData": {}
+}

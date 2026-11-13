@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -72,3 +72,11 @@ Thumbs.db:encryptable
 ehthumbs.db
 ehthumbs_vista.db
 .DS_Store
+
+# Chatlytics project rules (ensure n8n/lib is tracked; exclude local secrets & agent scratch logs)
+!n8n/lib/
+!n8n/lib/**
+env.php
+api/*.log
+*.log
+.agents/
