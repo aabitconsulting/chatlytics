@@ -105,3 +105,56 @@ test('Obsidian Dossier Landing Architecture & Anti-Slop Ban-List Compliance', ()
     }
   }
 });
+
+test('Frontier LLM Showcase, Admin ESM Scripts, and Local Favicon Integrity', () => {
+  const rootDir = path.resolve(__dirname, '../..');
+  const indexHtml = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf8');
+  const dashboardHtml = fs.readFileSync(path.join(rootDir, 'dashboard.html'), 'utf8');
+  const adminHtml = fs.readFileSync(path.join(rootDir, 'admin.html'), 'utf8');
+  const dossierJs = fs.readFileSync(path.join(rootDir, 'assets/js/dossier-stage.js'), 'utf8');
+  const i18nJs = fs.readFileSync(path.join(rootDir, 'assets/js/i18n.js'), 'utf8');
+
+  const requiredFrontierModels = [
+    'GPT-6.1 Sol',
+    'GPT-6.1 Terra',
+    'GPT-6 Astra',
+    'GPT-6 Luna',
+    'Claude Opus 5.5',
+    'Claude Sonnet 5.5',
+    'Claude Haiku 5.5',
+    'Gemini Hydrogen',
+    'Gemini Carbon',
+    'Gemini Argon',
+    'Gemini 3.8 Flash',
+  ];
+
+  for (const modelName of requiredFrontierModels) {
+    assert.ok(dossierJs.includes(modelName), `dossier-stage.js must showcase frontier model ${modelName}`);
+    assert.ok(indexHtml.includes(modelName), `index.html must surface frontier model ${modelName}`);
+    assert.ok(i18nJs.includes(modelName), `i18n.js must surface frontier model ${modelName}`);
+  }
+
+  for (const [label, content] of [
+    ['index.html', indexHtml],
+    ['dossier-stage.js', dossierJs],
+    ['i18n.js', i18nJs],
+  ]) {
+    for (const legacyRx of [/GPT-4o/i, /Claude 3\.5/i, /Gemini 1\.5/i]) {
+      assert.equal(legacyRx.test(content), false, `Legacy model pattern ${legacyRx} must not remain in ${label}`);
+    }
+  }
+
+  for (const moduleFile of ['assets/js/i18n.js', 'assets/js/api-client.js', 'assets/js/auth.js']) {
+    const moduleTagRx = new RegExp(`<script\\s+[^>]*type=["']module["'][^>]*src=["']${moduleFile.replace(/\./g, '\\.')}["']`, 'i');
+    assert.match(adminHtml, moduleTagRx, `admin.html must load ${moduleFile} as type="module"`);
+  }
+
+  assert.ok(fs.existsSync(path.join(rootDir, 'assets/favicon.svg')), 'assets/favicon.svg must exist');
+  for (const [name, html] of [
+    ['index.html', indexHtml],
+    ['dashboard.html', dashboardHtml],
+    ['admin.html', adminHtml],
+  ]) {
+    assert.ok(html.includes('assets/favicon.svg'), `${name} must reference local assets/favicon.svg`);
+  }
+});

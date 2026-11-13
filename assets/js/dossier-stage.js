@@ -16,7 +16,7 @@ const DUELS = {
       timeline: { brandPos: 35, compPos: 148, leadLabel: '+113 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6.1 Sol',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Platz 1 · Erste Wahl',
@@ -35,7 +35,7 @@ const DUELS = {
           compChar: 148
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Sonnet 5.5',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Platz 2 · Im Windschatten',
@@ -55,7 +55,7 @@ const DUELS = {
           compChar: 44
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini 3.8 Flash',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Verdrängt · Stummes Quell-Zitat',
@@ -84,7 +84,7 @@ const DUELS = {
       timeline: { brandPos: 32, compPos: 139, leadLabel: '+107 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6.1 Sol',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Rank 1 · First Choice',
@@ -103,7 +103,7 @@ const DUELS = {
           compChar: 139
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Sonnet 5.5',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Rank 2 · Runner-Up',
@@ -123,7 +123,7 @@ const DUELS = {
           compChar: 36
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini 3.8 Flash',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Displaced · Silent Citation',
@@ -156,7 +156,7 @@ const DUELS = {
       timeline: { brandPos: 20, compPos: 119, leadLabel: '+99 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6 Astra',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Platz 1 · Erste Wahl',
@@ -175,7 +175,7 @@ const DUELS = {
           compChar: 119
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Opus 5.5',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Platz 2 · Im Windschatten',
@@ -194,7 +194,7 @@ const DUELS = {
           compChar: 67
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini Hydrogen',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Verdrängt · Gekaperte Vorlage',
@@ -223,7 +223,7 @@ const DUELS = {
       timeline: { brandPos: 26, compPos: 124, leadLabel: '+98 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6 Astra',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Rank 1 · First Choice',
@@ -242,7 +242,7 @@ const DUELS = {
           compChar: 124
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Opus 5.5',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Rank 2 · Runner-Up',
@@ -261,7 +261,7 @@ const DUELS = {
           compChar: 61
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini Hydrogen',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Displaced · Hijacked Brief',
@@ -294,7 +294,7 @@ const DUELS = {
       timeline: { brandPos: 34, compPos: 141, leadLabel: '+107 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6.1 Terra',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Platz 1 · Erste Wahl',
@@ -313,7 +313,7 @@ const DUELS = {
           compChar: 141
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Sonnet 5.5',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Platz 2 · Im Windschatten',
@@ -332,7 +332,7 @@ const DUELS = {
           compChar: 32
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini Carbon',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Verdrängt · Stummes Quell-Zitat',
@@ -361,7 +361,7 @@ const DUELS = {
       timeline: { brandPos: 31, compPos: 124, leadLabel: '+93 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6.1 Terra',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Rank 1 · First Choice',
@@ -380,7 +380,7 @@ const DUELS = {
           compChar: 124
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Sonnet 5.5',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Rank 2 · Runner-Up',
@@ -399,7 +399,7 @@ const DUELS = {
           compChar: 25
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini Carbon',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Displaced · Silent Citation',
@@ -432,7 +432,7 @@ const DUELS = {
       timeline: { brandPos: 39, compPos: 133, leadLabel: '+94 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6 Luna',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Platz 1 · Erste Wahl',
@@ -451,7 +451,7 @@ const DUELS = {
           compChar: 133
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Haiku 5.5',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Platz 2 · Im Windschatten',
@@ -470,7 +470,7 @@ const DUELS = {
           compChar: 47
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini Argon',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Verdrängt · Gekaperte Vorlage',
@@ -499,7 +499,7 @@ const DUELS = {
       timeline: { brandPos: 34, compPos: 128, leadLabel: '+94 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6 Luna',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Rank 1 · First Choice',
@@ -518,7 +518,7 @@ const DUELS = {
           compChar: 74
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Haiku 5.5',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Rank 2 · Runner-Up',
@@ -537,7 +537,7 @@ const DUELS = {
           compChar: 30
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini Argon',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Displaced · Hijacked Brief',
@@ -570,7 +570,7 @@ const DUELS = {
       timeline: { brandPos: 39, compPos: 135, leadLabel: '+96 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6.1 Sol',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Platz 1 · Erste Wahl',
@@ -589,7 +589,7 @@ const DUELS = {
           compChar: 135
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Opus 5.5',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Platz 2 · Im Windschatten',
@@ -609,7 +609,7 @@ const DUELS = {
           compChar: 50
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini Hydrogen',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Verdrängt · Stummes Quell-Zitat',
@@ -638,7 +638,7 @@ const DUELS = {
       timeline: { brandPos: 34, compPos: 128, leadLabel: '+94 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-4o',
+          name: 'OpenAI GPT-6.1 Sol',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
           statusLabel: 'Rank 1 · First Choice',
@@ -657,7 +657,7 @@ const DUELS = {
           compChar: 128
         },
         claude: {
-          name: 'Anthropic Claude 3.5',
+          name: 'Anthropic Claude Opus 5.5',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
           statusLabel: 'Rank 2 · Runner-Up',
@@ -677,7 +677,7 @@ const DUELS = {
           compChar: 54
         },
         gemini: {
-          name: 'Google Gemini 1.5',
+          name: 'Google Gemini Hydrogen',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
           statusLabel: 'Displaced · Silent Citation',
@@ -1071,7 +1071,7 @@ export class DossierStageController {
       if (diagEl) diagEl.textContent = m.diagLabel;
     }
 
-    // Synchronized 0..200 character timeline based on GPT-4o
+    // Synchronized 0..200 character timeline based on OpenAI flagship response
     const tl = duel.timeline;
     const oai = duel.models.openai;
     const oaiRevealedChars = Math.round(oai.text.length * this.progress);
