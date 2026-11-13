@@ -37,6 +37,7 @@ $cronHeader = $_SERVER['HTTP_X_CHATLYTICS_CRON_KEY']
 $appConfig = getConfig();
 $expectedSecret = (string)($appConfig['n8n']['shared_secret'] ?? '');
 $fallbackSecret = 'chatlytics_queue_auth_secret';
+$apiBaseUrl = rtrim((string)($appConfig['app']['base_url'] ?? 'https://chatlytics.de'), '/');
 
 $isAuthorized = false;
 
@@ -111,15 +112,11 @@ try {
         $claimedRunIds[] = (int)$row['id'];
         $domains = json_decode($row['brand_domains'] ?: '[]', true) ?? [];
         $competitors = json_decode($row['competitors'] ?: '[]', true) ?? [];
-
-        // Format competitors to clean names array
-        $compList = [];
-        foreach ($competitors as $c) {
-            if (is_string($c)) $compList[] = $c;
-            elseif (is_array($c) && !empty($c['name'])) $compList[] = $c['name'];
-        }
+        $compList = normalizeQueueCompetitors(is_array($competitors) ? $competitors : []);
 
         $claimedJobs[] = [
+            'run_id'         => 'run_' . time() . '_' . substr(bin2hex(random_bytes(4)), 0, 7),
+            'api_base_url'   => $apiBaseUrl,
             'config_id'      => (int)$row['config_id'],
             'user_id'        => (int)$row['user_id'],
             'brand_name'     => (string)$row['brand_name'],
@@ -172,13 +169,7 @@ try {
 
             // Normalize target LLMs to canonical provider/model tokens while preserving distinct models per provider
             $targetLLMs = normalizeTargetLlmsList(is_array($rawLLMs) ? $rawLLMs : []);
-
-            // Clean competitor names array
-            $compList = [];
-            foreach ($competitors as $c) {
-                if (is_string($c)) $compList[] = $c;
-                elseif (is_array($c) && !empty($c['name'])) $compList[] = $c['name'];
-            }
+            $compList = normalizeQueueCompetitors(is_array($competitors) ? $competitors : []);
 
             // Prevent mid-config prompt truncation when batch limit is already partially consumed
             if (count($claimedJobs) > 0 && (count($claimedJobs) + count($prompts)) > $limit) {
@@ -199,6 +190,7 @@ try {
 
             // Dispatch all prompts for this config while credits remain
             $costPerPrompt = count($targetLLMs);
+            $batchRunId = 'run_' . time() . '_' . substr(bin2hex(random_bytes(4)), 0, 7);
 
             foreach ($prompts as $promptText) {
 
@@ -216,6 +208,8 @@ try {
 
                 if ($credStmt->rowCount() > 0) {
                     $claimedJobs[] = [
+                        'run_id'         => $batchRunId,
+                        'api_base_url'   => $apiBaseUrl,
                         'config_id'      => (int)$cfg['id'],
                         'user_id'        => (int)$cfg['user_id'],
                         'brand_name'     => (string)$cfg['brand_name'],
@@ -244,11 +238,64 @@ try {
 // 5. Output Uniform Queue Poller Response Envelope
 jsonResponse([
     'status'           => 'success',
+    'api_base_url'     => $apiBaseUrl,
     'jobs_count'       => count($claimedJobs),
     'queue_depth'      => $queueDepth,
     'batch_size_limit' => $limit,
     'jobs'             => $claimedJobs,
 ], 200);
+
+/**
+ * Normalizes stored competitor entries while preserving registered competitor domains.
+ *
+ * @param array $competitors Raw competitors array from tracking_configs
+ * @return array Normalized competitor objects (or trimmed strings if stored as raw strings)
+ */
+function normalizeQueueCompetitors(array $competitors): array {
+    $normalized = [];
+    foreach ($competitors as $c) {
+        if (is_string($c)) {
+            $clean = trim($c);
+            if ($clean !== '') {
+                $normalized[] = $clean;
+            }
+            continue;
+        }
+        if (!is_array($c)) {
+            continue;
+        }
+
+        $name = trim((string)($c['name'] ?? $c['competitor_name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+
+        $domains = [];
+        if (isset($c['domains']) && is_array($c['domains'])) {
+            foreach ($c['domains'] as $d) {
+                $cleanDom = strtolower(trim((string)$d));
+                if ($cleanDom !== '' && !in_array($cleanDom, $domains, true)) {
+                    $domains[] = $cleanDom;
+                }
+            }
+        }
+        foreach (['domain', 'competitor_domain'] as $key) {
+            if (!empty($c[$key]) && is_string($c[$key])) {
+                $cleanDom = strtolower(trim($c[$key]));
+                if ($cleanDom !== '' && !in_array($cleanDom, $domains, true)) {
+                    $domains[] = $cleanDom;
+                }
+            }
+        }
+
+        $normalized[] = [
+            'name'    => $name,
+            'domain'  => $domains[0] ?? '',
+            'domains' => $domains,
+        ];
+    }
+    return $normalized;
+}
 
 /**
  * Calculates next run timestamp based on interval and base date.

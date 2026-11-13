@@ -156,11 +156,13 @@ if ($deductStmt->rowCount() === 0) {
 // 6. Build Webhook Payload & Execute cURL to n8n
 $runId = 'run_' . time() . '_' . substr(bin2hex(random_bytes(4)), 0, 7);
 $appConfig = getConfig();
+$apiBaseUrl = rtrim((string)($appConfig['app']['base_url'] ?? 'https://chatlytics.de'), '/');
 $webhookUrl = (string)($appConfig['n8n']['webhook_url'] ?? 'https://n8n.chatlytics.de/webhook/chatlytics-run');
 $sharedSecret = (string)($appConfig['n8n']['shared_secret'] ?? '');
 
 $webhookPayload = [
     'run_id'         => $runId,
+    'api_base_url'   => $apiBaseUrl,
     'config_id'      => (int)$config['id'],
     'user_id'        => $userId,
     'brand_name'     => $brandName,

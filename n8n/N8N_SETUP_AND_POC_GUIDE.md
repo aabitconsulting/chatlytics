@@ -21,8 +21,8 @@ The Chatlytics Universal Worker (`chatlytics_universal_worker.json`) is an enter
 | **Google Gemini API Key** | Google AI Studio key | Native `@n8n/n8n-nodes-langchain.googleGemini` (`models/gemini-3.5-flash` + optional Google Search grounding) |
 | **Mistral AI API Key (EU-Hosted)** | Active Mistral La Plateforme account | `mistralCloudApi` via `https://api.eu.mistral.ai/v1/chat/completions` (`mistral-medium-latest`, `mistral-large-latest`, `zai-glm-5-3`, `zai-glm-5-3-flash`) |
 | **Anthropic API Key (Optional)** | Active account | Optional disabled fallback node (`claude-3-5-sonnet-20241022`) |
-| **Chatlytics Ingest Secret** | 32+ character string | Shared HMAC secret for `X-Chatlytics-Ingest-Key` |
-| **Chatlytics Queue Secret** | 32+ character string | Shared HMAC secret for `X-Chatlytics-Cron-Key` |
+| **Chatlytics Backend Secret** | 32+ character string | Single `httpHeaderAuth` credential sending `X-N8N-Secret` (matches `n8n.shared_secret` in `env.php`) |
+| **Local vs Prod Base URL** | Concrete URL + `api_base_url` | `Poll Backend Queue` polls `https://chatlytics.de/api/n8n_queue.php?action=poll`; `Dispatch Ingest API` routes dynamically via `$json.api_base_url` |
 
 ---
 
@@ -76,7 +76,7 @@ docker exec -u node n8n_container n8n update:workflow --id=chatlytics_universal_
 
 ## 3. Credential Setup in n8n
 
-To prevent sensitive secret exposure, the workflow does not hardcode any API credentials in the JSON canvas definition. All external calls resolve via n8n Credential Stores or environment variable fallbacks.
+To prevent sensitive secret exposure and maintain full compatibility with hardened n8n `2.44.5+` defaults (`N8N_BLOCK_ENV_ACCESS_IN_NODE=true`), the workflow uses zero `$env` expressions in nodes. All external API calls authenticate via native n8n Credential Stores (`openAiApi`, `googlePalmApi`, `mistralCloudApi`, `anthropicApi`, and `httpHeaderAuth`).
 
 ### 3.1 OpenAI API Credential
 - **n8n Credential Type**: `OpenAI API` (`openAiApi`)
@@ -100,31 +100,22 @@ To prevent sensitive secret exposure, the workflow does not hardcode any API cre
 - **n8n Credential Type**: `Anthropic API` (`anthropicApi`)
 - **Status**: `Call Anthropic Claude (Optional Fallback)` is **disabled by default**. Enable the node and assign your Anthropic API key only if you want to include Claude models outside the standard dashboard UI catalog.
 
-### 3.5 Environment Variable Configuration (`.env`)
+### 3.5 Backend Header Auth Credential (`httpHeaderAuth`) & Runtime Configuration
 
-Add the following environment variables to your n8n `.env` file or Docker Compose environment block to configure backend endpoints and fallback authentication:
+Because n8n `2.44.5+` blocks node `$env` access by default (`N8N_BLOCK_ENV_ACCESS_IN_NODE=true`), this workflow stores secrets in native **n8n Credentials** instead of environment variables:
+
+1. **Create Header Auth Credential**: Left sidebar -> **Credentials** -> **Add Credential** -> **Header Auth** (`httpHeaderAuth`), name it `Chatlytics Backend Secret`:
+   - **Name**: `X-N8N-Secret`
+   - **Value**: exact `n8n.shared_secret` value configured in production `env.php`
+2. **Assign to Nodes**: Attach `Chatlytics Backend Secret` to both `Poll Backend Queue` and `Dispatch Ingest API`.
+3. **API Base URL Routing**: `Poll Backend Queue` targets `https://chatlytics.de/api/n8n_queue.php?action=poll` (change to `http://localhost:8000/api/n8n_queue.php?action=poll` only for local testing). `Dispatch Ingest API` automatically uses `$json.api_base_url` emitted by PHP payloads (defaulting to `https://chatlytics.de`).
+
+> **Note (Optional Server Runtime Variables):** Your n8n container `.env` only needs standard n8n host settings below ? `CHATLYTICS_*` env vars are no longer required inside workflow nodes:
 
 ```env
-# ==============================================================================
-# Chatlytics Plesk PHP Backend Interconnect
-# ==============================================================================
-CHATLYTICS_API_BASE_URL=http://localhost:8000
-CHATLYTICS_INGEST_KEY=chatlytics_dev_secret_key_2026
-CHATLYTICS_QUEUE_SECRET=chatlytics_queue_auth_secret
-
-# ==============================================================================
-# LLM Provider Fallback Keys (Optional if UI credentials configured)
-# ==============================================================================
-OPENAI_API_KEY=sk-proj-your-openai-key-here
-ANTHROPIC_API_KEY=sk-ant-api03-your-anthropic-key-here
-GEMINI_API_KEY=AIzaSyYourGeminiKeyHere
-
-# ==============================================================================
-# n8n Runtime Settings
-# ==============================================================================
 N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
 EXECUTIONS_MODE=regular
-WEBHOOK_URL=http://localhost:5678/
+WEBHOOK_URL=https://n8n.chatlytics.de/
 ```
 
 ---
@@ -406,9 +397,9 @@ Before deploying the worker to production or executing scheduled batches, verify
 
 | # | Check Item | Action | Expected Output | Status |
 |:---:|---|---|---|:---:|
-| **1** | **Canvas Import** | Open n8n UI -> `Ctrl + V` | 16 nodes appear on canvas, zero floating nodes | [ ] |
+| **1** | **Canvas Import** | Open n8n UI -> `Ctrl + V` | 21 nodes appear on canvas, zero floating nodes | [ ] |
 | **2** | **Workflow Settings** | Open gear icon | Execution Order is strictly set to `v1` | [ ] |
-| **3** | **API Credentials** | Configure OpenAI, Anthropic, Gemini | Green checkmark indicators on all 3 credentials | [ ] |
+| **3** | **API & Backend Credentials** | Configure OpenAI, Gemini, Mistral & `Chatlytics Backend Secret` (`httpHeaderAuth`) | Green checkmark indicators on all active credentials | [ ] |
 | **4** | **Chat Trigger Test** | Send Prompt A in Chat modal | Markdown summary table with MECE status and badges | [ ] |
 | **5** | **Webhook Sync Test** | Execute Mode 1 cURL request | HTTP 200 with full evaluation metrics payload | [ ] |
 | **6** | **Webhook Async Test** | Execute Mode 2 cURL request | HTTP 200 `{"status": "queued"}` in `<200ms` | [ ] |
