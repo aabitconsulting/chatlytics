@@ -11,6 +11,7 @@
 import { apiClient } from './api-client.js';
 import { auth } from './auth.js';
 import { i18n } from './i18n.js';
+import { showToast, setButtonLoading } from './notifications.js';
 
 export const SCHEDULE_INTERVALS = {
   every_2h: { runsPerDay: 12, highFreq: true, i18nKey: 'interval.every_2h', fallback: '12x täglich (alle 2 Std.)' },
@@ -72,6 +73,38 @@ export const LLM_CATALOG = [
 ];
 
 const DEFAULT_FALLBACK_LLMS = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'];
+
+function parseConfigArray(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string' && val.trim() !== '') {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_) {
+      return val.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+export function getConfigRunBreakdown(config) {
+  if (!config) {
+    return {
+      llmCount: DEFAULT_FALLBACK_LLMS.length,
+      promptCount: 1,
+      expectedRuns: DEFAULT_FALLBACK_LLMS.length
+    };
+  }
+  const rawLlms = parseConfigArray(config.target_llms ?? config.llms_json ?? config.llms);
+  const rawPrompts = parseConfigArray(config.keywords_prompts ?? config.prompts ?? (config.prompt ? [config.prompt] : []));
+  const llmCount = rawLlms.length > 0 ? rawLlms.length : DEFAULT_FALLBACK_LLMS.length;
+  const promptCount = rawPrompts.length > 0 ? rawPrompts.length : 1;
+  return {
+    llmCount,
+    promptCount,
+    expectedRuns: Math.max(1, llmCount * promptCount)
+  };
+}
 const DEFAULT_SELECTED_LLMS = LLM_CATALOG.filter(m => m.defaultChecked).map(m => m.id);
 
 export function mapSavedTokenToCatalogId(token) {
@@ -230,7 +263,13 @@ export class ConfigManager {
   async toggleConfigStatus(config) {
     if (!config || !config.id) return null;
     const nextStatus = config.status === 'paused' ? 'active' : 'paused';
-    const res = await apiClient.updateConfig(config.id, { status: nextStatus });
+    let res;
+    try {
+      res = await apiClient.updateConfig(config.id, { status: nextStatus });
+    } catch (err) {
+      showToast(err?.message || (i18n ? i18n.t('toast.config_toggle_error', 'Status der Konfiguration konnte nicht geändert werden.') : 'Status der Konfiguration konnte nicht geändert werden.'), 'error');
+      throw err;
+    }
     const updated = res?.config || res;
     const idx = this.configs.findIndex(c => String(c.id) === String(config.id));
     if (idx >= 0 && updated && updated.id) {
@@ -484,7 +523,7 @@ export class ConfigManager {
       const searchEnabled = searchToggle ? Boolean(searchToggle.checked) : true;
 
       try {
-        if (submitBtn) submitBtn.disabled = true;
+        setButtonLoading(submitBtn, true, i18n ? i18n.t('config.btn_saving', 'Wird gespeichert…') : 'Wird gespeichert…');
         const saved = await this.saveConfig({
           name,
           brand_name: brandName,
@@ -498,13 +537,19 @@ export class ConfigManager {
         }, configId);
 
         hideModal();
+        showToast(
+          configId
+            ? (i18n ? i18n.t('toast.config_saved', 'Konfiguration gespeichert.') : 'Konfiguration gespeichert.')
+            : (i18n ? i18n.t('toast.config_created', 'Konfiguration erstellt.') : 'Konfiguration erstellt.'),
+          'success'
+        );
         if (typeof onSaveCallback === 'function') {
           onSaveCallback(saved);
         }
       } catch (err) {
         if (errBox) errBox.textContent = err.message;
       } finally {
-        if (submitBtn) submitBtn.disabled = false;
+        setButtonLoading(submitBtn, false);
       }
     });
 
@@ -520,6 +565,7 @@ if (typeof window !== 'undefined') {
   window.ConfigManager = ConfigManager;
   window.sanitizeDomains = sanitizeDomains;
   window.LLM_CATALOG = LLM_CATALOG;
+  window.getConfigRunBreakdown = getConfigRunBreakdown;
 }
 
 // CommonJS compatibility export for test runners
@@ -533,6 +579,7 @@ if (typeof module !== 'undefined' && module.exports) {
     isHighFrequencySchedule,
     canUserUseScheduleInterval,
     calculateEstimatedCredits,
+    getConfigRunBreakdown,
     getScheduleLabel,
     mapSavedTokenToCatalogId,
     sanitizeDomains,

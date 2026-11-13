@@ -161,6 +161,23 @@
       <div id="period-bar-error" class="period-bar-error hidden" role="alert"></div>
     </section>
 
+    <!-- Live Run Progress & Feedback Banner -->
+    <div id="run-status-banner" class="run-status-banner hidden" role="status" aria-live="polite">
+      <div class="run-status-lead">
+        <span id="run-status-indicator" class="run-status-indicator" aria-hidden="true">
+          <span class="run-spinner"></span>
+        </span>
+        <div class="run-status-copy">
+          <div id="run-status-title" class="run-status-title">Audit-Run gestartet</div>
+          <div id="run-status-detail" class="run-status-detail">Anfrage wird an die KI-Modelle übermittelt…</div>
+        </div>
+      </div>
+      <div class="run-status-meta">
+        <span id="run-status-badge" class="run-status-badge font-mono">0 / 0</span>
+        <button type="button" id="run-status-dismiss" class="btn-close run-status-dismiss" aria-label="Statusbanner schließen">&times;</button>
+      </div>
+    </div>
+
     <!-- Top 6-Card KPI Bar (Feature 26.3 & Combination 3.7) -->
     <section class="kpi-section" aria-label="Key Performance Indicators">
       <div class="kpi-grid">
@@ -657,6 +674,29 @@
       </div>
     </div>
   </div>
+
+  <!-- Confirmation Modal for Consequential Actions -->
+  <div id="action-confirm-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <h3 id="confirm-modal-title" class="modal-title" data-i18n="run.confirm_title">Abfrage jetzt starten?</h3>
+        <button type="button" id="confirm-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message" class="text-sm text-muted confirm-modal-message"></p>
+        <div id="confirm-modal-summary" class="confirm-summary-box" hidden></div>
+        <div id="confirm-modal-warning" class="confirm-warning-note" role="alert" hidden></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="confirm-modal-cancel" class="btn btn-secondary" data-i18n="common.cancel">Abbrechen</button>
+        <button type="button" id="confirm-modal-submit" class="btn btn-primary" data-i18n="run.confirm_cta_generic">Bestätigen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
   <footer class="footer">
     <div class="container-fluid footer-inner">

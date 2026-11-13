@@ -26,6 +26,46 @@ $isAuditMode = !empty($currentUser['is_audit_mode']);
 $db = getDb();
 $requestData = getRequestData();
 
+// Early Handler: Live Run Ingestion Status Polling (GET ?action=run_status&run_id=...)
+$action = strtolower(trim((string)($_GET['action'] ?? $requestData['action'] ?? '')));
+if ($action === 'run_status') {
+    if ($isAuditMode) {
+        jsonError("Forbidden: Live run status is disabled in Magic Audit mode.", 403);
+    }
+    $runId = trim((string)($_GET['run_id'] ?? $requestData['run_id'] ?? ''));
+    if ($runId === '' || !preg_match('/^run_[0-9]+_[a-f0-9]+$/', $runId)) {
+        jsonError("Invalid or missing run_id parameter.", 422);
+    }
+
+    $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
+    $jsonFilter = $driver === 'sqlite'
+        ? "json_valid(raw_prompt_payload) AND json_extract(raw_prompt_payload, '$.run_id') = :run_id"
+        : "JSON_VALID(raw_prompt_payload) AND JSON_UNQUOTE(JSON_EXTRACT(raw_prompt_payload, '$.run_id')) = :run_id";
+
+    $sql = "SELECT
+                COUNT(*) AS ingested_count,
+                COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_count,
+                COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed_count
+            FROM llm_runs
+            WHERE {$jsonFilter}";
+    $params = [':run_id' => $runId];
+    if (!$isAdmin) {
+        $sql .= " AND user_id = :usr_id";
+        $params[':usr_id'] = $userId;
+    }
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $row = $stmt->fetch() ?: [];
+
+    jsonResponse([
+        'run_id'          => $runId,
+        'ingested_count'  => (int)($row['ingested_count'] ?? 0),
+        'completed_count' => (int)($row['completed_count'] ?? 0),
+        'failed_count'    => (int)($row['failed_count'] ?? 0),
+    ], 200);
+}
+
 // 2. Tenant Scoping & Config Resolution
 $configId = isset($_GET['config_id']) && is_numeric($_GET['config_id'])
     ? (int)$_GET['config_id']

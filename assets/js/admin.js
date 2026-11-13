@@ -455,7 +455,10 @@ async function handleCreditSubmit(e) {
   const payload = buildCreditPayload(AdminState.selectedUserId, deltaVal, reasonVal);
 
   AdminState.isAdjustingCredit = true;
-  if (submitBtn) submitBtn.disabled = true;
+  const savingLabel = (typeof window !== 'undefined' && window.i18n?.t)
+    ? window.i18n.t('admin.btn_saving', 'Wird gespeichert…')
+    : 'Wird gespeichert…';
+  setAdminButtonLoading(submitBtn, true, savingLabel);
 
   try {
     const token = localStorage.getItem('chatlytics_token');
@@ -483,7 +486,7 @@ async function handleCreditSubmit(e) {
     showToast('Netzwerkfehler beim Anpassen der Credits.', 'error');
   } finally {
     AdminState.isAdjustingCredit = false;
-    if (submitBtn) submitBtn.disabled = false;
+    setAdminButtonLoading(submitBtn, false);
   }
 }
 
@@ -608,7 +611,31 @@ async function triggerDemoSeeder() {
 // 7. Toast Notification Utility (Accessible & Self-Contained)
 // -----------------------------------------------------------------------------
 
+function setAdminButtonLoading(btn, isLoading, loadingText = '') {
+  if (typeof window !== 'undefined' && typeof window.ChatlyticsNotify?.setButtonLoading === 'function') {
+    window.ChatlyticsNotify.setButtonLoading(btn, isLoading, loadingText);
+    return;
+  }
+  if (!btn) return;
+  if (isLoading) {
+    if (btn._origText === undefined) btn._origText = btn.textContent;
+    btn.disabled = true;
+    btn.classList?.add('is-loading');
+    if (loadingText) btn.textContent = loadingText;
+  } else {
+    btn.disabled = false;
+    btn.classList?.remove('is-loading');
+    if (btn._origText !== undefined) {
+      btn.textContent = btn._origText;
+      delete btn._origText;
+    }
+  }
+}
+
 function showToast(message, type = 'info') {
+  if (typeof window !== 'undefined' && typeof window.ChatlyticsNotify?.showToast === 'function') {
+    return window.ChatlyticsNotify.showToast(message, type);
+  }
   const container = document.getElementById('toast-container');
   if (!container) return;
 

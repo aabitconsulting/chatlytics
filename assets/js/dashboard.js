@@ -17,7 +17,12 @@
 
 import { apiClient } from './api-client.js';
 import { auth } from './auth.js';
-import { configs, getScheduleLabel } from './configs.js';
+import { configs, getScheduleLabel, getConfigRunBreakdown } from './configs.js';
+import { showToast, setButtonLoading, formatTemplate } from './notifications.js';
+
+const ACTIVE_RUN_STORAGE_KEY = 'chatlytics_active_run';
+const RUN_COOLDOWN_MS = 30000;
+const RUN_POLL_INTERVAL_MS = 3000;
 
 const TIMELINE_METRICS = {
   som_score: { key: 'som_score', i18nKey: 'timeline.metric_som', fallback: 'Share-of-Model (%)', unit: '%' },
@@ -148,6 +153,16 @@ class DashboardController {
     this.compareEndDate = '';
     this.activeTimelineMetric = 'som_score';
     this.lastReportsData = null;
+    this.cooldownUntil = 0;
+    this.activeRunState = null;
+    this.runTickTimer = null;
+    this.runPollTimer = null;
+    this.isPollingRunStatus = false;
+    this.currentCredits = null;
+    this._activeConfirmHandler = null;
+    this._confirmTriggerEl = null;
+    this._isConfirmSubmitting = false;
+    this._confirmListenersBound = false;
   }
 
   async init() {
@@ -184,6 +199,9 @@ class DashboardController {
 
     // 5. Initial Data Load
     await this.loadDashboard();
+
+    // 6. Restore any in-flight run cooldown & progress banner across reloads
+    await this.restoreActiveRunTracking();
   }
 
   /**
@@ -296,6 +314,7 @@ class DashboardController {
         scheduleBadge.className = `badge ${isPaused ? 'badge-warning' : 'badge-success'}`;
       }
     }
+    this.syncRunButtonsState();
   }
 
   syncPeriodBarVisibility() {
@@ -411,17 +430,18 @@ class DashboardController {
       await this.loadDashboard();
     });
 
-    // 3. Debounced Instant Run Trigger Button (Feature 26.5 & Boundary 4.5)
+    // 3. Confirmation-Gated Instant Run Trigger Buttons (Feature 26.5 & Boundary 4.5)
+    this.setupConfirmAndBannerListeners();
     const btnTrigger = document.getElementById('btn-trigger-run');
     btnTrigger?.addEventListener('click', async (e) => {
       e.preventDefault();
-      await this.handleTriggerRun();
+      await this.requestTriggerRun(btnTrigger);
     });
 
     const btnEmptyTrigger = document.getElementById('btn-empty-trigger');
     btnEmptyTrigger?.addEventListener('click', async (e) => {
       e.preventDefault();
-      await this.handleTriggerRun();
+      await this.requestTriggerRun(btnEmptyTrigger);
     });
 
     // 4. Config Modal Initialization
@@ -485,14 +505,48 @@ class DashboardController {
       e.preventDefault();
       const cfg = this.getSelectedConfigObject();
       if (!cfg || this.isAuditMode) return;
-      try {
-        btnToggleConfig.disabled = true;
-        await configs.toggleConfigStatus(cfg);
-        this.updateConfigActionControls();
-      } catch (err) {
-        console.error('Failed to toggle config status:', err);
-      } finally {
-        btnToggleConfig.disabled = false;
+
+      const isPausing = cfg.status !== 'paused';
+      const executeToggle = async () => {
+        const loadingLabel = isPausing
+          ? this.tMsg('run.btn_pausing', 'Wird pausiert…')
+          : this.tMsg('run.btn_resuming', 'Wird fortgesetzt…');
+        try {
+          setButtonLoading(btnToggleConfig, true, loadingLabel);
+          await configs.toggleConfigStatus(cfg);
+          showToast(
+            isPausing
+              ? this.tMsg('toast.config_paused', 'Zeitplan pausiert.')
+              : this.tMsg('toast.config_resumed', 'Zeitplan fortgesetzt.'),
+            isPausing ? 'info' : 'success'
+          );
+        } catch (err) {
+          console.error('Failed to toggle config status:', err);
+        } finally {
+          setButtonLoading(btnToggleConfig, false);
+          this.updateConfigActionControls();
+        }
+      };
+
+      if (isPausing) {
+        const cfgName = cfg.name || cfg.brand_name || `#${cfg.id}`;
+        this.openConfirmModal({
+          title: this.tMsg('run.pause_confirm_title', 'Zeitplan pausieren?'),
+          message: this.tMsg(
+            'run.pause_confirm_desc',
+            'Automatische Ausführungen für „{name}“ werden angehalten. Bereits erfasste Verlaufsdaten bleiben vollständig erhalten.',
+            { name: cfgName }
+          ),
+          summaryRows: [
+            { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: cfgName }
+          ],
+          confirmLabel: this.tMsg('run.pause_confirm_cta', 'Zeitplan pausieren'),
+          confirmVariant: 'warning',
+          triggerEl: btnToggleConfig,
+          onConfirm: executeToggle
+        });
+      } else {
+        await executeToggle();
       }
     });
 
@@ -555,6 +609,10 @@ class DashboardController {
           this.applyMagicAuditUI();
         }
         this.updateConfigActionControls();
+        if (this.activeRunState) {
+          this.syncRunButtonsState();
+          this.updateActiveRunBanner();
+        }
         if (this.lastReportsData) {
           this.renderDashboard(this.lastReportsData);
         }
@@ -562,7 +620,605 @@ class DashboardController {
     }
   }
 
-  async handleTriggerRun() {
+  tMsg(key, fallback, vars = null) {
+    const template = (typeof i18n !== 'undefined' && typeof i18n?.t === 'function')
+      ? i18n.t(key, fallback)
+      : fallback;
+    return vars ? formatTemplate(template, vars) : template;
+  }
+
+  getAvailableCredits() {
+    if (typeof this.currentCredits === 'number' && !Number.isNaN(this.currentCredits)) {
+      return this.currentCredits;
+    }
+    const userCredits = Number(auth?.getUser?.()?.credits_remaining);
+    if (!Number.isNaN(userCredits) && Number.isFinite(userCredits)) {
+      return userCredits;
+    }
+    const badgeVal = Number(document.getElementById('header-credits-val')?.textContent || 0);
+    return Number.isNaN(badgeVal) ? 0 : badgeVal;
+  }
+
+  getRunButtons() {
+    if (typeof document === 'undefined') return [];
+    return [
+      document.getElementById('btn-trigger-run'),
+      document.getElementById('btn-empty-trigger')
+    ].filter(Boolean);
+  }
+
+  syncRunButtonsState() {
+    const remainingMs = Math.max(0, Number(this.cooldownUntil || 0) - Date.now());
+    const isLocked = Boolean(this.isRunning || remainingMs > 0);
+    let label = '';
+    if (this.isRunning && remainingMs <= 0) {
+      label = this.tMsg('run.btn_dispatching', 'Wird gestartet…');
+    } else if (remainingMs > 0) {
+      const remainingSec = Math.max(1, Math.ceil(remainingMs / 1000));
+      label = this.tMsg('run.btn_locked_countdown', 'Analyse läuft ({seconds}s)…', { seconds: remainingSec });
+    }
+
+    for (const btn of this.getRunButtons()) {
+      if (isLocked) {
+        btn._chatlyticsRunLocked = true;
+        setButtonLoading(btn, true, label);
+      } else if (
+        btn._chatlyticsRunLocked ||
+        btn._chatlyticsOrigNodes !== undefined ||
+        btn._chatlyticsOrigText !== undefined
+      ) {
+        delete btn._chatlyticsRunLocked;
+        setButtonLoading(btn, false);
+      }
+    }
+  }
+
+  saveActiveRunState(state) {
+    if (typeof sessionStorage === 'undefined' || !state) return;
+    try {
+      sessionStorage.setItem(ACTIVE_RUN_STORAGE_KEY, JSON.stringify(state));
+    } catch (_) {}
+  }
+
+  loadActiveRunState() {
+    if (typeof sessionStorage === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(ACTIVE_RUN_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  clearActiveRunState() {
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+      sessionStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+    } catch (_) {}
+  }
+
+  clearRunTimers() {
+    if (this.runTickTimer) {
+      clearInterval(this.runTickTimer);
+      this.runTickTimer = null;
+    }
+    if (this.runPollTimer) {
+      clearInterval(this.runPollTimer);
+      this.runPollTimer = null;
+    }
+    this.isPollingRunStatus = false;
+  }
+
+  setupConfirmAndBannerListeners() {
+    if (this._confirmListenersBound || typeof document === 'undefined') return;
+    this._confirmListenersBound = true;
+
+    const dismissBtn = document.getElementById('run-status-dismiss');
+    dismissBtn?.addEventListener('click', () => {
+      this.bannerDismissed = true;
+      document.getElementById('run-status-banner')?.classList?.add('hidden');
+    });
+
+    const modal = document.getElementById('action-confirm-modal');
+    if (!modal) return;
+
+    const closeBtn = document.getElementById('confirm-modal-close');
+    const cancelBtn = document.getElementById('confirm-modal-cancel');
+    const submitBtn = document.getElementById('confirm-modal-submit');
+    const backdrop = typeof modal.querySelector === 'function' ? modal.querySelector('.modal-backdrop') : null;
+
+    closeBtn?.addEventListener('click', () => this.closeConfirmModal());
+    cancelBtn?.addEventListener('click', () => this.closeConfirmModal());
+    backdrop?.addEventListener('click', () => this.closeConfirmModal());
+
+    submitBtn?.addEventListener('click', async () => {
+      if (this._isConfirmSubmitting || submitBtn.disabled) return;
+      this._isConfirmSubmitting = true;
+      const handler = this._activeConfirmHandler;
+      this.closeConfirmModal();
+      try {
+        if (typeof handler === 'function') {
+          await handler();
+        }
+      } finally {
+        this._isConfirmSubmitting = false;
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList && !modal.classList.contains('modal-hidden')) {
+        this.closeConfirmModal();
+      }
+    });
+  }
+
+  openConfirmModal({
+    title = '',
+    message = '',
+    summaryRows = [],
+    warningText = '',
+    warningLinkHref = '',
+    warningLinkLabel = '',
+    confirmLabel = '',
+    confirmVariant = 'primary',
+    confirmDisabled = false,
+    triggerEl = null,
+    onConfirm = null
+  } = {}) {
+    if (typeof document === 'undefined') return;
+    const modal = document.getElementById('action-confirm-modal');
+    if (!modal) {
+      if (!confirmDisabled && typeof onConfirm === 'function') {
+        onConfirm();
+      }
+      return;
+    }
+
+    this.setupConfirmAndBannerListeners();
+    this._activeConfirmHandler = typeof onConfirm === 'function' ? onConfirm : null;
+    this._confirmTriggerEl = triggerEl || document.activeElement || null;
+
+    const titleEl = document.getElementById('confirm-modal-title');
+    const msgEl = document.getElementById('confirm-modal-message');
+    const summaryEl = document.getElementById('confirm-modal-summary');
+    const warningEl = document.getElementById('confirm-modal-warning');
+    const submitBtn = document.getElementById('confirm-modal-submit');
+
+    if (titleEl) titleEl.textContent = String(title || '');
+    if (msgEl) msgEl.textContent = String(message || '');
+
+    if (summaryEl) {
+      if (typeof summaryEl.replaceChildren === 'function') {
+        summaryEl.replaceChildren();
+      } else {
+        summaryEl.textContent = '';
+      }
+      if (Array.isArray(summaryRows) && summaryRows.length > 0 && typeof document.createElement === 'function') {
+        for (const row of summaryRows) {
+          const rowEl = document.createElement('div');
+          rowEl.className = row.isTotal ? 'confirm-summary-row confirm-summary-total' : 'confirm-summary-row';
+          const lbl = document.createElement('span');
+          lbl.className = 'confirm-summary-label';
+          lbl.textContent = String(row.label || '');
+          const val = document.createElement('span');
+          val.className = 'confirm-summary-val font-mono';
+          val.textContent = String(row.value ?? '');
+          rowEl.appendChild(lbl);
+          rowEl.appendChild(val);
+          summaryEl.appendChild(rowEl);
+        }
+        summaryEl.hidden = false;
+      } else {
+        summaryEl.hidden = true;
+      }
+    }
+
+    if (warningEl) {
+      if (typeof warningEl.replaceChildren === 'function') {
+        warningEl.replaceChildren();
+      } else {
+        warningEl.textContent = '';
+      }
+      if (warningText) {
+        const msgSpan = document.createElement('div');
+        msgSpan.textContent = String(warningText);
+        warningEl.appendChild(msgSpan);
+        if (warningLinkHref && warningLinkLabel) {
+          const link = document.createElement('a');
+          link.href = String(warningLinkHref);
+          link.className = 'confirm-warning-link';
+          link.textContent = String(warningLinkLabel);
+          warningEl.appendChild(link);
+        }
+        warningEl.hidden = false;
+      } else {
+        warningEl.hidden = true;
+      }
+    }
+
+    if (submitBtn) {
+      submitBtn.className = confirmVariant === 'warning' ? 'btn btn-warning' : 'btn btn-primary';
+      submitBtn.textContent = String(confirmLabel || this.tMsg('run.confirm_cta_generic', 'Bestätigen'));
+      submitBtn.disabled = Boolean(confirmDisabled);
+    }
+
+    modal.classList?.remove('modal-hidden');
+    modal.setAttribute?.('aria-hidden', 'false');
+
+    const focusTarget = confirmDisabled
+      ? document.getElementById('confirm-modal-cancel')
+      : submitBtn;
+    if (focusTarget && typeof focusTarget.focus === 'function') {
+      focusTarget.focus();
+    }
+  }
+
+  closeConfirmModal() {
+    if (typeof document === 'undefined') return;
+    const modal = document.getElementById('action-confirm-modal');
+    if (modal) {
+      modal.classList?.add('modal-hidden');
+      modal.setAttribute?.('aria-hidden', 'true');
+    }
+    this._activeConfirmHandler = null;
+    if (
+      this._confirmTriggerEl &&
+      typeof this._confirmTriggerEl.focus === 'function' &&
+      !this._confirmTriggerEl.disabled
+    ) {
+      this._confirmTriggerEl.focus();
+    }
+    this._confirmTriggerEl = null;
+  }
+
+  renderRunBanner(mode, { title = '', detail = '', badgeText = '' } = {}) {
+    if (typeof document === 'undefined') return;
+    const banner = document.getElementById('run-status-banner');
+    if (!banner) return;
+
+    const stateClass = mode === 'complete'
+      ? 'is-complete'
+      : (mode === 'timeout' ? 'is-timeout' : 'is-running');
+    const prevMode = banner._chatlyticsRunMode;
+    banner._chatlyticsRunMode = mode;
+    const hideWhileDismissed = mode === 'running' && this.bannerDismissed;
+    banner.className = hideWhileDismissed
+      ? `run-status-banner ${stateClass} hidden`
+      : `run-status-banner ${stateClass}`;
+
+    const indicator = document.getElementById('run-status-indicator');
+    if (indicator && prevMode !== mode) {
+      if (typeof indicator.replaceChildren === 'function') {
+        indicator.replaceChildren();
+      } else {
+        indicator.textContent = '';
+      }
+      if (mode === 'running' && typeof document.createElement === 'function') {
+        const spinner = document.createElement('span');
+        spinner.className = 'run-spinner';
+        indicator.appendChild(spinner);
+      } else {
+        indicator.textContent = mode === 'complete' ? '✓' : '!';
+      }
+    }
+
+    const titleEl = document.getElementById('run-status-title');
+    const detailEl = document.getElementById('run-status-detail');
+    const badgeEl = document.getElementById('run-status-badge');
+    if (titleEl) titleEl.textContent = String(title || '');
+    if (detailEl) detailEl.textContent = String(detail || '');
+    if (badgeEl) badgeEl.textContent = String(badgeText || '');
+  }
+
+  updateActiveRunBanner() {
+    if (!this.activeRunState) return;
+    const ingested = Number(this.activeRunState.ingestedCount || 0);
+    const expected = Math.max(1, Number(this.activeRunState.expectedRuns || 1));
+    const credits = Number(this.activeRunState.creditsDeducted ?? expected);
+    const remainingSec = Math.max(0, Math.ceil((Number(this.cooldownUntil || 0) - Date.now()) / 1000));
+
+    const badgeText = remainingSec > 0
+      ? `${ingested} / ${expected} · ${remainingSec}s`
+      : `${ingested} / ${expected}`;
+
+    if (ingested > 0) {
+      this.renderRunBanner('running', {
+        title: this.tMsg('run.banner_progress_title', 'Analyse läuft im Hintergrund'),
+        detail: this.tMsg('run.banner_progress_detail', '{count} / {expected} Modell-Antworten empfangen…', {
+          count: ingested,
+          expected
+        }),
+        badgeText
+      });
+    } else {
+      this.renderRunBanner('running', {
+        title: this.tMsg('run.banner_queued_title', 'Audit-Run gestartet ({credits} Credits abgebucht)', {
+          credits
+        }),
+        detail: this.tMsg(
+          'run.banner_queued_detail',
+          'KI-Antworten werden im Hintergrund erfasst. Live-Fortschritt wird automatisch aktualisiert.'
+        ),
+        badgeText
+      });
+    }
+  }
+
+  startRunTracking(state) {
+    this.clearRunTimers();
+    this.bannerDismissed = false;
+    const expectedRuns = Math.max(1, Number(state?.expectedRuns || 1));
+    const creditsDeducted = Number(state?.creditsDeducted ?? expectedRuns);
+    const cooldownUntil = Number(state?.cooldownUntil || (Date.now() + RUN_COOLDOWN_MS));
+
+    this.activeRunState = {
+      runId: state?.runId || null,
+      configId: state?.configId || this.selectedConfigId || null,
+      expectedRuns,
+      creditsDeducted,
+      ingestedCount: Number(state?.ingestedCount || 0),
+      startedAt: Number(state?.startedAt || Date.now()),
+      cooldownUntil,
+      baselineTotalRuns: Number(state?.baselineTotalRuns || 0)
+    };
+    this.cooldownUntil = cooldownUntil;
+    this.saveActiveRunState(this.activeRunState);
+
+    if (!state?.isRestore) {
+      showToast(
+        this.tMsg('run.toast_started', 'Abfrage gestartet ({credits} Credits abgebucht). Antworten treffen ein…', {
+          credits: creditsDeducted
+        }),
+        'info',
+        5000
+      );
+    }
+
+    this.updateActiveRunBanner();
+    this.syncRunButtonsState();
+
+    this.runTickTimer = setInterval(() => {
+      if (Date.now() >= this.cooldownUntil) {
+        this.finishRunCooldownTimeout();
+        return;
+      }
+      this.syncRunButtonsState();
+      this.updateActiveRunBanner();
+    }, 1000);
+    if (typeof this.runTickTimer?.unref === 'function') {
+      this.runTickTimer.unref();
+    }
+
+    if (this.activeRunState.runId) {
+      this.runPollTimer = setInterval(async () => {
+        await this.pollRunStatus();
+      }, RUN_POLL_INTERVAL_MS);
+      if (typeof this.runPollTimer?.unref === 'function') {
+        this.runPollTimer.unref();
+      }
+    }
+  }
+
+  async restoreActiveRunTracking() {
+    if (this.isAuditMode) return;
+    const saved = this.loadActiveRunState();
+    if (!saved || !saved.cooldownUntil || Number(saved.cooldownUntil) <= Date.now()) {
+      this.clearActiveRunState();
+      return;
+    }
+
+    this.startRunTracking({ ...saved, isRestore: true });
+    if (saved.runId) {
+      await this.pollRunStatus();
+    }
+  }
+
+  async pollRunStatus() {
+    if (!this.activeRunState?.runId || this.isPollingRunStatus) return;
+    this.isPollingRunStatus = true;
+
+    try {
+      const status = await apiClient.getRunStatus(this.activeRunState.runId);
+      if (!this.activeRunState) return;
+
+      const ingested = Math.max(0, Number(status?.ingested_count || 0));
+      const expected = Math.max(1, Number(this.activeRunState.expectedRuns || 1));
+      const prevIngested = Number(this.activeRunState.ingestedCount || 0);
+
+      this.activeRunState.ingestedCount = ingested;
+      this.saveActiveRunState(this.activeRunState);
+
+      if (ingested >= expected) {
+        await this.completeRunTracking(ingested, expected);
+        return;
+      }
+
+      this.updateActiveRunBanner();
+      if (ingested > prevIngested && ingested > 0) {
+        await this.loadDashboard();
+      }
+    } catch (_) {
+      // Transient polling errors are ignored until completion or cooldown expiry
+    } finally {
+      this.isPollingRunStatus = false;
+    }
+  }
+
+  async completeRunTracking(ingested, expected) {
+    this.clearRunTimers();
+    this.cooldownUntil = 0;
+    this.activeRunState = null;
+    this.clearActiveRunState();
+    this.syncRunButtonsState();
+
+    this.renderRunBanner('complete', {
+      title: this.tMsg('run.banner_completed_title', 'Analyse abgeschlossen'),
+      detail: this.tMsg(
+        'run.banner_completed_detail',
+        'Alle {count} / {expected} Modell-Antworten empfangen. Dashboard-Daten wurden aktualisiert.',
+        { count: ingested, expected }
+      ),
+      badgeText: `${ingested} / ${expected} ✓`
+    });
+
+    showToast(
+      this.tMsg('run.toast_completed', 'Analyse abgeschlossen: {count} / {expected} Ergebnisse im Dashboard geladen.', {
+        count: ingested,
+        expected
+      }),
+      'success',
+      5000
+    );
+
+    await this.loadDashboard();
+  }
+
+  async finishRunCooldownTimeout() {
+    const stateSnapshot = this.activeRunState;
+    this.clearRunTimers();
+    this.cooldownUntil = 0;
+    this.activeRunState = null;
+    this.clearActiveRunState();
+    this.syncRunButtonsState();
+
+    const expected = Math.max(1, Number(stateSnapshot?.expectedRuns || 1));
+    let ingested = Math.max(0, Number(stateSnapshot?.ingestedCount || 0));
+
+    if (stateSnapshot?.runId) {
+      try {
+        const finalStatus = await apiClient.getRunStatus(stateSnapshot.runId);
+        ingested = Math.max(ingested, Number(finalStatus?.ingested_count || 0));
+      } catch (_) {}
+    }
+
+    if (ingested >= expected) {
+      this.renderRunBanner('complete', {
+        title: this.tMsg('run.banner_completed_title', 'Analyse abgeschlossen'),
+        detail: this.tMsg(
+          'run.banner_completed_detail',
+          'Alle {count} / {expected} Modell-Antworten empfangen. Dashboard-Daten wurden aktualisiert.',
+          { count: ingested, expected }
+        ),
+        badgeText: `${ingested} / ${expected} ✓`
+      });
+      showToast(
+        this.tMsg('run.toast_completed', 'Analyse abgeschlossen: {count} / {expected} Ergebnisse im Dashboard geladen.', {
+          count: ingested,
+          expected
+        }),
+        'success',
+        5000
+      );
+    } else {
+      this.renderRunBanner('timeout', {
+        title: this.tMsg('run.banner_timeout_title', 'Verarbeitung läuft im Hintergrund weiter'),
+        detail: this.tMsg(
+          'run.banner_timeout_detail',
+          'Der Worker benötigt etwas mehr Zeit ({count} / {expected} Antworten bisher). Neue Ergebnisse erscheinen automatisch im Verlauf.',
+          { count: ingested, expected }
+        ),
+        badgeText: `${ingested} / ${expected}`
+      });
+      showToast(
+        this.tMsg(
+          'run.toast_timeout',
+          'Audit-Run läuft weiterhin im Hintergrund. Sie können bei Bedarf erneut aktualisieren.'
+        ),
+        'info',
+        5000
+      );
+    }
+
+    await this.loadDashboard();
+  }
+
+  async requestTriggerRun(triggerEl = null) {
+    if (this.isAuditMode) return;
+
+    if (this.isRunning || this.cooldownUntil > Date.now()) {
+      showToast(
+        this.tMsg(
+          'run.already_running_toast',
+          'Eine Analyse läuft bereits – Fortschritt wird im Status-Banner angezeigt.'
+        ),
+        'info'
+      );
+      if (this.activeRunState) {
+        this.bannerDismissed = false;
+        this.updateActiveRunBanner();
+        const banner = document.getElementById('run-status-banner');
+        banner?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+      }
+      return;
+    }
+
+    if (!this.selectedConfigId && configs.configs.length > 0) {
+      this.selectedConfigId = Number(configs.configs[0].id);
+    }
+
+    if (!this.selectedConfigId) {
+      showToast(
+        this.tMsg('run.need_config_toast', 'Bitte erstellen Sie zuerst eine Tracking-Konfiguration.'),
+        'warning'
+      );
+      configs.showModal?.();
+      return;
+    }
+
+    const cfg = this.getSelectedConfigObject();
+    const breakdown = getConfigRunBreakdown(cfg);
+    const balance = this.getAvailableCredits();
+    const afterBalance = balance - breakdown.expectedRuns;
+    const insufficient = balance < breakdown.expectedRuns;
+    const profileName = cfg?.name || cfg?.brand_name || `#${this.selectedConfigId}`;
+
+    this.openConfirmModal({
+      title: this.tMsg('run.confirm_title', 'Audit-Abfrage jetzt starten?'),
+      message: this.tMsg(
+        'run.confirm_desc',
+        'Die ausgewählten Prompts werden jetzt live an alle konfigurierten KI-Modelle gesendet. Jeder Prompt-Modell-Durchlauf verbraucht 1 Credit.'
+      ),
+      summaryRows: [
+        { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: profileName },
+        {
+          label: this.tMsg('run.confirm_label_matrix', 'Abfrage-Matrix'),
+          value: this.tMsg('run.confirm_matrix_val', '{prompts} Prompt(s) × {llms} Modell(e)', {
+            prompts: breakdown.promptCount,
+            llms: breakdown.llmCount
+          })
+        },
+        { label: this.tMsg('run.confirm_label_cost', 'Benötigte Credits'), value: `-${breakdown.expectedRuns}` },
+        { label: this.tMsg('run.confirm_label_balance', 'Verfügbares Guthaben'), value: String(balance) },
+        {
+          label: this.tMsg('run.confirm_label_after', 'Guthaben danach'),
+          value: insufficient ? '0' : String(afterBalance),
+          isTotal: true
+        }
+      ],
+      warningText: insufficient
+        ? this.tMsg(
+            'run.insufficient_credits',
+            'Nicht genügend Credits verfügbar ({balance} vorhanden, {required} benötigt). Bitte laden Sie zuerst Credits auf.',
+            { balance, required: breakdown.expectedRuns }
+          )
+        : '',
+      warningLinkHref: insufficient ? 'billing.html' : '',
+      warningLinkLabel: insufficient ? this.tMsg('run.insufficient_link', 'Zu den Paketen & Credits') : '',
+      confirmLabel: this.tMsg('run.confirm_cta', '{credits} Credits einlösen & starten', {
+        credits: breakdown.expectedRuns
+      }),
+      confirmVariant: 'primary',
+      confirmDisabled: insufficient,
+      triggerEl,
+      onConfirm: async () => {
+        await this.handleTriggerRun({ fromConfirmModal: true });
+      }
+    });
+  }
+
+  async handleTriggerRun(options = {}) {
     if (this.isRunning) return;
     if (this.isAuditMode) return;
 
@@ -571,38 +1227,86 @@ class DashboardController {
     }
 
     if (!this.selectedConfigId) {
-      alert('Bitte erstellen Sie zuerst eine Tracking-Konfiguration.');
-      configs.showModal();
+      showToast(
+        this.tMsg('run.need_config_toast', 'Bitte erstellen Sie zuerst eine Tracking-Konfiguration.'),
+        'warning'
+      );
+      configs.showModal?.();
       return;
     }
 
+    const cfg = this.getSelectedConfigObject();
+    const breakdown = getConfigRunBreakdown(cfg);
+    const baselineTotalRuns = Number(this.lastReportsData?.metrics?.total_runs || 0);
+
     this.isRunning = true;
-    const btnTrigger = document.getElementById('btn-trigger-run');
-    const origText = btnTrigger ? btnTrigger.innerHTML : '';
-    if (btnTrigger) {
-      btnTrigger.disabled = true;
-      const runningLabel = i18n ? i18n.t('dashboard.btn_running', 'Abfrage läuft...') : 'Abfrage läuft...';
-      btnTrigger.textContent = runningLabel;
-    }
+    this.syncRunButtonsState();
 
     try {
-      const res = await apiClient.triggerRun(this.selectedConfigId, { mode: 'async' });
-      const remaining = res.credits_remaining;
+      const res = await apiClient.triggerRun(this.selectedConfigId, { mode: options?.mode || 'async' });
+      const remaining = res?.credits_remaining;
       if (remaining !== undefined) {
         this.updateCreditBadge(remaining);
       }
-      // Reload dashboard after short interval to allow n8n worker ingestion
-      setTimeout(async () => {
+
+      const hasTrackableRun = Boolean(res?.run_id) || Boolean(options?.fromConfirmModal);
+      if (!hasTrackableRun) {
+        // Reload dashboard after short interval for direct headless calls without run_id
+        const refreshTimer = setTimeout(async () => {
+          await this.loadDashboard();
+        }, 1500);
+        if (typeof refreshTimer?.unref === 'function') {
+          refreshTimer.unref();
+        }
+      } else if (res?.response_mode === 'sync' || res?.status === 'completed') {
+        const expected = Math.max(1, Number(res?.expected_runs || breakdown.expectedRuns || 1));
+        this.renderRunBanner('complete', {
+          title: this.tMsg('run.banner_completed_title', 'Analyse abgeschlossen'),
+          detail: this.tMsg(
+            'run.banner_completed_detail',
+            'Alle {count} / {expected} Modell-Antworten empfangen. Dashboard-Daten wurden aktualisiert.',
+            { count: expected, expected }
+          ),
+          badgeText: `${expected} / ${expected} ✓`
+        });
+        showToast(
+          this.tMsg('run.toast_completed', 'Analyse abgeschlossen: {count} / {expected} Ergebnisse im Dashboard geladen.', {
+            count: expected,
+            expected
+          }),
+          'success'
+        );
         await this.loadDashboard();
-      }, 1500);
+      } else {
+        const expectedRuns = Math.max(1, Number(res?.expected_runs || breakdown.expectedRuns || 1));
+        const creditsDeducted = Number(res?.credits_deducted ?? expectedRuns);
+        this.startRunTracking({
+          runId: res?.run_id || null,
+          configId: this.selectedConfigId,
+          expectedRuns,
+          creditsDeducted,
+          ingestedCount: 0,
+          startedAt: Date.now(),
+          cooldownUntil: Date.now() + RUN_COOLDOWN_MS,
+          baselineTotalRuns
+        });
+      }
     } catch (err) {
-      alert(err.message || 'Audit-Run konnte nicht gestartet werden.');
+      this.clearRunTimers();
+      this.cooldownUntil = 0;
+      this.activeRunState = null;
+      this.clearActiveRunState();
+      if (typeof document !== 'undefined') {
+        document.getElementById('run-status-banner')?.classList?.add('hidden');
+      }
+      showToast(
+        err?.message || this.tMsg('run.error_start_toast', 'Audit-Run konnte nicht gestartet werden.'),
+        'error',
+        6000
+      );
     } finally {
       this.isRunning = false;
-      if (btnTrigger) {
-        btnTrigger.disabled = false;
-        btnTrigger.innerHTML = origText;
-      }
+      this.syncRunButtonsState();
     }
   }
 
@@ -1048,7 +1752,7 @@ class DashboardController {
     document.getElementById('kpi-earliness').textContent = '0.0 %';
     document.getElementById('kpi-runs').textContent = '0';
     document.getElementById('kpi-citations').textContent = '0.0 %';
-    const credits = metrics.credits_remaining !== undefined ? metrics.credits_remaining : 0;
+    const credits = metrics.credits_remaining !== undefined ? metrics.credits_remaining : this.getAvailableCredits();
     document.getElementById('kpi-credits').textContent = String(credits);
     this.updateCreditBadge(credits);
     ['kpi-som-delta', 'kpi-visibility-delta', 'kpi-earliness-delta', 'kpi-runs-delta', 'kpi-citations-delta'].forEach(id => {
@@ -1083,7 +1787,7 @@ class DashboardController {
     this.setDeltaBadge('kpi-citations-delta', pop.citation_delta);
 
     // 6. Credits
-    const creds = metrics.credits_remaining !== undefined ? metrics.credits_remaining : 0;
+    const creds = metrics.credits_remaining !== undefined ? metrics.credits_remaining : this.getAvailableCredits();
     document.getElementById('kpi-credits').textContent = String(creds);
     this.updateCreditBadge(creds);
   }
@@ -1113,6 +1817,10 @@ class DashboardController {
   }
 
   updateCreditBadge(credits) {
+    const parsed = Number(credits);
+    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      this.currentCredits = parsed;
+    }
     const headerCredits = document.getElementById('header-credits-val');
     if (headerCredits) headerCredits.textContent = String(credits);
   }
