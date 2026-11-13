@@ -64,8 +64,10 @@ function handleListUsers(array $data): void {
     $params = [];
 
     if ($search !== '') {
-        $where .= " AND (u.email LIKE :search OR u.company_name LIKE :search)";
-        $params[':search'] = '%' . $search . '%';
+        $where .= " AND (u.email LIKE :search_email OR u.company_name LIKE :search_company)";
+        $searchPattern = '%' . $search . '%';
+        $params[':search_email'] = $searchPattern;
+        $params[':search_company'] = $searchPattern;
     }
 
     // Count total users

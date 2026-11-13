@@ -129,9 +129,10 @@ $requiredCredits = max(1, $llmCount * $promptCount);
 $deductStmt = $db->prepare("
     UPDATE users 
     SET credits_remaining = credits_remaining - :cost 
-    WHERE id = :user_id AND credits_remaining >= :cost
+    WHERE id = :user_id AND credits_remaining >= :cost_min
 ");
 $deductStmt->execute([
+    ':cost_min' => $requiredCredits,
     ':cost'    => $requiredCredits,
     ':user_id' => $userId,
 ]);

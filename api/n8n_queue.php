@@ -206,9 +206,10 @@ try {
                 $credStmt = $db->prepare("
                     UPDATE users 
                     SET credits_remaining = credits_remaining - :cost 
-                    WHERE id = :user_id AND credits_remaining >= :cost
+                    WHERE id = :user_id AND credits_remaining >= :cost_min
                 ");
                 $credStmt->execute([
+                    ':cost_min' => $costPerPrompt,
                     ':cost'    => $costPerPrompt,
                     ':user_id' => (int)$cfg['user_id'],
                 ]);
