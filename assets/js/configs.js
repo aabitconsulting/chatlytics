@@ -9,6 +9,58 @@
  */
 
 import { apiClient } from './api-client.js';
+import { auth } from './auth.js';
+import { i18n } from './i18n.js';
+
+export const SCHEDULE_INTERVALS = {
+  every_2h: { runsPerDay: 12, highFreq: true, i18nKey: 'interval.every_2h', fallback: '12x täglich (alle 2 Std.)' },
+  every_4h: { runsPerDay: 6, highFreq: true, i18nKey: 'interval.every_4h', fallback: '6x täglich (alle 4 Std.)' },
+  every_6h: { runsPerDay: 4, highFreq: true, i18nKey: 'interval.every_6h', fallback: '4x täglich (alle 6 Std.)' },
+  every_12h: { runsPerDay: 2, highFreq: true, i18nKey: 'interval.every_12h', fallback: '2x täglich (alle 12 Std.)' },
+  daily: { runsPerDay: 1, highFreq: false, i18nKey: 'interval.daily', fallback: '1x täglich (Daily)' },
+  weekly: { runsPerDay: 1 / 7, highFreq: false, i18nKey: 'interval.weekly', fallback: '1x wöchentlich (Weekly)' },
+  biweekly: { runsPerDay: 1 / 14, highFreq: false, i18nKey: 'interval.biweekly', fallback: 'Alle 14 Tage' },
+  monthly: { runsPerDay: 1 / 30, highFreq: false, i18nKey: 'interval.monthly', fallback: 'Monatlich' },
+  manual: { runsPerDay: 0, highFreq: false, i18nKey: 'interval.manual', fallback: 'Nur Manuell (Manual)' }
+};
+
+export function getScheduleRunsPerDay(interval) {
+  const key = String(interval || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(SCHEDULE_INTERVALS, key)
+    ? SCHEDULE_INTERVALS[key].runsPerDay
+    : 1;
+}
+
+export function isHighFrequencySchedule(interval) {
+  const key = String(interval || '').trim().toLowerCase();
+  return Boolean(SCHEDULE_INTERVALS[key]?.highFreq);
+}
+
+export function canUserUseScheduleInterval(user, interval) {
+  if (!isHighFrequencySchedule(interval)) return true;
+  if (!user) return false;
+  if (String(user.role || '').toLowerCase() === 'admin') return true;
+  const tier = String(user.tier || 'free').toLowerCase();
+  return tier !== 'free' && tier !== '';
+}
+
+export function calculateEstimatedCredits(promptCount, llmCount, interval) {
+  const prompts = Math.max(0, Number(promptCount) || 0);
+  const llms = Math.max(0, Number(llmCount) || 0);
+  const perRun = prompts * llms;
+  const runsPerDay = getScheduleRunsPerDay(interval);
+  const perDay = Number((perRun * runsPerDay).toFixed(2));
+  const perMonth = Number((perRun * runsPerDay * 30).toFixed(1));
+  return { perRun, runsPerDay, perDay, perMonth };
+}
+
+export function getScheduleLabel(interval) {
+  const key = String(interval || 'daily').trim().toLowerCase();
+  const meta = SCHEDULE_INTERVALS[key] || SCHEDULE_INTERVALS.daily;
+  return i18n && typeof i18n.t === 'function'
+    ? i18n.t(meta.i18nKey, meta.fallback)
+    : meta.fallback;
+}
 
 export const LLM_CATALOG = [
   { id: 'openai/gpt-6-luna', provider: 'openai', model: 'gpt-6-luna', label: 'OpenAI · GPT-6 Luna', euHosted: false, defaultChecked: true },
@@ -175,6 +227,20 @@ export class ConfigManager {
     }
   }
 
+  async toggleConfigStatus(config) {
+    if (!config || !config.id) return null;
+    const nextStatus = config.status === 'paused' ? 'active' : 'paused';
+    const res = await apiClient.updateConfig(config.id, { status: nextStatus });
+    const updated = res?.config || res;
+    const idx = this.configs.findIndex(c => String(c.id) === String(config.id));
+    if (idx >= 0 && updated && updated.id) {
+      this.configs[idx] = updated;
+    } else if (idx >= 0) {
+      this.configs[idx] = { ...this.configs[idx], status: nextStatus };
+    }
+    return updated;
+  }
+
   async deleteConfig(configId) {
     return await apiClient.deleteConfig(configId);
   }
@@ -204,27 +270,143 @@ export class ConfigManager {
       }
     };
 
+    const tierHintEl = document.getElementById('cfg-tier-hint');
+    const previewEl = document.getElementById('cfg-credit-preview');
+    const intervalSelect = document.getElementById('cfg-interval');
+
+    const applyIntervalTierConstraints = () => {
+      if (!intervalSelect) return;
+      const currentUser = auth.getUser();
+      const allowHighFreq = canUserUseScheduleInterval(currentUser, 'every_2h');
+      Array.from(intervalSelect.options).forEach(opt => {
+        if (isHighFrequencySchedule(opt.value)) {
+          opt.disabled = !allowHighFreq;
+        }
+      });
+      if (!allowHighFreq && isHighFrequencySchedule(intervalSelect.value)) {
+        intervalSelect.value = 'daily';
+      }
+      if (tierHintEl) {
+        if (allowHighFreq) {
+          tierHintEl.classList.add('hidden');
+          tierHintEl.textContent = '';
+        } else {
+          tierHintEl.classList.remove('hidden');
+          tierHintEl.textContent = i18n.t(
+            'config.tier_hint_free',
+            'Frequenzen über 1x täglich (alle 12 Std. bis alle 2 Std.) erfordern einen bezahlten Tarif (Starter, Growth oder Enterprise).'
+          );
+        }
+      }
+    };
+
+    const updateCreditPreview = () => {
+      if (!previewEl) return;
+      const prompts = parsePrompts(document.getElementById('cfg-prompts')?.value || '');
+      const llmCount = form.querySelectorAll('.cfg-llm-checkbox:checked').length;
+      const interval = intervalSelect?.value || 'daily';
+      const est = calculateEstimatedCredits(prompts.length, llmCount, interval);
+      const balanceRaw = auth.getUser()?.credits_remaining;
+      const hasBalance = balanceRaw !== undefined && balanceRaw !== null && !isNaN(Number(balanceRaw));
+      const balance = hasBalance ? Number(balanceRaw) : null;
+      const isManual = interval === 'manual';
+
+      previewEl.replaceChildren();
+
+      const header = document.createElement('div');
+      header.className = 'cfg-credit-preview-header';
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'cfg-credit-preview-title';
+      titleSpan.textContent = i18n.t('config.credit_preview_title', 'Geschätzter Credit-Verbrauch');
+      const formulaSpan = document.createElement('span');
+      formulaSpan.className = 'cfg-credit-preview-formula font-mono';
+      formulaSpan.textContent = `${prompts.length} × ${llmCount}`;
+      header.append(titleSpan, formulaSpan);
+
+      const grid = document.createElement('div');
+      grid.className = 'cfg-credit-preview-grid';
+
+      const appendStat = (label, valueText) => {
+        const box = document.createElement('div');
+        box.className = 'cfg-credit-stat';
+        const lbl = document.createElement('span');
+        lbl.className = 'cfg-credit-stat-label';
+        lbl.textContent = label;
+        const val = document.createElement('strong');
+        val.className = 'cfg-credit-stat-val font-mono';
+        val.textContent = valueText;
+        box.append(lbl, val);
+        grid.appendChild(box);
+      };
+
+      appendStat(
+        i18n.t('config.credit_preview_per_run', 'Pro Lauf'),
+        `${est.perRun} Credits`
+      );
+      appendStat(
+        i18n.t('config.credit_preview_per_day', 'Pro Tag'),
+        isManual ? i18n.t('config.credit_preview_manual', 'Manuell') : `${est.perDay} Credits`
+      );
+      appendStat(
+        i18n.t('config.credit_preview_per_month', 'Pro Monat (~30 Tage)'),
+        isManual ? '—' : `${Math.round(est.perMonth)} Credits`
+      );
+      appendStat(
+        i18n.t('config.credit_preview_balance', 'Aktuelles Guthaben'),
+        hasBalance ? `${balance} Credits` : '—'
+      );
+
+      previewEl.append(header, grid);
+
+      if (hasBalance && !isManual && est.perDay > 0 && balance < est.perDay) {
+        const warn = document.createElement('p');
+        warn.className = 'cfg-credit-warning';
+        warn.textContent = i18n.t(
+          'config.credit_preview_low_warning',
+          'Hinweis: Ihr aktuelles Guthaben deckt weniger als 1 Tag bei dieser Frequenz ab.'
+        );
+        previewEl.appendChild(warn);
+      }
+    };
+
+    const ensureIntervalOption = (value) => {
+      if (!intervalSelect || !value) return;
+      const exists = Array.from(intervalSelect.options).some(opt => opt.value === value);
+      if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = getScheduleLabel(value);
+        intervalSelect.appendChild(opt);
+      }
+      intervalSelect.value = value;
+    };
+
     const showModal = (config = null) => {
       if (errBox) errBox.textContent = '';
       if (config) {
-        if (titleEl) titleEl.textContent = 'Tracking-Konfiguration bearbeiten';
+        if (titleEl) titleEl.textContent = i18n.t('config.modal_edit_title', 'Tracking-Konfiguration bearbeiten');
+        form.dataset.configStatus = config.status || 'active';
         form.dataset.configId = config.id;
         document.getElementById('cfg-name').value = config.name || '';
         document.getElementById('cfg-brand').value = config.brand_name || '';
         document.getElementById('cfg-domains').value = (config.brand_domains || []).join(', ');
         document.getElementById('cfg-prompts').value = (config.keywords_prompts || config.prompts || []).join('\n');
         document.getElementById('cfg-competitors').value = (config.competitors || []).map(c => c.name || c).join(', ');
-        document.getElementById('cfg-interval').value = config.schedule_interval || 'daily';
+        ensureIntervalOption(config.schedule_interval || 'daily');
         const savedLlms = Array.isArray(config.target_llms) && config.target_llms.length > 0
           ? config.target_llms
           : DEFAULT_FALLBACK_LLMS;
         applyModelAndSearchFields(savedLlms, config.search_enabled !== undefined ? config.search_enabled : true);
       } else {
-        if (titleEl) titleEl.textContent = 'Neue Tracking-Konfiguration anlegen';
+        if (titleEl) titleEl.textContent = i18n.t('config.modal_create_title', 'Neue Tracking-Konfiguration anlegen');
+        delete form.dataset.configStatus;
         delete form.dataset.configId;
         form.reset();
+        ensureIntervalOption('daily');
         applyModelAndSearchFields(DEFAULT_SELECTED_LLMS, true);
       }
+      applyIntervalTierConstraints();
+      updateCreditPreview();
       modal.classList.remove('modal-hidden');
       modal.setAttribute('aria-hidden', 'false');
       document.getElementById('cfg-brand')?.focus();
@@ -244,6 +426,12 @@ export class ConfigManager {
 
     closeBtn?.addEventListener('click', hideModal);
     cancelBtn?.addEventListener('click', hideModal);
+
+    document.getElementById('cfg-prompts')?.addEventListener('input', updateCreditPreview);
+    intervalSelect?.addEventListener('change', updateCreditPreview);
+    form?.querySelectorAll('.cfg-llm-checkbox').forEach(cb => {
+      cb.addEventListener('change', updateCreditPreview);
+    });
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !modal.classList.contains('modal-hidden')) {
@@ -305,7 +493,8 @@ export class ConfigManager {
           competitors: rawCompetitors,
           target_llms: selectedLlms,
           search_enabled: searchEnabled,
-          schedule_interval: interval
+          schedule_interval: interval,
+          status: configId ? (form.dataset.configStatus || 'active') : 'active'
         }, configId);
 
         hideModal();
@@ -339,6 +528,12 @@ if (typeof module !== 'undefined' && module.exports) {
     LLM_CATALOG,
     DEFAULT_FALLBACK_LLMS,
     DEFAULT_SELECTED_LLMS,
+    SCHEDULE_INTERVALS,
+    getScheduleRunsPerDay,
+    isHighFrequencySchedule,
+    canUserUseScheduleInterval,
+    calculateEstimatedCredits,
+    getScheduleLabel,
     mapSavedTokenToCatalogId,
     sanitizeDomains,
     parsePrompts,

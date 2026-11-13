@@ -81,6 +81,7 @@ $depthStmt = $db->query("
 $queueDepth = (int)$depthStmt->fetchColumn();
 
 // 4. Atomic Job Claiming Transaction
+$forUpdateSql = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME)) === 'sqlite' ? '' : 'FOR UPDATE';
 $claimedJobs = [];
 
 $db->beginTransaction();
@@ -99,7 +100,7 @@ try {
           AND u.status = 'active'
         ORDER BY r.created_at ASC
         LIMIT :limit
-        FOR UPDATE
+        {$forUpdateSql}
     ");
     $pendingStmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $pendingStmt->execute();
@@ -154,7 +155,7 @@ try {
               AND u.status = 'active'
             ORDER BY (tc.next_run_at IS NULL) DESC, tc.next_run_at ASC
             LIMIT :limit
-            FOR UPDATE
+            {$forUpdateSql}
         ");
         $configStmt->bindValue(':limit', $availableSlots, PDO::PARAM_INT);
         $configStmt->execute();
@@ -179,11 +180,16 @@ try {
                 elseif (is_array($c) && !empty($c['name'])) $compList[] = $c['name'];
             }
 
+            // Prevent mid-config prompt truncation when batch limit is already partially consumed
+            if (count($claimedJobs) > 0 && (count($claimedJobs) + count($prompts)) > $limit) {
+                break;
+            }
+
             // Advance schedule for this configuration
             $nextRunAt = advanceScheduleTimestamp($cfg['next_run_at'], (string)$cfg['schedule_interval']);
             $advStmt = $db->prepare("
-                UPDATE tracking_configs 
-                SET next_run_at = :next_run_at, last_run_at = NOW() 
+                UPDATE tracking_configs
+                SET next_run_at = :next_run_at, last_run_at = NOW()
                 WHERE id = :id
             ");
             $advStmt->execute([
@@ -191,13 +197,10 @@ try {
                 ':id'          => (int)$cfg['id'],
             ]);
 
-            // Dispatch prompts for this config up to available slots
+            // Dispatch all prompts for this config while credits remain
             $costPerPrompt = count($targetLLMs);
 
             foreach ($prompts as $promptText) {
-                if (count($claimedJobs) >= $limit) {
-                    break;
-                }
 
                 // Atomically deduct user credits for this prompt execution
                 $credStmt = $db->prepare("
@@ -260,11 +263,19 @@ function advanceScheduleTimestamp(?string $currentDate, string $interval): strin
         $baseTime = time();
     }
 
-    return match ($interval) {
-        'daily'    => date('Y-m-d H:i:s', strtotime('+1 day', $baseTime)),
-        'weekly'   => date('Y-m-d H:i:s', strtotime('+7 days', $baseTime)),
-        'biweekly' => date('Y-m-d H:i:s', strtotime('+14 days', $baseTime)),
-        'monthly'  => date('Y-m-d H:i:s', strtotime('+1 month', $baseTime)),
-        default    => date('Y-m-d H:i:s', strtotime('+1 day', $baseTime)),
+    $canonical = function_exists('normalizeScheduleInterval')
+        ? normalizeScheduleInterval($interval)
+        : strtolower(trim($interval));
+
+    return match ($canonical) {
+        'every_2h'  => date('Y-m-d H:i:s', strtotime('+2 hours', $baseTime)),
+        'every_4h'  => date('Y-m-d H:i:s', strtotime('+4 hours', $baseTime)),
+        'every_6h'  => date('Y-m-d H:i:s', strtotime('+6 hours', $baseTime)),
+        'every_12h' => date('Y-m-d H:i:s', strtotime('+12 hours', $baseTime)),
+        'daily'     => date('Y-m-d H:i:s', strtotime('+1 day', $baseTime)),
+        'weekly'    => date('Y-m-d H:i:s', strtotime('+7 days', $baseTime)),
+        'biweekly'  => date('Y-m-d H:i:s', strtotime('+14 days', $baseTime)),
+        'monthly'   => date('Y-m-d H:i:s', strtotime('+1 month', $baseTime)),
+        default     => date('Y-m-d H:i:s', strtotime('+1 day', $baseTime)),
     };
 }

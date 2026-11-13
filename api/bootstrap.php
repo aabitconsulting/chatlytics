@@ -697,3 +697,77 @@ function normalizeTargetLlmsList($rawTargetLlms, array $fallback = ['openai/gpt-
     }
     return $normalized;
 }
+
+// -----------------------------------------------------------------------------
+// 7. Tracking Schedule Intervals & Tier Entitlements
+// -----------------------------------------------------------------------------
+
+/**
+ * Returns the canonical whitelist of persisted tracking_configs.schedule_interval values.
+ *
+ * @return array<int, string>
+ */
+function getValidScheduleIntervals(): array
+{
+    return ['manual', 'every_2h', 'every_4h', 'every_6h', 'every_12h', 'daily', 'weekly', 'biweekly', 'monthly'];
+}
+
+/**
+ * Normalizes human/API interval aliases (e.g. 12x_daily, 2h) to canonical tokens.
+ */
+function normalizeScheduleInterval(string $raw): string
+{
+    $clean = strtolower(trim($raw));
+    return match ($clean) {
+        'every_2h', '2h', '12x', '12x_daily', '12x-daily'   => 'every_2h',
+        'every_4h', '4h', '6x', '6x_daily', '6x-daily'     => 'every_4h',
+        'every_6h', '6h', '4x', '4x_daily', '4x-daily'     => 'every_6h',
+        'every_12h', '12h', '2x', '2x_daily', '2x-daily'   => 'every_12h',
+        'daily', '1x', '1x_daily', '1x-daily', '24h'       => 'daily',
+        'weekly', '1x_weekly', '1x-weekly', '7d'           => 'weekly',
+        'biweekly', 'monthly', 'manual'                    => $clean,
+        default                                            => $clean,
+    };
+}
+
+/**
+ * Returns true if the interval triggers more than once per day.
+ */
+function isHighFrequencySchedule(string $interval): bool
+{
+    return in_array($interval, ['every_2h', 'every_4h', 'every_6h', 'every_12h'], true);
+}
+
+/**
+ * Checks whether the authenticated user's tier/role permits the requested frequency.
+ * Free accounts are capped at 1x daily; paid tiers & admins can schedule up to 12x daily.
+ */
+function canUserUseScheduleInterval(array $user, string $interval): bool
+{
+    if (strtolower((string)($user['role'] ?? 'user')) === 'admin') {
+        return true;
+    }
+    if (!isHighFrequencySchedule($interval)) {
+        return true;
+    }
+    $tier = strtolower((string)($user['tier'] ?? 'free'));
+    return in_array($tier, ['starter', 'growth', 'enterprise_managed'], true);
+}
+
+/**
+ * Returns the expected executions per day for credit consumption estimates.
+ */
+function getScheduleRunsPerDay(string $interval): float
+{
+    return match ($interval) {
+        'every_2h'  => 12.0,
+        'every_4h'  => 6.0,
+        'every_6h'  => 4.0,
+        'every_12h' => 2.0,
+        'daily'     => 1.0,
+        'weekly'    => round(1.0 / 7.0, 4),
+        'biweekly'  => round(1.0 / 14.0, 4),
+        'monthly'   => round(1.0 / 30.0, 4),
+        default     => 0.0,
+    };
+}

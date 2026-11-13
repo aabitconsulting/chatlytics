@@ -132,9 +132,23 @@ function handleCreateConfig(array $data): void {
     $userId = (int)$currentUser['id'];
     $validated = validateAndSanitizeConfigInput($data);
 
+    if (!canUserUseScheduleInterval($currentUser, $validated['schedule_interval'])) {
+        jsonError(
+            "High-frequency tracking ({$validated['schedule_interval']}) requires a paid plan (Starter, Growth, or Enterprise). Free accounts are limited to 1x daily.",
+            403,
+            [
+                'required_tier'     => 'starter',
+                'current_tier'      => $currentUser['tier'] ?? 'free',
+                'schedule_interval' => $validated['schedule_interval'],
+            ]
+        );
+    }
+
     $db = getDb();
 
-    $nextRunAt = calculateNextRunAt($validated['schedule_interval']);
+    $nextRunAt = ($validated['status'] === 'active')
+        ? calculateNextRunAt($validated['schedule_interval'])
+        : null;
 
     $sql = "
         INSERT INTO tracking_configs (
@@ -210,7 +224,30 @@ function handleUpdateConfig(?int $id, array $data): void {
 
     $validated = validateAndSanitizeConfigInput($data, true, $existing);
 
-    $nextRunAt = calculateNextRunAt($validated['schedule_interval']);
+    if (isset($data['schedule_interval']) && !canUserUseScheduleInterval($currentUser, $validated['schedule_interval'])) {
+        jsonError(
+            "High-frequency tracking ({$validated['schedule_interval']}) requires a paid plan (Starter, Growth, or Enterprise). Free accounts are limited to 1x daily.",
+            403,
+            [
+                'required_tier'     => 'starter',
+                'current_tier'      => $currentUser['tier'] ?? 'free',
+                'schedule_interval' => $validated['schedule_interval'],
+            ]
+        );
+    }
+
+    $intervalChanged = ($validated['schedule_interval'] !== (string)($existing['schedule_interval'] ?? ''));
+    $reactivated = ((string)($existing['status'] ?? 'active') !== 'active' && $validated['status'] === 'active');
+
+    if ($validated['schedule_interval'] === 'manual') {
+        $nextRunAt = null;
+    } elseif ($validated['status'] !== 'active') {
+        $nextRunAt = $existing['next_run_at'] ?? null;
+    } elseif ($intervalChanged || $reactivated || empty($existing['next_run_at'])) {
+        $nextRunAt = calculateNextRunAt($validated['schedule_interval']);
+    } else {
+        $nextRunAt = $existing['next_run_at'];
+    }
 
     $sql = "
         UPDATE tracking_configs SET
@@ -426,14 +463,14 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
     }
 
     // 6. schedule_interval
-    $VALID_INTERVALS = ['manual', 'daily', 'weekly', 'biweekly', 'monthly'];
+    $VALID_INTERVALS = getValidScheduleIntervals();
     if (isset($data['schedule_interval'])) {
-        $scheduleInterval = strtolower(trim((string)$data['schedule_interval']));
+        $scheduleInterval = normalizeScheduleInterval((string)$data['schedule_interval']);
         if (!in_array($scheduleInterval, $VALID_INTERVALS, true)) {
-            jsonError("Invalid schedule_interval. Allowed: manual, daily, weekly, biweekly, monthly", 422);
+            jsonError("Invalid schedule_interval. Allowed: " . implode(', ', $VALID_INTERVALS), 422);
         }
     } elseif ($isUpdate && $existing) {
-        $scheduleInterval = (string)$existing['schedule_interval'];
+        $scheduleInterval = normalizeScheduleInterval((string)$existing['schedule_interval']);
     } else {
         $scheduleInterval = 'daily';
     }
@@ -480,17 +517,15 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
 }
 
 /**
- * Calculates next_run_at timestamp based on the selected schedule interval.
+ * Calculates initial next_run_at timestamp for newly scheduled or reactivated configs.
+ * Scheduled configs run immediately on the next queue poll (NOW), then advance by interval.
  */
 function calculateNextRunAt(string $interval): ?string {
-    return match ($interval) {
-        'manual'   => null,
-        'daily'    => date('Y-m-d H:i:s', strtotime('+1 day')),
-        'weekly'   => date('Y-m-d H:i:s', strtotime('+1 week')),
-        'biweekly' => date('Y-m-d H:i:s', strtotime('+2 weeks')),
-        'monthly'  => date('Y-m-d H:i:s', strtotime('+1 month')),
-        default    => date('Y-m-d H:i:s', strtotime('+1 day')),
-    };
+    $canonical = normalizeScheduleInterval($interval);
+    if ($canonical === 'manual') {
+        return null;
+    }
+    return date('Y-m-d H:i:s');
 }
 
 /**
@@ -501,6 +536,7 @@ function formatConfigRecord(array $row): array {
     $prompts = json_decode($row['keywords_prompts'] ?: '[]', true) ?? [];
     $competitors = json_decode($row['competitors'] ?: '[]', true) ?? [];
     $targetLLMs = json_decode($row['target_llms'] ?: '[]', true) ?? [];
+    $scheduleInterval = (string)($row['schedule_interval'] ?? 'daily');
 
     return [
         'id'                => (int)$row['id'],
@@ -513,7 +549,8 @@ function formatConfigRecord(array $row): array {
         'competitors'       => $competitors,
         'target_llms'       => $targetLLMs,
         'search_enabled'    => (bool)$row['search_enabled'],
-        'schedule_interval' => $row['schedule_interval'],
+        'schedule_interval' => $scheduleInterval,
+        'runs_per_day'      => getScheduleRunsPerDay($scheduleInterval),
         'status'            => $row['status'],
         'last_run_at'       => $row['last_run_at'],
         'next_run_at'       => $row['next_run_at'],
