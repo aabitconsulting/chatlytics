@@ -10,6 +10,8 @@
  */
 
 import { apiClient } from './api-client.js';
+import { i18n } from './i18n.js';
+import { setButtonLoading } from './notifications.js';
 
 const DISALLOWED_FREEMAIL_DOMAINS = [
   'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.de', 'hotmail.com',
@@ -327,11 +329,16 @@ export class AuthManager {
 
       try {
         if (submitBtn) submitBtn.disabled = true;
+        const creatingLabel = (typeof i18n !== 'undefined' && i18n?.t)
+          ? i18n.t('auth.btn_creating', 'Konto wird erstellt…')
+          : 'Konto wird erstellt…';
+        setButtonLoading(submitBtn, true, creatingLabel);
         await this.signup(email, password, company);
+        setButtonLoading(submitBtn, false);
         window.location.href = 'dashboard.html?welcome=1';
       } catch (err) {
         if (errBox) errBox.textContent = err.message;
-        if (submitBtn) submitBtn.disabled = false;
+        setButtonLoading(submitBtn, false);
       }
     });
 
@@ -347,11 +354,16 @@ export class AuthManager {
 
       try {
         if (submitBtn) submitBtn.disabled = true;
+        const loginLabel = (typeof i18n !== 'undefined' && i18n?.t)
+          ? i18n.t('auth.btn_logging_in', 'Wird angemeldet…')
+          : 'Wird angemeldet…';
+        setButtonLoading(submitBtn, true, loginLabel);
         await this.login(email, password);
+        setButtonLoading(submitBtn, false);
         window.location.href = 'dashboard.html';
       } catch (err) {
         if (errBox) errBox.textContent = err.message;
-        if (submitBtn) submitBtn.disabled = false;
+        setButtonLoading(submitBtn, false);
       }
     });
   }

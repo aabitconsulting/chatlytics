@@ -129,9 +129,10 @@ $requiredCredits = max(1, $llmCount * $promptCount);
 $deductStmt = $db->prepare("
     UPDATE users 
     SET credits_remaining = credits_remaining - :cost 
-    WHERE id = :user_id AND credits_remaining >= :cost
+    WHERE id = :user_id AND credits_remaining >= :cost_min
 ");
 $deductStmt->execute([
+    ':cost_min' => $requiredCredits,
     ':cost'    => $requiredCredits,
     ':user_id' => $userId,
 ]);
@@ -243,6 +244,9 @@ if ($mode === 'sync') {
         'response_mode'     => 'sync',
         'credits_deducted'  => $requiredCredits,
         'credits_remaining' => $newCredits,
+        'expected_runs'     => $requiredCredits,
+        'llm_count'         => $llmCount,
+        'prompt_count'      => $promptCount,
         'results'           => $parsedResults,
         'message'           => 'Execution run completed successfully.',
     ], 200);
@@ -254,6 +258,9 @@ if ($mode === 'sync') {
         'response_mode'     => 'async',
         'credits_deducted'  => $requiredCredits,
         'credits_remaining' => $newCredits,
+        'expected_runs'     => $requiredCredits,
+        'llm_count'         => $llmCount,
+        'prompt_count'      => $promptCount,
         'message'           => 'Execution run dispatched successfully to worker queue.',
     ], 200);
 }

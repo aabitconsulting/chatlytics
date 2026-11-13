@@ -232,6 +232,11 @@ export class ApiClient {
   }
 
   // Trigger Execution
+  async getRunStatus(runId) {
+    const res = await this.get('api/reports.php', { action: 'run_status', run_id: runId });
+    return res.data || res;
+  }
+
   async triggerRun(configId, options = {}) {
     const payload = {
       config_id: configId,

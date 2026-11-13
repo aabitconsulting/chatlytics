@@ -426,7 +426,7 @@ describe('M3 Adversarial Challenger #2: Concurrency, Schema Constraints & Data I
 
       // Tracking config schedule intervals
       assert.ok(
-        schemaSql.includes("ENUM('manual', 'daily', 'weekly', 'biweekly', 'monthly')"),
+        schemaSql.includes("ENUM('manual', 'every_2h', 'every_4h', 'every_6h', 'every_12h', 'daily', 'weekly', 'biweekly', 'monthly')"),
         'tracking_configs.schedule_interval must define whitelist intervals'
       );
     });

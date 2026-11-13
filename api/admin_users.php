@@ -64,8 +64,10 @@ function handleListUsers(array $data): void {
     $params = [];
 
     if ($search !== '') {
-        $where .= " AND (u.email LIKE :search OR u.company_name LIKE :search)";
-        $params[':search'] = '%' . $search . '%';
+        $where .= " AND (u.email LIKE :search_email OR u.company_name LIKE :search_company)";
+        $searchPattern = '%' . $search . '%';
+        $params[':search_email'] = $searchPattern;
+        $params[':search_company'] = $searchPattern;
     }
 
     // Count total users
@@ -495,6 +497,88 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => null,
                     'day_offset'       => 24,
                 ],
+                // 7. Intraday High-Frequency Win (Last 4 hours)
+                [
+                    'mece'             => '1_DIRECT_WIN',
+                    'geo'              => 'NONE',
+                    'brand_mentioned'  => 1,
+                    'char_earliness'   => 32,
+                    'word_earliness'   => 5,
+                    'rel_pos'          => 3.90,
+                    'has_cit'          => 1,
+                    'brand_cited'      => 1,
+                    'comp_cited'       => 0,
+                    'comp_mentioned'   => 1,
+                    'comp_rec'         => 0,
+                    'comp_earliness'   => 460,
+                    'day_offset'       => 0,
+                    'hour_offset'      => 4,
+                ],
+                // 8. Intraday Halo (Last 12 hours)
+                [
+                    'mece'             => '2_BRAND_HALO',
+                    'geo'              => '3_BRAND_HALO_TRAP',
+                    'brand_mentioned'  => 1,
+                    'char_earliness'   => 480,
+                    'word_earliness'   => 70,
+                    'rel_pos'          => 39.00,
+                    'has_cit'          => 1,
+                    'brand_cited'      => 0,
+                    'comp_cited'       => 1,
+                    'comp_mentioned'   => 1,
+                    'comp_rec'         => 1,
+                    'comp_earliness'   => 84,
+                    'day_offset'       => 0,
+                    'hour_offset'      => 12,
+                ],
+                // 9. Previous 30d Baseline Win (34 days ago)
+                [
+                    'mece'             => '1_DIRECT_WIN',
+                    'geo'              => 'NONE',
+                    'brand_mentioned'  => 1,
+                    'char_earliness'   => 68,
+                    'word_earliness'   => 10,
+                    'rel_pos'          => 7.40,
+                    'has_cit'          => 1,
+                    'brand_cited'      => 1,
+                    'comp_cited'       => 0,
+                    'comp_mentioned'   => 1,
+                    'comp_rec'         => 0,
+                    'comp_earliness'   => 510,
+                    'day_offset'       => 34,
+                ],
+                // 10. Previous 30d Baseline Takeover (42 days ago)
+                [
+                    'mece'             => '3_COMPETITOR_TAKEOVER',
+                    'geo'              => '1_CITATION_HIJACK',
+                    'brand_mentioned'  => 0,
+                    'char_earliness'   => null,
+                    'word_earliness'   => null,
+                    'rel_pos'          => null,
+                    'has_cit'          => 1,
+                    'brand_cited'      => 0,
+                    'comp_cited'       => 1,
+                    'comp_mentioned'   => 1,
+                    'comp_rec'         => 1,
+                    'comp_earliness'   => 60,
+                    'day_offset'       => 42,
+                ],
+                // 11. Previous 30d Baseline Halo (51 days ago)
+                [
+                    'mece'             => '2_BRAND_HALO',
+                    'geo'              => '3_BRAND_HALO_TRAP',
+                    'brand_mentioned'  => 1,
+                    'char_earliness'   => 610,
+                    'word_earliness'   => 88,
+                    'rel_pos'          => 49.00,
+                    'has_cit'          => 1,
+                    'brand_cited'      => 0,
+                    'comp_cited'       => 1,
+                    'comp_mentioned'   => 1,
+                    'comp_rec'         => 1,
+                    'comp_earliness'   => 95,
+                    'day_offset'       => 51,
+                ],
             ];
 
             $providers = [
@@ -508,7 +592,11 @@ function handleSeedDemoData(): void {
             foreach ($runTemplates as $tmpl) {
                 foreach ($providers as $prov) {
                     $promptText = $cfg['keywords_prompts'][array_rand($cfg['keywords_prompts'])];
-                    $createdAt = date('Y-m-d H:i:s', strtotime("-{$tmpl['day_offset']} days"));
+                    $hourOffset = (int)($tmpl['hour_offset'] ?? 0);
+                    $dayOffset = (int)($tmpl['day_offset'] ?? 0);
+                    $createdAt = $hourOffset > 0
+                        ? date('Y-m-d H:i:s', strtotime("-{$hourOffset} hours"))
+                        : date('Y-m-d H:i:s', strtotime("-{$dayOffset} days"));
 
                     $insRun = $db->prepare("
                         INSERT INTO llm_runs (

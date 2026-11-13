@@ -54,11 +54,13 @@
       <div class="header-center">
         <!-- Period Filter Segmented Controls -->
         <div id="period-filter" class="segmented-control" role="group" aria-label="Zeitraumfilter">
+          <button type="button" class="segment-btn" data-period="24h">24h</button>
           <button type="button" class="segment-btn" data-period="7d">7d</button>
           <button type="button" class="segment-btn" data-period="14d">14d</button>
           <button type="button" class="segment-btn active" data-period="30d">30d</button>
           <button type="button" class="segment-btn" data-period="90d">90d</button>
           <button type="button" class="segment-btn" data-period="all">All</button>
+          <button type="button" class="segment-btn" data-period="custom" data-i18n="period.custom">Eigener</button>
         </div>
       </div>
 
@@ -107,7 +109,73 @@
   <!-- Main Content Layout -->
   <main class="dashboard-main container-fluid">
     <div class="workspace-heading-row">
-      <h1 class="workspace-title" data-i18n="dashboard.page_title">Sichtbarkeits-Workspace</h1>
+      <div class="workspace-title-group">
+        <h1 class="workspace-title" data-i18n="dashboard.page_title">Sichtbarkeits-Workspace</h1>
+        <span id="config-schedule-badge" class="badge badge-neutral hidden"></span>
+      </div>
+      <div class="config-actions-inline" role="group" aria-label="Profilaktionen">
+        <button id="btn-edit-config" type="button" class="btn btn-secondary btn-sm" disabled title="Profil bearbeiten" data-i18n="dashboard.edit_config">
+          Bearbeiten
+        </button>
+        <button id="btn-toggle-config-status" type="button" class="btn btn-secondary btn-sm" disabled title="Zeitplan pausieren oder fortsetzen" data-i18n="dashboard.pause_config">
+          Pausieren
+        </button>
+      </div>
+    </div>
+
+    <!-- Period & Comparison Controls Bar -->
+    <section id="period-comparison-bar" class="period-comparison-bar card" aria-label="Zeitraum und Vergleichszeitraum">
+      <div class="period-bar-controls">
+        <div id="custom-period-controls" class="date-range-group hidden">
+          <span class="date-range-label" data-i18n="period.custom_range_label">Zeitraum:</span>
+          <label for="custom-start-date" class="sr-only">Startdatum</label>
+          <input type="date" id="custom-start-date" class="form-control form-control-sm">
+          <span class="date-range-sep" aria-hidden="true">–</span>
+          <label for="custom-end-date" class="sr-only">Enddatum</label>
+          <input type="date" id="custom-end-date" class="form-control form-control-sm">
+        </div>
+
+        <div class="compare-mode-group">
+          <label for="compare-mode-select" class="date-range-label" data-i18n="compare.label">Vergleich:</label>
+          <select id="compare-mode-select" class="form-control form-select form-control-sm">
+            <option value="previous" selected data-i18n="compare.previous">vs. Vorperiode (gleich lang)</option>
+            <option value="custom" data-i18n="compare.custom">vs. Benutzerdefiniert</option>
+            <option value="none" data-i18n="compare.none">Kein Vergleich</option>
+          </select>
+        </div>
+
+        <div id="custom-compare-controls" class="date-range-group hidden">
+          <span class="date-range-label" data-i18n="compare.custom_range_label">Vergleichszeitraum:</span>
+          <label for="compare-start-date" class="sr-only">Vergleich Startdatum</label>
+          <input type="date" id="compare-start-date" class="form-control form-control-sm">
+          <span class="date-range-sep" aria-hidden="true">–</span>
+          <label for="compare-end-date" class="sr-only">Vergleich Enddatum</label>
+          <input type="date" id="compare-end-date" class="form-control form-control-sm">
+        </div>
+
+        <button id="btn-apply-date-filters" type="button" class="btn btn-primary btn-sm hidden" data-i18n="period.apply">
+          Anwenden
+        </button>
+        <div id="active-range-label" class="active-range-pill font-mono" aria-live="polite"></div>
+      </div>
+      <div id="period-bar-error" class="period-bar-error hidden" role="alert"></div>
+    </section>
+
+    <!-- Live Run Progress & Feedback Banner -->
+    <div id="run-status-banner" class="run-status-banner hidden" role="status" aria-live="polite">
+      <div class="run-status-lead">
+        <span id="run-status-indicator" class="run-status-indicator" aria-hidden="true">
+          <span class="run-spinner"></span>
+        </span>
+        <div class="run-status-copy">
+          <div id="run-status-title" class="run-status-title">Audit-Run gestartet</div>
+          <div id="run-status-detail" class="run-status-detail">Anfrage wird an die KI-Modelle übermittelt…</div>
+        </div>
+      </div>
+      <div class="run-status-meta">
+        <span id="run-status-badge" class="run-status-badge font-mono">0 / 0</span>
+        <button type="button" id="run-status-dismiss" class="btn-close run-status-dismiss" aria-label="Statusbanner schließen">&times;</button>
+      </div>
     </div>
 
     <!-- Top 6-Card KPI Bar (Feature 26.3 & Combination 3.7) -->
@@ -165,6 +233,7 @@
         <div class="kpi-card card">
           <div class="kpi-header">
             <span class="kpi-title" data-i18n="kpi.citation_share">Citations Share</span>
+            <span id="kpi-citations-delta" class="delta-badge delta-neutral">—</span>
           </div>
           <div class="kpi-value-row">
             <span id="kpi-citations" class="kpi-value font-mono">0.0 %</span>
@@ -182,6 +251,39 @@
           </div>
           <div class="kpi-subtext" data-i18n="kpi.credits_sub">Guthaben für Live- und Queue-Audits</div>
         </div>
+      </div>
+    </section>
+
+    <!-- Full-Width Time-Series & Comparison Visualization Card -->
+    <section id="timeline-card" class="card timeline-card" aria-label="Zeitverlauf und Periodenvergleich">
+      <div class="card-header timeline-header">
+        <div class="timeline-title-wrap">
+          <h2 class="card-title" data-i18n="timeline.title">Entwicklung über Zeitverlauf &amp; Vergleich</h2>
+          <p id="timeline-subtitle" class="card-hint"></p>
+        </div>
+        <div id="timeline-metric-tabs" class="timeline-tabs" role="tablist" aria-label="Kennzahl auswählen">
+          <button type="button" role="tab" aria-selected="true" class="timeline-tab-btn active" data-metric="som_score" data-i18n="timeline.metric_som">Share-of-Model (%)</button>
+          <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="visibility_index" data-i18n="timeline.metric_visibility">Visibility Index (%)</button>
+          <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="citation_share" data-i18n="timeline.metric_citations">Quellen-Anteil (%)</button>
+          <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="avg_earliness" data-i18n="timeline.metric_earliness">Ø Earliness (%)</button>
+        </div>
+      </div>
+
+      <div class="timeline-legend-bar">
+        <div class="timeline-legend-item">
+          <span class="legend-line legend-line-primary" aria-hidden="true"></span>
+          <span id="timeline-legend-primary" class="timeline-legend-text" data-i18n="timeline.legend_primary">Gewählter Zeitraum</span>
+        </div>
+        <div id="timeline-legend-compare-wrap" class="timeline-legend-item">
+          <span class="legend-line legend-line-compare" aria-hidden="true"></span>
+          <span id="timeline-legend-compare" class="timeline-legend-text" data-i18n="timeline.legend_compare">Vergleichszeitraum</span>
+        </div>
+        <div id="timeline-granularity-pill" class="timeline-granularity-pill font-mono"></div>
+      </div>
+
+      <div id="timeline-svg-wrap" class="timeline-svg-wrap">
+        <div id="timeline-svg-host" class="timeline-svg-host" role="img" aria-label="Liniendiagramm zur Sichtbarkeitsentwicklung"></div>
+        <div id="timeline-tooltip" class="timeline-tooltip hidden" role="status" aria-live="polite"></div>
       </div>
     </section>
 
@@ -450,12 +552,17 @@
         </div>
 
         <div class="form-group">
-          <label for="cfg-interval" class="form-label">Audit-Intervall</label>
+          <label for="cfg-interval" class="form-label" data-i18n="config.interval_label">Audit-Intervall</label>
           <select id="cfg-interval" class="form-control form-select">
-            <option value="daily" selected>Täglich (Daily)</option>
-            <option value="weekly">Wöchentlich (Weekly)</option>
-            <option value="manual">Nur Manuell (Manual)</option>
+            <option value="every_2h" data-i18n="interval.every_2h">12x täglich (alle 2 Std.)</option>
+            <option value="every_4h" data-i18n="interval.every_4h">6x täglich (alle 4 Std.)</option>
+            <option value="every_6h" data-i18n="interval.every_6h">4x täglich (alle 6 Std.)</option>
+            <option value="every_12h" data-i18n="interval.every_12h">2x täglich (alle 12 Std.)</option>
+            <option value="daily" selected data-i18n="interval.daily">1x täglich (Daily)</option>
+            <option value="weekly" data-i18n="interval.weekly">1x wöchentlich (Weekly)</option>
+            <option value="manual" data-i18n="interval.manual">Nur Manuell (Manual)</option>
           </select>
+          <p id="cfg-tier-hint" class="cfg-tier-hint hidden"></p>
         </div>
 
         <div class="form-group">
@@ -538,6 +645,8 @@
           </label>
         </div>
 
+        <div id="cfg-credit-preview" class="cfg-credit-preview" aria-live="polite"></div>
+
         <div class="modal-footer">
           <button type="button" id="config-cancel" class="btn btn-secondary">Abbrechen</button>
           <button type="submit" class="btn btn-primary">Konfiguration speichern</button>
@@ -565,6 +674,29 @@
       </div>
     </div>
   </div>
+
+  <!-- Confirmation Modal for Consequential Actions -->
+  <div id="action-confirm-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <h3 id="confirm-modal-title" class="modal-title" data-i18n="run.confirm_title">Abfrage jetzt starten?</h3>
+        <button type="button" id="confirm-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message" class="text-sm text-muted confirm-modal-message"></p>
+        <div id="confirm-modal-summary" class="confirm-summary-box" hidden></div>
+        <div id="confirm-modal-warning" class="confirm-warning-note" role="alert" hidden></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="confirm-modal-cancel" class="btn btn-secondary" data-i18n="common.cancel">Abbrechen</button>
+        <button type="button" id="confirm-modal-submit" class="btn btn-primary" data-i18n="run.confirm_cta_generic">Bestätigen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
   <footer class="footer">
     <div class="container-fluid footer-inner">

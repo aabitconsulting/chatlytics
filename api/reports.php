@@ -26,6 +26,46 @@ $isAuditMode = !empty($currentUser['is_audit_mode']);
 $db = getDb();
 $requestData = getRequestData();
 
+// Early Handler: Live Run Ingestion Status Polling (GET ?action=run_status&run_id=...)
+$action = strtolower(trim((string)($_GET['action'] ?? $requestData['action'] ?? '')));
+if ($action === 'run_status') {
+    if ($isAuditMode) {
+        jsonError("Forbidden: Live run status is disabled in Magic Audit mode.", 403);
+    }
+    $runId = trim((string)($_GET['run_id'] ?? $requestData['run_id'] ?? ''));
+    if ($runId === '' || !preg_match('/^run_[0-9]+_[a-f0-9]+$/', $runId)) {
+        jsonError("Invalid or missing run_id parameter.", 422);
+    }
+
+    $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
+    $jsonFilter = $driver === 'sqlite'
+        ? "json_valid(raw_prompt_payload) AND json_extract(raw_prompt_payload, '$.run_id') = :run_id"
+        : "JSON_VALID(raw_prompt_payload) AND JSON_UNQUOTE(JSON_EXTRACT(raw_prompt_payload, '$.run_id')) = :run_id";
+
+    $sql = "SELECT
+                COUNT(*) AS ingested_count,
+                COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_count,
+                COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed_count
+            FROM llm_runs
+            WHERE {$jsonFilter}";
+    $params = [':run_id' => $runId];
+    if (!$isAdmin) {
+        $sql .= " AND user_id = :usr_id";
+        $params[':usr_id'] = $userId;
+    }
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $row = $stmt->fetch() ?: [];
+
+    jsonResponse([
+        'run_id'          => $runId,
+        'ingested_count'  => (int)($row['ingested_count'] ?? 0),
+        'completed_count' => (int)($row['completed_count'] ?? 0),
+        'failed_count'    => (int)($row['failed_count'] ?? 0),
+    ], 200);
+}
+
 // 2. Tenant Scoping & Config Resolution
 $configId = isset($_GET['config_id']) && is_numeric($_GET['config_id'])
     ? (int)$_GET['config_id']
@@ -43,24 +83,30 @@ if ($configId !== null) {
     }
 }
 
-// 3. Resolve Period & Date Ranges (complying with Boundary 3.7)
+// 3. Resolve Primary & Comparison Period Date Ranges (complying with Boundary 3.7)
 $periodParam = strtolower(trim((string)($_GET['period'] ?? $requestData['period'] ?? '30d')));
 $startDateParam = trim((string)($_GET['start_date'] ?? $requestData['start_date'] ?? ''));
 $endDateParam = trim((string)($_GET['end_date'] ?? $requestData['end_date'] ?? ''));
+$compareModeParam = strtolower(trim((string)($_GET['compare_mode'] ?? $requestData['compare_mode'] ?? 'previous')));
+$compareStartParam = trim((string)($_GET['compare_start_date'] ?? $requestData['compare_start_date'] ?? ''));
+$compareEndParam = trim((string)($_GET['compare_end_date'] ?? $requestData['compare_end_date'] ?? ''));
 
 $isCustomRange = false;
 $days = 30;
+$nowTs = time();
 
 if ($startDateParam !== '' && $endDateParam !== '') {
     $startTs = strtotime($startDateParam);
     $endTs = strtotime($endDateParam);
     if ($startTs !== false && $endTs !== false && $endTs >= $startTs) {
         $isCustomRange = true;
-        $curStart = date('Y-m-d 00:00:00', $startTs);
-        $curEnd = date('Y-m-d 23:59:59', $endTs);
-        $diffDays = max(1, (int)round(($endTs - $startTs) / 86400));
-        $prevStart = date('Y-m-d 00:00:00', strtotime($curStart . " -{$diffDays} days"));
-        $prevEnd = date('Y-m-d 23:59:59', strtotime($curStart . " -1 second"));
+        $startDay = date('Y-m-d', $startTs);
+        $endDay = date('Y-m-d', $endTs);
+        $curStart = $startDay . ' 00:00:00';
+        $curEnd = $endDay . ' 23:59:59';
+        $spanDays = max(1, (int)round((strtotime($endDay) - strtotime($startDay)) / 86400) + 1);
+        $prevStartDefault = date('Y-m-d 00:00:00', strtotime($startDay . " -{$spanDays} days"));
+        $prevEndDefault = date('Y-m-d 23:59:59', strtotime($startDay . " -1 day"));
         $periodLabel = 'custom';
     }
 }
@@ -69,21 +115,66 @@ if (!$isCustomRange) {
     if ($periodParam === 'all') {
         $days = 3650;
         $periodLabel = 'all';
-    } elseif (preg_match('/^(\d+)d$/', $periodParam, $m)) {
-        $parsedDays = (int)$m[1];
-        if ($parsedDays < 1) $parsedDays = 7;
-        if ($parsedDays > 365) $parsedDays = 365;
-        $days = $parsedDays;
-        $periodLabel = "{$days}d";
+        $curStart = date('Y-m-d H:i:s', strtotime('-3650 days', $nowTs));
+        $curEnd = date('Y-m-d H:i:s', $nowTs);
+        $prevStartDefault = null;
+        $prevEndDefault = null;
+    } elseif ($periodParam === '24h' || $periodParam === '1d') {
+        $days = 1;
+        $periodLabel = '24h';
+        $curStartTs = $nowTs - 86400;
+        $curStart = date('Y-m-d H:i:s', $curStartTs);
+        $curEnd = date('Y-m-d H:i:s', $nowTs);
+        $prevStartDefault = date('Y-m-d H:i:s', $curStartTs - 86400);
+        $prevEndDefault = date('Y-m-d H:i:s', $curStartTs - 1);
     } else {
-        $days = 30;
-        $periodLabel = '30d';
-    }
+        if (preg_match('/^(\d+)d$/', $periodParam, $m)) {
+            $parsedDays = (int)$m[1];
+            if ($parsedDays < 1) $parsedDays = 7;
+            if ($parsedDays > 365) $parsedDays = 365;
+            $days = $parsedDays;
+            $periodLabel = "{$days}d";
+        } else {
+            $days = 30;
+            $periodLabel = '30d';
+        }
 
-    $curStart = date('Y-m-d H:i:s', strtotime("-{$days} days"));
-    $curEnd = date('Y-m-d H:i:s');
-    $prevStart = date('Y-m-d H:i:s', strtotime("-" . ($days * 2) . " days"));
-    $prevEnd = $curStart;
+        $curStartTs = strtotime("-{$days} days", $nowTs);
+        $curStart = date('Y-m-d H:i:s', $curStartTs);
+        $curEnd = date('Y-m-d H:i:s', $nowTs);
+        $prevStartDefault = date('Y-m-d H:i:s', strtotime("-" . ($days * 2) . " days", $nowTs));
+        $prevEndDefault = date('Y-m-d H:i:s', $curStartTs - 1);
+    }
+}
+
+// Resolve Comparison Period (previous [default], custom, none)
+$compareActive = false;
+$compareMode = 'none';
+$prevStart = null;
+$prevEnd = null;
+
+if ($compareModeParam === 'none' || $compareModeParam === 'off') {
+    $compareActive = false;
+    $compareMode = 'none';
+} elseif ($compareModeParam === 'custom' || ($compareStartParam !== '' && $compareEndParam !== '')) {
+    $cStartTs = strtotime($compareStartParam);
+    $cEndTs = strtotime($compareEndParam);
+    if ($compareStartParam !== '' && $compareEndParam !== '' && $cStartTs !== false && $cEndTs !== false && $cEndTs >= $cStartTs) {
+        $compareActive = true;
+        $compareMode = 'custom';
+        $prevStart = date('Y-m-d 00:00:00', $cStartTs);
+        $prevEnd = date('Y-m-d 23:59:59', $cEndTs);
+    } elseif ($periodLabel !== 'all' && $prevStartDefault !== null && $prevEndDefault !== null) {
+        $compareActive = true;
+        $compareMode = 'previous';
+        $prevStart = $prevStartDefault;
+        $prevEnd = $prevEndDefault;
+    }
+} elseif ($periodLabel !== 'all' && $prevStartDefault !== null && $prevEndDefault !== null) {
+    $compareActive = true;
+    $compareMode = 'previous';
+    $prevStart = $prevStartDefault;
+    $prevEnd = $prevEndDefault;
 }
 
 // 4. Build Scope WHERE clause
@@ -136,13 +227,14 @@ $curVisible = (int)($cur['visible_runs'] ?? 0);
 $curCited = (int)($cur['cited_runs'] ?? 0);
 $curAvgEarly = $cur['avg_earliness'] !== null ? round((float)$cur['avg_earliness'], 1) : 0.0;
 
-// 6. Query 2: Previous Period Baseline Aggregations
+// 6. Query 2: Comparison Period Baseline Aggregations
 $prevTotal = 0;
 $prevMentions = 0;
 $prevVisible = 0;
+$prevCited = 0;
 $prevAvgEarly = 0.0;
 
-if ($periodLabel !== 'all') {
+if ($compareActive && $prevStart !== null && $prevEnd !== null) {
     $prevParams = array_merge($baseParams, [
         ':prev_start' => $prevStart,
         ':prev_end'   => $prevEnd,
@@ -152,10 +244,11 @@ if ($periodLabel !== 'all') {
             COUNT(*) AS total_runs,
             SUM(CASE WHEN r.brand_mentioned = 1 THEN 1 ELSE 0 END) AS mentions_count,
             SUM(CASE WHEN r.brand_mentioned = 1 OR r.brand_cited = 1 THEN 1 ELSE 0 END) AS visible_runs,
+            SUM(CASE WHEN r.brand_cited = 1 THEN 1 ELSE 0 END) AS cited_runs,
             AVG(CASE WHEN r.brand_mentioned = 1 THEN r.relative_position_pct ELSE NULL END) AS avg_earliness
         FROM llm_runs r
         WHERE {$baseWhere}
-          AND r.created_at >= :prev_start AND r.created_at < :prev_end
+          AND r.created_at >= :prev_start AND r.created_at <= :prev_end
     ";
     $stmtPrev = $db->prepare($prevSql);
     $stmtPrev->execute($prevParams);
@@ -163,6 +256,7 @@ if ($periodLabel !== 'all') {
     $prevTotal = (int)($prev['total_runs'] ?? 0);
     $prevMentions = (int)($prev['mentions_count'] ?? 0);
     $prevVisible = (int)($prev['visible_runs'] ?? 0);
+    $prevCited = (int)($prev['cited_runs'] ?? 0);
     $prevAvgEarly = $prev['avg_earliness'] !== null ? round((float)$prev['avg_earliness'], 1) : 0.0;
 }
 
@@ -177,16 +271,19 @@ if ($curTotal > 0) {
     $citationShare = 0.0;
 }
 
-if ($prevTotal > 0 && $periodLabel !== 'all') {
+if ($compareActive && $prevTotal > 0) {
     $prevSom = round(($prevMentions / $prevTotal) * 100, 2);
     $prevVis = round(($prevVisible / $prevTotal) * 100, 1);
+    $prevCit = round(($prevCited / $prevTotal) * 100, 1);
     $somDelta = round($somScore - $prevSom, 2);
     $visibilityDelta = round($visibilityIndex - $prevVis, 1);
     $earlinessDelta = round($curAvgEarly - $prevAvgEarly, 1);
+    $citationDelta = round($citationShare - $prevCit, 1);
 } else {
     $somDelta = null;
     $visibilityDelta = null;
     $earlinessDelta = null;
+    $citationDelta = null;
 }
 
 // 8. MECE Breakdown (Strictly 4 snake_case keys whose sum equals total_runs)
@@ -249,7 +346,7 @@ if ($curTotal > 0) {
             rc.competitor_domain,
             COUNT(*) AS total_tracked,
             SUM(CASE WHEN rc.mentioned = 1 THEN 1 ELSE 0 END) AS mentions,
-            ROUND(SUM(CASE WHEN rc.mentioned = 1 THEN 1 ELSE 0 END) / :tot_runs * 100, 1) AS visibility_pct,
+            ROUND(SUM(CASE WHEN rc.mentioned = 1 THEN 1.0 ELSE 0.0 END) / :tot_runs * 100.0, 1) AS visibility_pct,
             ROUND(AVG(CASE WHEN rc.mentioned = 1 THEN rc.relative_position_pct ELSE NULL END), 1) AS avg_relative_pos,
             SUM(CASE WHEN rc.recommended = 1 THEN 1 ELSE 0 END) AS recommendations_count
         FROM run_competitors rc
@@ -309,27 +406,25 @@ if ($curTotal > 0) {
     $topUrls = $urlStmt->fetchAll() ?: [];
 }
 
-// 12. Query 5: Timeline Data Points (Daily)
-$timeline = [];
-if ($curTotal > 0) {
-    $timeSql = "
-        SELECT 
-            DATE(r.created_at) AS date_point,
-            COUNT(*) AS total_runs,
-            SUM(CASE WHEN r.brand_mentioned = 1 THEN 1 ELSE 0 END) AS mentions,
-            ROUND(SUM(CASE WHEN r.brand_mentioned = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS som_score,
-            ROUND(SUM(CASE WHEN r.brand_mentioned = 1 OR r.brand_cited = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS visibility_index,
-            SUM(CASE WHEN r.mece_category = '1_DIRECT_WIN' THEN 1 ELSE 0 END) AS direct_wins
-        FROM llm_runs r
-        WHERE {$baseWhere}
-          AND r.created_at >= :cur_start AND r.created_at <= :cur_end
-        GROUP BY DATE(r.created_at)
-        ORDER BY date_point ASC
-    ";
-    $timeStmt = $db->prepare($timeSql);
-    $timeStmt->execute($curParams);
-    $timeline = $timeStmt->fetchAll() ?: [];
-}
+// 12. Query 5: Adaptive Primary & Comparison Timeline Data Points
+$curDurationSec = max(0, strtotime($curEnd) - strtotime($curStart));
+$granularity = ($curDurationSec <= 48 * 3600) ? 'hour' : 'day';
+
+$timelineResult = ($curTotal > 0)
+    ? fetchTimelineSeries($db, $baseWhere, $baseParams, $curStart, $curEnd, $granularity, $periodLabel === 'all')
+    : ['points' => [], 'total_slots' => computeTimelineSlots($curStart, $curEnd, $granularity)];
+
+$comparisonTimelineResult = ($compareActive && $prevTotal > 0 && $prevStart !== null && $prevEnd !== null)
+    ? fetchTimelineSeries($db, $baseWhere, $baseParams, $prevStart, $prevEnd, $granularity, false)
+    : ['points' => [], 'total_slots' => ($compareActive && $prevStart && $prevEnd ? computeTimelineSlots($prevStart, $prevEnd, $granularity) : 0)];
+
+$timeline = $timelineResult['points'];
+$comparisonTimeline = $comparisonTimelineResult['points'];
+$totalSlots = max(
+    1,
+    (int)$timelineResult['total_slots'],
+    (int)$comparisonTimelineResult['total_slots']
+);
 
 // 13. Assemble Final Response
 jsonResponse([
@@ -346,7 +441,9 @@ jsonResponse([
         'som_delta'         => $somDelta,
         'visibility_delta'  => $visibilityDelta,
         'earliness_delta'   => $earlinessDelta,
-        'runs_delta'        => ($periodLabel !== 'all' && $prevTotal > 0) ? ($curTotal - $prevTotal) : null,
+        'citation_delta'    => $citationDelta,
+        'runs_delta'        => ($compareActive && $prevTotal > 0) ? ($curTotal - $prevTotal) : null,
+        'previous_total'    => $compareActive ? $prevTotal : null,
     ],
     'geo_diagnostic' => [
         'active_quadrant' => $activeQuadrant,
@@ -364,9 +461,13 @@ jsonResponse([
         'domains' => $topDomains,
         'urls'    => $topUrls,
     ],
-    'timeline' => $timeline,
+    'timeline'            => $timeline,
+    'comparison_timeline' => $comparisonTimeline,
     'date_range' => [
         'period'         => $periodLabel,
+        'compare_mode'   => $compareMode,
+        'granularity'    => $granularity,
+        'total_slots'    => $totalSlots,
         'current_start'  => $curStart,
         'current_end'    => $curEnd,
         'previous_start' => $prevStart,
@@ -374,3 +475,124 @@ jsonResponse([
     ],
     'is_audit_mode' => $isAuditMode,
 ], 200);
+
+/**
+ * Computes expected number of time buckets between start and end for a given granularity.
+ */
+function computeTimelineSlots(string $start, string $end, string $granularity): int
+{
+    $startTs = strtotime($start);
+    $endTs = strtotime($end);
+    if ($startTs === false || $endTs === false || $endTs < $startTs) {
+        return 1;
+    }
+
+    if ($granularity === 'hour') {
+        $aStart = strtotime(date('Y-m-d H:00:00', $startTs));
+        $aEnd = strtotime(date('Y-m-d H:00:00', $endTs));
+        return max(1, (int)round(($aEnd - $aStart) / 3600) + 1);
+    }
+
+    $aStart = strtotime(date('Y-m-d 00:00:00', $startTs));
+    $aEnd = strtotime(date('Y-m-d 00:00:00', $endTs));
+    return max(1, (int)round(($aEnd - $aStart) / 86400) + 1);
+}
+
+/**
+ * Queries and normalizes hourly or daily aggregated metrics for a single period.
+ * Uses floating-point literals (1.0 / 100.0) so SQLite and MySQL produce identical percentages.
+ *
+ * @return array{points: array<int, array<string, mixed>>, total_slots: int}
+ */
+function fetchTimelineSeries(
+    PDO $db,
+    string $baseWhere,
+    array $baseParams,
+    string $start,
+    string $end,
+    string $granularity,
+    bool $anchorToFirstBucket = false
+): array {
+    $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
+    if ($granularity === 'hour') {
+        $bucketExpr = ($driver === 'sqlite')
+            ? "strftime('%Y-%m-%d %H:00:00', r.created_at)"
+            : "DATE_FORMAT(r.created_at, '%Y-%m-%d %H:00:00')";
+    } else {
+        $bucketExpr = "DATE(r.created_at)";
+    }
+
+    $sql = "
+        SELECT 
+            {$bucketExpr} AS date_point,
+            COUNT(*) AS total_runs,
+            SUM(CASE WHEN r.brand_mentioned = 1 THEN 1 ELSE 0 END) AS mentions,
+            ROUND(SUM(CASE WHEN r.brand_mentioned = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS som_score,
+            ROUND(SUM(CASE WHEN r.brand_mentioned = 1 OR r.brand_cited = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS visibility_index,
+            ROUND(SUM(CASE WHEN r.brand_cited = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS citation_share,
+            ROUND(AVG(CASE WHEN r.brand_mentioned = 1 THEN r.relative_position_pct ELSE NULL END), 1) AS avg_earliness,
+            SUM(CASE WHEN r.mece_category = '1_DIRECT_WIN' THEN 1 ELSE 0 END) AS direct_wins
+        FROM llm_runs r
+        WHERE {$baseWhere}
+          AND r.created_at >= :range_start AND r.created_at <= :range_end
+        GROUP BY {$bucketExpr}
+        ORDER BY date_point ASC
+    ";
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute(array_merge($baseParams, [
+        ':range_start' => $start,
+        ':range_end'   => $end,
+    ]));
+    $rows = $stmt->fetchAll() ?: [];
+
+    if (empty($rows)) {
+        return [
+            'points'      => [],
+            'total_slots' => computeTimelineSlots($start, $end, $granularity),
+        ];
+    }
+
+    $stepSeconds = ($granularity === 'hour') ? 3600 : 86400;
+    $rawAnchorStart = ($anchorToFirstBucket && !empty($rows[0]['date_point']))
+        ? (string)$rows[0]['date_point']
+        : $start;
+    $anchorTs = strtotime($rawAnchorStart);
+    $alignedAnchorTs = ($granularity === 'hour')
+        ? strtotime(date('Y-m-d H:00:00', $anchorTs))
+        : strtotime(date('Y-m-d 00:00:00', $anchorTs));
+
+    $effectiveEndTs = strtotime($end);
+    $alignedEndTs = ($granularity === 'hour')
+        ? strtotime(date('Y-m-d H:00:00', $effectiveEndTs))
+        : strtotime(date('Y-m-d 00:00:00', $effectiveEndTs));
+
+    $totalSlots = max(1, (int)round(($alignedEndTs - $alignedAnchorTs) / $stepSeconds) + 1);
+    $points = [];
+
+    foreach ($rows as $row) {
+        $pointStr = (string)$row['date_point'];
+        $pointTs = strtotime($pointStr);
+        $alignedPointTs = ($granularity === 'hour')
+            ? strtotime(date('Y-m-d H:00:00', $pointTs))
+            : strtotime(date('Y-m-d 00:00:00', $pointTs));
+        $slotIndex = max(0, (int)round(($alignedPointTs - $alignedAnchorTs) / $stepSeconds));
+
+        $points[] = [
+            'date_point'       => $pointStr,
+            'slot_index'       => $slotIndex,
+            'total_runs'       => (int)($row['total_runs'] ?? 0),
+            'mentions'         => (int)($row['mentions'] ?? 0),
+            'som_score'        => (float)($row['som_score'] ?? 0),
+            'visibility_index' => (float)($row['visibility_index'] ?? 0),
+            'citation_share'   => (float)($row['citation_share'] ?? 0),
+            'avg_earliness'    => $row['avg_earliness'] !== null ? (float)$row['avg_earliness'] : null,
+            'direct_wins'      => (int)($row['direct_wins'] ?? 0),
+        ];
+    }
+
+    return [
+        'points'      => $points,
+        'total_slots' => $totalSlots,
+    ];
+}

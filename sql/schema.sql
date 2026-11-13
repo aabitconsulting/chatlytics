@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS `tracking_configs` (
   `competitors` JSON NOT NULL,
   `target_llms` JSON NOT NULL,
   `search_enabled` TINYINT(1) NOT NULL DEFAULT 1,
-  `schedule_interval` ENUM('manual', 'daily', 'weekly', 'biweekly', 'monthly') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'daily',
+  `schedule_interval` ENUM('manual', 'every_2h', 'every_4h', 'every_6h', 'every_12h', 'daily', 'weekly', 'biweekly', 'monthly') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'daily',
   `status` ENUM('active', 'paused', 'archived') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
   `last_run_at` TIMESTAMP NULL DEFAULT NULL,
   `next_run_at` TIMESTAMP NULL DEFAULT NULL,

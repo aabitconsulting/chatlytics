@@ -316,7 +316,7 @@ describe('M4 Adversarial Challenger #2: Concurrency, Data Integrity & Mathematic
 
       // 4. Atomic credit deduction
       assert.ok(queueSrc.includes('credits_remaining = credits_remaining - :cost'), 'Must deduct credits atomically');
-      assert.ok(queueSrc.includes('credits_remaining >= :cost'), 'Must guard against negative credit deduction');
+      assert.ok(queueSrc.includes('credits_remaining >= :cost_min'), 'Must guard against negative credit deduction with distinct :cost_min parameter');
     });
   });
 
@@ -947,7 +947,7 @@ describe('M4 Adversarial Challenger #2: Concurrency, Data Integrity & Mathematic
 
       assert.ok(triggerSrc.includes('requireAuth(false)'), 'Must forbid audit mode in requireAuth');
       assert.ok(triggerSrc.includes('requireWritePermission($currentUser)'), 'Must enforce requireWritePermission');
-      assert.ok(triggerSrc.includes('credits_remaining >= :cost'), 'Must check credits balance atomically in SQL');
+      assert.ok(triggerSrc.includes('credits_remaining >= :cost_min'), 'Must check credits balance atomically in SQL with distinct :cost_min parameter');
       assert.ok(triggerSrc.includes('credits_remaining = credits_remaining + :cost'), 'Must implement credit refund SQL statement');
     });
   });
