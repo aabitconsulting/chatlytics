@@ -2,24 +2,26 @@
 declare(strict_types=1);
 
 /**
- * Chatlytics.de — Execution Dispatcher (Feature 18)
+ * Chatlytics.de — One-Time Pre-Start Test Run Dispatcher (Feature 18 / Flow B)
  * File: api/trigger_run.php
  *
- * Dispatches on-demand and manual AI Visibility audit runs to the n8n
- * Universal Worker webhook (`POST /webhook/chatlytics-run`).
+ * Dispatches the single pre-start test run (`is_test_run = 1`) for a configuration
+ * before "Full Start" (`full_started_at`) is activated.
  *
  * Responsibilities:
  * 1. Strict Authentication: Enforces `requireAuth(false)` and `requireWritePermission`
  *    (Magic Audit mode is strictly forbidden from triggering live runs).
  * 2. Multi-Tenant Scoping: Verifies `config_id` exists and belongs to the authenticated user.
- * 3. Atomic Credit Reservation: Calculates required credits (LLM count * Prompt count)
- *    and atomically deducts balance (`credits_remaining >= :cost`). Rejects immediately if insufficient.
- * 4. Dual Execution Modes:
- *    - `async` (default): Sets 2s cURL timeout; awaits n8n fast queue ack (`200 OK {"status": "queued"}` in <200ms)
- *      and returns 200 OK with `queued` status and remaining credits.
- *    - `sync`: Sets 60s cURL timeout; blocks until n8n finishes computation and returns full run results.
- * 5. Rollback on Failure: If n8n is unreachable, times out, or returns a 5xx error,
- *    atomically refunds the reserved credits and returns 502/504 Bad Gateway / Gateway Timeout.
+ * 3. Pre-Start Lifecycle Enforcement:
+ *    - Rejects with 409 Conflict if `full_started_at` is already set (Full Start is active).
+ *    - Rejects with 409 Conflict if `initial_test_used` is already 1 (1x test run already used).
+ * 4. Atomic Credit & Test Flag Reservation: Calculates required credits (LLM count * Prompt count),
+ *    deducts balance, and marks `initial_test_used = 1`.
+ * 5. Provider Cost-Optimization & Correlation (`custom_id`):
+ *    - Generates a unique `custom_id` and deterministic `prompt_cache_key` for every prompt × LLM item,
+ *      persisting each request in `batch_requests` (`is_test_run = 1`).
+ * 6. Rollback on Failure: If n8n is unreachable, times out, or returns a 5xx error,
+ *    atomically refunds the reserved credits, resets `initial_test_used = 0`, and removes pending batch items.
  */
 
 require_once __DIR__ . '/bootstrap.php';
@@ -46,6 +48,9 @@ if ($configId <= 0) {
 
 // 3. Multi-Tenant Config Resolution
 $db = getDb();
+ensureCoreSchemaColumns($db);
+ensureUserResultsTable($db, $userId);
+
 $configStmt = $db->prepare("SELECT * FROM tracking_configs WHERE id = :id LIMIT 1");
 $configStmt->execute([':id' => $configId]);
 $config = $configStmt->fetch();
@@ -64,10 +69,35 @@ if (($config['status'] ?? '') === 'archived') {
     jsonError("Cannot trigger execution for an archived tracking configuration.", 400);
 }
 
+// Enforce Flow B: One-Time Pre-Start Test Run Lifecycle
+if (!empty($config['full_started_at'])) {
+    jsonError(
+        "Full Data Mining has already started for this configuration. Manual test runs are locked; configuration can only be paused or resumed.",
+        409,
+        [
+            'config_id'         => $configId,
+            'full_started_at'   => $config['full_started_at'],
+            'initial_test_used' => true,
+        ]
+    );
+}
+
+if (!empty($config['initial_test_used'])) {
+    jsonError(
+        "The single pre-start test run has already been used for this configuration. Please activate Full Start to begin continuous daily Data Mining.",
+        409,
+        [
+            'config_id'         => $configId,
+            'initial_test_used' => true,
+        ]
+    );
+}
+
 // 4. Resolve Execution Parameters
 $brandName = (string)$config['brand_name'];
 $brandDomains = json_decode($config['brand_domains'] ?: '[]', true) ?? [];
 $competitors = json_decode($config['competitors'] ?: '[]', true) ?? [];
+$scheduleInterval = normalizeScheduleInterval((string)($config['schedule_interval'] ?? 'every_120m'));
 
 // Resolve target LLMs while preserving per-model granularity (including Mistral vs Z.ai GLM)
 $rawTargetLLMs = $requestData['target_llms'] ?? json_decode($config['target_llms'] ?: '[]', true);
@@ -133,8 +163,8 @@ $deductStmt = $db->prepare("
 ");
 $deductStmt->execute([
     ':cost_min' => $requiredCredits,
-    ':cost'    => $requiredCredits,
-    ':user_id' => $userId,
+    ':cost'     => $requiredCredits,
+    ':user_id'  => $userId,
 ]);
 
 if ($deductStmt->rowCount() === 0) {
@@ -153,27 +183,95 @@ if ($deductStmt->rowCount() === 0) {
     );
 }
 
-// 6. Build Webhook Payload & Execute cURL to n8n
+// Mark initial_test_used = 1 atomically before dispatching
+$markTestStmt = $db->prepare("UPDATE tracking_configs SET initial_test_used = 1 WHERE id = :id");
+$markTestStmt->execute([':id' => $configId]);
+
+// 6. Generate custom_id & Provider Caching Metadata for Each Prompt × LLM Item
 $runId = 'run_' . time() . '_' . substr(bin2hex(random_bytes(4)), 0, 7);
 $appConfig = getConfig();
 $apiBaseUrl = rtrim((string)($appConfig['app']['base_url'] ?? 'https://chatlytics.de'), '/');
 $webhookUrl = (string)($appConfig['n8n']['webhook_url'] ?? 'https://n8n.chatlytics.de/webhook/chatlytics-run');
 $sharedSecret = (string)($appConfig['n8n']['shared_secret'] ?? '');
 
+$batchItems = [];
+$customIds = [];
+$insBatchReq = $db->prepare("
+    INSERT INTO batch_requests (
+        custom_id, prompt_cache_key, execution_strategy,
+        user_id, config_id, prompt, provider, model,
+        brand_name, brand_domains, competitors,
+        search_enabled, is_test_run, status, scheduled_for, submitted_at
+    ) VALUES (
+        :custom_id, :prompt_cache_key, :execution_strategy,
+        :user_id, :config_id, :prompt, :provider, :model,
+        :brand_name, :brand_domains, :competitors,
+        :search_enabled, 1, 'submitted', NOW(), NOW()
+    )
+");
+
+$domainsJson = json_encode($brandDomains, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+$competitorsJson = json_encode($competitors, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+foreach ($prompts as $promptText) {
+    foreach ($targetLLMs as $llmToken) {
+        $spec = resolveTargetLlmSpec((string)$llmToken, $scheduleInterval);
+        $customId = sprintf('cl_u%d_c%d_%d_%s', $userId, $configId, time(), substr(bin2hex(random_bytes(4)), 0, 8));
+        $promptCacheKey = buildPromptCacheKey($configId, $promptText, $spec['id']);
+        $providerCachingConfig = buildProviderCachingConfig($spec['provider'], $spec['model'], $promptCacheKey, $scheduleInterval);
+
+        $insBatchReq->execute([
+            ':custom_id'          => $customId,
+            ':prompt_cache_key'   => $promptCacheKey,
+            ':execution_strategy' => $spec['execution_strategy'],
+            ':user_id'            => $userId,
+            ':config_id'          => $configId,
+            ':prompt'             => $promptText,
+            ':provider'           => $spec['provider'],
+            ':model'              => $spec['model'],
+            ':brand_name'         => $brandName,
+            ':brand_domains'      => $domainsJson,
+            ':competitors'        => $competitorsJson,
+            ':search_enabled'     => $searchEnabled ? 1 : 0,
+        ]);
+
+        $customIds[] = $customId;
+        $batchItems[] = [
+            'custom_id'               => $customId,
+            'prompt_cache_key'        => $promptCacheKey,
+            'execution_strategy'      => $spec['execution_strategy'],
+            'provider_caching_config' => $providerCachingConfig,
+            'prompt'                  => $promptText,
+            'provider'                => $spec['provider'],
+            'model'                   => $spec['model'],
+            'target_llm'              => $spec['id'],
+            'is_test_run'             => true,
+        ];
+    }
+}
+
+$firstItem = $batchItems[0] ?? [];
 $webhookPayload = [
-    'run_id'         => $runId,
-    'api_base_url'   => $apiBaseUrl,
-    'config_id'      => (int)$config['id'],
-    'user_id'        => $userId,
-    'brand_name'     => $brandName,
-    'brand_domains'  => $brandDomains,
-    'prompt'         => $prompts[0],
-    'prompts'        => $prompts,
-    'competitors'    => $competitors,
-    'target_llms'    => $targetLLMs,
-    'search_enabled' => $searchEnabled,
-    'response_mode'  => $mode,
-    'created_at'     => date('Y-m-d\TH:i:s\Z'),
+    'run_id'                  => $runId,
+    'custom_id'               => $firstItem['custom_id'] ?? null,
+    'prompt_cache_key'        => $firstItem['prompt_cache_key'] ?? null,
+    'execution_strategy'      => $firstItem['execution_strategy'] ?? 'prompt_caching',
+    'provider_caching_config' => $firstItem['provider_caching_config'] ?? null,
+    'is_test_run'             => true,
+    'batch_items'             => $batchItems,
+    'api_base_url'            => $apiBaseUrl,
+    'config_id'               => (int)$config['id'],
+    'user_id'                 => $userId,
+    'brand_name'              => $brandName,
+    'brand_domains'           => $brandDomains,
+    'prompt'                  => $prompts[0],
+    'prompts'                 => $prompts,
+    'competitors'             => $competitors,
+    'target_llms'             => $targetLLMs,
+    'schedule_interval'       => $scheduleInterval,
+    'search_enabled'          => $searchEnabled,
+    'response_mode'           => $mode,
+    'created_at'              => date('Y-m-d\TH:i:s\Z'),
 ];
 
 $timeoutSeconds = ($mode === 'sync') ? 60 : 2;
@@ -204,7 +302,7 @@ curl_close($ch);
 $isFailed = ($curlErrno !== 0) || ($httpCode >= 400) || ($mode === 'async' && $httpCode !== 200);
 
 if ($isFailed) {
-    // Atomic refund of reserved credits
+    // Atomic refund of reserved credits and reset initial_test_used = 0
     $refundStmt = $db->prepare("
         UPDATE users 
         SET credits_remaining = credits_remaining + :cost 
@@ -214,6 +312,22 @@ if ($isFailed) {
         ':cost'    => $requiredCredits,
         ':user_id' => $userId,
     ]);
+
+    $resetTestStmt = $db->prepare("UPDATE tracking_configs SET initial_test_used = 0 WHERE id = :id");
+    $resetTestStmt->execute([':id' => $configId]);
+
+    if (!empty($customIds)) {
+        $namedPlaceholders = [];
+        $delParams = [];
+        foreach (array_values($customIds) as $idx => $cid) {
+            $ph = ':cid_' . $idx;
+            $namedPlaceholders[] = $ph;
+            $delParams[$ph] = $cid;
+        }
+        $placeholdersSql = implode(',', $namedPlaceholders);
+        $delBrStmt = $db->prepare("DELETE FROM batch_requests WHERE custom_id IN ({$placeholdersSql})");
+        $delBrStmt->execute($delParams);
+    }
 
     $statusCode = ($curlErrno === CURLE_OPERATION_TIMEDOUT) ? 504 : 502;
     $errorMessage = $curlError !== '' ? $curlError : "HTTP {$httpCode} from n8n webhook";
@@ -230,7 +344,7 @@ if ($isFailed) {
 }
 
 // 8. Success: Update Tracking Config and Output Envelope
-$updateStmt = $db->prepare("UPDATE tracking_configs SET last_run_at = NOW() WHERE id = :id");
+$updateStmt = $db->prepare("UPDATE tracking_configs SET last_run_at = NOW(), initial_test_used = 1 WHERE id = :id");
 $updateStmt->execute([':id' => (int)$config['id']]);
 
 $credStmt = $db->prepare("SELECT credits_remaining FROM users WHERE id = :user_id");
@@ -244,13 +358,17 @@ if ($mode === 'sync') {
         'run_id'            => $runId,
         'config_id'         => (int)$config['id'],
         'response_mode'     => 'sync',
+        'is_test_run'       => true,
+        'initial_test_used' => true,
+        'custom_ids'        => $customIds,
+        'batch_items'       => $batchItems,
         'credits_deducted'  => $requiredCredits,
         'credits_remaining' => $newCredits,
         'expected_runs'     => $requiredCredits,
         'llm_count'         => $llmCount,
         'prompt_count'      => $promptCount,
         'results'           => $parsedResults,
-        'message'           => 'Execution run completed successfully.',
+        'message'           => 'Pre-start test run completed successfully.',
     ], 200);
 } else {
     jsonResponse([
@@ -258,11 +376,15 @@ if ($mode === 'sync') {
         'run_id'            => $runId,
         'config_id'         => (int)$config['id'],
         'response_mode'     => 'async',
+        'is_test_run'       => true,
+        'initial_test_used' => true,
+        'custom_ids'        => $customIds,
+        'batch_items'       => $batchItems,
         'credits_deducted'  => $requiredCredits,
         'credits_remaining' => $newCredits,
         'expected_runs'     => $requiredCredits,
         'llm_count'         => $llmCount,
         'prompt_count'      => $promptCount,
-        'message'           => 'Execution run dispatched successfully to worker queue.',
+        'message'           => 'Pre-start test run dispatched successfully to worker queue.',
     ], 200);
 }

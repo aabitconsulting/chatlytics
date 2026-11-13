@@ -205,6 +205,12 @@ export class ApiClient {
     return res.data || res;
   }
 
+  // Per-User Physical Results Table Lookup
+  async getUserResults(params = {}) {
+    const res = await this.get('api/user_results.php', params);
+    return res.data || res;
+  }
+
   // Configs CRUD
   async getConfigs() {
     const res = await this.get('api/configs.php');
@@ -226,12 +232,17 @@ export class ApiClient {
     return res.data || res;
   }
 
+  async fullStartConfig(id) {
+    const res = await this.put(`api/configs.php?id=${id}`, { action: 'full_start' });
+    return res.data || res;
+  }
+
   async deleteConfig(id) {
     const res = await this.delete(`api/configs.php?id=${id}`);
     return res.data || res;
   }
 
-  // Trigger Execution
+  // Trigger Execution (One-Time Pre-Start Test Run)
   async getRunStatus(runId) {
     const res = await this.get('api/reports.php', { action: 'run_status', run_id: runId });
     return res.data || res;

@@ -52,9 +52,8 @@
       </div>
 
       <div class="header-center">
-        <!-- Period Filter Segmented Controls -->
+        <!-- Period Filter Segmented Controls (Strictly Daily Aggregation) -->
         <div id="period-filter" class="segmented-control" role="group" aria-label="Zeitraumfilter">
-          <button type="button" class="segment-btn" data-period="24h">24h</button>
           <button type="button" class="segment-btn" data-period="7d">7d</button>
           <button type="button" class="segment-btn" data-period="14d">14d</button>
           <button type="button" class="segment-btn active" data-period="30d">30d</button>
@@ -65,7 +64,7 @@
       </div>
 
       <div class="header-right">
-        <!-- Instant Run Trigger Button -->
+        <!-- One-Time Pre-Start Test Run Button -->
         <button id="btn-trigger-run" type="button" class="btn btn-primary btn-sm btn-trigger-run">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
             <polygon points="2,1 11,6 2,11"/>
@@ -114,6 +113,9 @@
         <span id="config-schedule-badge" class="badge badge-neutral hidden"></span>
       </div>
       <div class="config-actions-inline" role="group" aria-label="Profilaktionen">
+        <button id="btn-full-start-config" type="button" class="btn btn-primary btn-sm hidden" data-i18n="dashboard.full_start_config">
+          Full Start aktivieren
+        </button>
         <button id="btn-edit-config" type="button" class="btn btn-secondary btn-sm" disabled title="Profil bearbeiten" data-i18n="dashboard.edit_config">
           Bearbeiten
         </button>
@@ -178,7 +180,27 @@
       </div>
     </div>
 
-    <!-- Top 6-Card KPI Bar (Feature 26.3 & Combination 3.7) -->
+    <!-- Day-1 Configuration Suppression Banner -->
+    <div id="first-day-banner" class="card first-day-banner hidden" role="status" aria-live="polite">
+      <div class="first-day-banner-inner">
+        <div class="first-day-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="9"/>
+            <polyline points="12 7 12 12 15 15"/>
+          </svg>
+        </div>
+        <div class="first-day-copy">
+          <h3 id="first-day-title" class="first-day-title" data-i18n="dashboard.first_day_title">
+            Tag 1 der Konfiguration — Datenerhebung läuft über den Kalendertag
+          </h3>
+          <p id="first-day-desc" class="first-day-desc" data-i18n="dashboard.first_day_desc">
+            Ihre Prompts werden gemäß der gewählten Data-Mining-Genauigkeit über den Tag verteilt abgefragt. Aggregierte Tageswerte und Modell-Zeitreihen erscheinen ab morgen im Dashboard.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top 6-Card KPI Bar -->
     <section class="kpi-section" aria-label="Key Performance Indicators">
       <div class="kpi-grid">
         <!-- 1. Share-of-Model (SoM %) -->
@@ -254,18 +276,26 @@
       </div>
     </section>
 
-    <!-- Full-Width Time-Series & Comparison Visualization Card -->
-    <section id="timeline-card" class="card timeline-card" aria-label="Zeitverlauf und Periodenvergleich">
+    <!-- Full-Width Daily Time-Series, Per-Model & Per-Prompt Visualization Card -->
+    <section id="timeline-card" class="card timeline-card" aria-label="Zeitverlauf und Modell-Performance pro Prompt">
       <div class="card-header timeline-header">
         <div class="timeline-title-wrap">
           <h2 class="card-title" data-i18n="timeline.title">Entwicklung über Zeitverlauf &amp; Vergleich</h2>
           <p id="timeline-subtitle" class="card-hint"></p>
         </div>
-        <div id="timeline-metric-tabs" class="timeline-tabs" role="tablist" aria-label="Kennzahl auswählen">
-          <button type="button" role="tab" aria-selected="true" class="timeline-tab-btn active" data-metric="som_score" data-i18n="timeline.metric_som">Share-of-Model (%)</button>
-          <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="visibility_index" data-i18n="timeline.metric_visibility">Visibility Index (%)</button>
-          <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="citation_share" data-i18n="timeline.metric_citations">Quellen-Anteil (%)</button>
-          <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="avg_earliness" data-i18n="timeline.metric_earliness">Ø Earliness (%)</button>
+        <div class="timeline-controls-right">
+          <div class="timeline-prompt-filter-wrap">
+            <label for="timeline-prompt-select" class="date-range-label" data-i18n="timeline.prompt_filter_label">Prompt-Filter:</label>
+            <select id="timeline-prompt-select" class="form-control form-select form-control-sm">
+              <option value="" data-i18n="timeline.all_prompts">Alle Prompts (Aggregiert)</option>
+            </select>
+          </div>
+          <div id="timeline-metric-tabs" class="timeline-tabs" role="tablist" aria-label="Kennzahl auswählen">
+            <button type="button" role="tab" aria-selected="true" class="timeline-tab-btn active" data-metric="som_score" data-i18n="timeline.metric_som">Share-of-Model (%)</button>
+            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="visibility_index" data-i18n="timeline.metric_visibility">Visibility Index (%)</button>
+            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="citation_share" data-i18n="timeline.metric_citations">Quellen-Anteil (%)</button>
+            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="avg_earliness" data-i18n="timeline.metric_earliness">Ø Earliness (%)</button>
+          </div>
         </div>
       </div>
 
@@ -278,11 +308,12 @@
           <span class="legend-line legend-line-compare" aria-hidden="true"></span>
           <span id="timeline-legend-compare" class="timeline-legend-text" data-i18n="timeline.legend_compare">Vergleichszeitraum</span>
         </div>
+        <div id="timeline-model-legend" class="timeline-model-legend" aria-label="KI-Modell-Serien"></div>
         <div id="timeline-granularity-pill" class="timeline-granularity-pill font-mono"></div>
       </div>
 
       <div id="timeline-svg-wrap" class="timeline-svg-wrap">
-        <div id="timeline-svg-host" class="timeline-svg-host" role="img" aria-label="Liniendiagramm zur Sichtbarkeitsentwicklung"></div>
+        <div id="timeline-svg-host" class="timeline-svg-host" role="img" aria-label="Liniendiagramm zur Sichtbarkeitsentwicklung pro Modell und Prompt"></div>
         <div id="timeline-tooltip" class="timeline-tooltip hidden" role="status" aria-live="polite"></div>
       </div>
     </section>
@@ -306,7 +337,7 @@
     <!-- Analytics Dashboard Data Grid -->
     <div id="dashboard-data-grid" class="dashboard-grid">
 
-      <!-- Left Column: MECE Trend & Competitor Leaderboard -->
+      <!-- Left Column: Recommendation Tiers & Competitor Leaderboard -->
       <div class="grid-col grid-col-main">
 
         <!-- Recommendation Tiers Breakdown -->
@@ -497,6 +528,71 @@
 
       </div>
     </div>
+
+    <!-- Expandable Accordion Table: Per-User Physical Results Lookup -->
+    <section id="user-results-section" class="card user-results-card" aria-label="Einzelabfragen und KI-Antworten">
+      <div class="card-header user-results-header">
+        <div class="user-results-title-wrap">
+          <div class="user-results-title-row">
+            <h3 class="card-title" data-i18n="results.title">Einzelabfragen &amp; KI-Antworten (Prompt- &amp; Antwort-Archiv)</h3>
+            <span id="user-results-table-badge" class="badge badge-neutral font-mono">user_results</span>
+            <span id="user-results-total-badge" class="badge badge-success font-mono">0</span>
+          </div>
+          <p class="card-hint" data-i18n="results.subtitle">
+            Jede Zeile kann aufgeklappt werden, um das exakte Prompt-Antwort-Paar, Quellen, Wettbewerber und Token-Caching-Details Ihrer dedizierten Benutzertabelle einzusehen.
+          </p>
+        </div>
+
+        <div class="user-results-filters">
+          <select id="results-prompt-filter" class="form-control form-select form-control-sm" aria-label="Nach Prompt filtern">
+            <option value="" data-i18n="results.filter_all_prompts">Alle Prompts</option>
+          </select>
+          <select id="results-model-filter" class="form-control form-select form-control-sm" aria-label="Nach KI-Modell filtern">
+            <option value="" data-i18n="results.filter_all_models">Alle KI-Modelle</option>
+          </select>
+          <select id="results-mece-filter" class="form-control form-select form-control-sm" aria-label="Nach Empfehlungs-Stufe filtern">
+            <option value="" data-i18n="results.filter_all_tiers">Alle Empfehlungs-Stufen</option>
+            <option value="1_DIRECT_WIN" data-i18n="1_DIRECT_WIN">Platz 1 · Erste Wahl</option>
+            <option value="2_BRAND_HALO" data-i18n="2_BRAND_HALO">Platz 2 · Im Windschatten</option>
+            <option value="3_COMPETITOR_TAKEOVER" data-i18n="3_COMPETITOR_TAKEOVER">Verdrängt · Wettbewerbs-Übernahme</option>
+            <option value="4_GENERIC" data-i18n="4_GENERIC">Markenfreie Antwort</option>
+          </select>
+          <input
+            type="search"
+            id="results-search-input"
+            class="form-control form-control-sm"
+            placeholder="Prompt oder KI-Antwort durchsuchen..."
+            data-i18n-placeholder="results.search_placeholder"
+          >
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table accordion-results-table" id="user-results-table">
+          <thead>
+            <tr>
+              <th style="width: 44px;" aria-label="Zeile ausklappen"></th>
+              <th data-i18n="results.col_date">Datum</th>
+              <th data-i18n="results.col_prompt">Prompt / Suchanfrage</th>
+              <th data-i18n="results.col_model">KI-Modell &amp; Strategie</th>
+              <th data-i18n="results.col_tier">Empfehlungs-Stufe</th>
+              <th class="text-right" data-i18n="results.col_position">Position &amp; Quellen</th>
+            </tr>
+          </thead>
+          <tbody id="user-results-tbody">
+            <tr>
+              <td colspan="6" class="text-center text-muted" data-i18n="results.loading">Lade Einzelabfragen...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="results-pagination" class="results-pagination-bar">
+        <button type="button" id="btn-results-prev" class="btn btn-secondary btn-sm" disabled data-i18n="pagination.prev">← Zurück</button>
+        <span id="results-page-info" class="font-mono text-xs text-muted">Seite 1 / 1</span>
+        <button type="button" id="btn-results-next" class="btn btn-secondary btn-sm" disabled data-i18n="pagination.next">Weiter →</button>
+      </div>
+    </section>
   </main>
 
   <!-- Conversion CTA Banner for Unregistered Board Report Visitors -->
@@ -539,6 +635,9 @@
         <div class="form-group">
           <label for="cfg-prompts" class="form-label">Prompts / Suchanfragen (eine pro Zeile) *</label>
           <textarea id="cfg-prompts" class="form-control form-textarea" rows="4" placeholder="Welche HR-Software eignet sich für den Mittelstand?" required></textarea>
+          <p id="cfg-prompts-lock-hint" class="cfg-tier-hint hidden" data-i18n="config.prompts_locked_hint">
+            Hinweis: Nach Aktivierung von Full Start sind die Prompts gesperrt, um konsistente Zeitreihen und Provider-Prompt-Caching zu gewährleisten.
+          </p>
         </div>
 
         <div class="form-group">
@@ -552,15 +651,12 @@
         </div>
 
         <div class="form-group">
-          <label for="cfg-interval" class="form-label" data-i18n="config.interval_label">Audit-Intervall</label>
+          <label for="cfg-interval" class="form-label" data-i18n="config.interval_label">Data-Mining-Genauigkeit (Datensätze / Tag pro KI-Modell)</label>
           <select id="cfg-interval" class="form-control form-select">
-            <option value="every_2h" data-i18n="interval.every_2h">12x täglich (alle 2 Std.)</option>
-            <option value="every_4h" data-i18n="interval.every_4h">6x täglich (alle 4 Std.)</option>
-            <option value="every_6h" data-i18n="interval.every_6h">4x täglich (alle 6 Std.)</option>
-            <option value="every_12h" data-i18n="interval.every_12h">2x täglich (alle 12 Std.)</option>
-            <option value="daily" selected data-i18n="interval.daily">1x täglich (Daily)</option>
-            <option value="weekly" data-i18n="interval.weekly">1x wöchentlich (Weekly)</option>
-            <option value="manual" data-i18n="interval.manual">Nur Manuell (Manual)</option>
+            <option value="every_120m" selected data-i18n="interval.every_120m">Starter · 12 Datensätze / Tag pro LLM (alle 120 Min.)</option>
+            <option value="every_60m" data-i18n="interval.every_60m">Standard · 24 Datensätze / Tag pro LLM (alle 60 Min.)</option>
+            <option value="every_30m" data-i18n="interval.every_30m">High · 48 Datensätze / Tag pro LLM (alle 30 Min.)</option>
+            <option value="every_15m" data-i18n="interval.every_15m">Precision · 96 Datensätze / Tag pro LLM (alle 15 Min.)</option>
           </select>
           <p id="cfg-tier-hint" class="cfg-tier-hint hidden"></p>
         </div>
@@ -574,7 +670,7 @@
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="openai/gpt-6-luna" checked>
                 <span>
                   <span class="llm-option-title">OpenAI · GPT-6 Luna</span>
-                  <span class="llm-option-meta">openai/gpt-6-luna</span>
+                  <span class="llm-option-meta">openai/gpt-6-luna · 24h Prompt-Cache</span>
                 </span>
               </span>
             </label>
@@ -584,7 +680,7 @@
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="gemini/models/gemini-3.5-flash" checked>
                 <span>
                   <span class="llm-option-title">Google · Gemini 3.5 Flash</span>
-                  <span class="llm-option-meta">models/gemini-3.5-flash</span>
+                  <span class="llm-option-meta">models/gemini-3.5-flash · Context-Cache</span>
                 </span>
               </span>
             </label>
@@ -594,7 +690,7 @@
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistral/mistral-medium-latest" checked>
                 <span>
                   <span class="llm-option-title">Mistral Medium Latest</span>
-                  <span class="llm-option-meta">mistral-medium-latest</span>
+                  <span class="llm-option-meta">mistral-medium-latest · 90% Prompt-Cache</span>
                 </span>
               </span>
               <span class="badge badge-eu" data-i18n="config.eu_hosted_badge">EU-Hosted</span>
@@ -605,7 +701,7 @@
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistral/mistral-large-latest">
                 <span>
                   <span class="llm-option-title">Mistral Large Latest</span>
-                  <span class="llm-option-meta">mistral-large-latest</span>
+                  <span class="llm-option-meta">mistral-large-latest · 90% Prompt-Cache</span>
                 </span>
               </span>
               <span class="badge badge-eu" data-i18n="config.eu_hosted_badge">EU-Hosted</span>
@@ -616,7 +712,7 @@
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistral/zai-glm-5-3" checked>
                 <span>
                   <span class="llm-option-title">Z.ai GLM 5.3 (Mistral EU)</span>
-                  <span class="llm-option-meta">zai-glm-5-3</span>
+                  <span class="llm-option-meta">zai-glm-5-3 · Standard-Inferenz</span>
                 </span>
               </span>
               <span class="badge badge-eu" data-i18n="config.eu_hosted_badge">EU-Hosted</span>
@@ -627,7 +723,7 @@
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistral/zai-glm-5-3-flash">
                 <span>
                   <span class="llm-option-title">Z.ai GLM 5.3 Flash (Mistral EU)</span>
-                  <span class="llm-option-meta">zai-glm-5-3-flash</span>
+                  <span class="llm-option-meta">zai-glm-5-3-flash · Standard-Inferenz</span>
                 </span>
               </span>
               <span class="badge badge-eu" data-i18n="config.eu_hosted_badge">EU-Hosted</span>

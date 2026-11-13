@@ -12,6 +12,8 @@ declare(strict_types=1);
  * - Uniform API response envelope helpers (jsonResponse, jsonError)
  * - Safe request payload parsing (JSON body, POST, GET)
  * - 3-tier Identity & Authentication resolution (Bearer token, Session, Magic Audit)
+ * - 3-tier Provider Execution Strategy Cascade (prompt_caching -> batch_api -> regular)
+ * - 4-tier Data Mining Accuracy Schedules (every_120m, every_60m, every_30m, every_15m)
  */
 
 // -----------------------------------------------------------------------------
@@ -547,22 +549,34 @@ function requireWritePermission(?array $user = null): void
 }
 
 // -----------------------------------------------------------------------------
-// 6. Target LLM Catalog & Canonical Model Resolution
+// 6. Target LLM Catalog, Canonical Model Resolution & Provider Prompt Caching
 // -----------------------------------------------------------------------------
 
 /**
  * Resolves any bare provider alias, model name, or canonical provider/model token
  * into structured routing metadata while preserving distinct models per provider
- * (including Mistral-hosted Z.ai GLM models on the EU endpoint).
+ * and computing the 3-tier execution strategy cascade:
+ *   1. 'prompt_caching' (Provider-Native Input Token Caching)
+ *   2. 'batch_api'      (Provider Batch API fallback)
+ *   3. 'regular'        (Standard synchronous inference fallback)
  *
  * @param string $rawToken
- * @return array{id:string,provider:string,model:string,eu_hosted:bool}
+ * @param string $scheduleInterval
+ * @return array{id:string,provider:string,model:string,eu_hosted:bool,supports_prompt_caching:bool,supports_batch_api:bool,execution_strategy:string}
  */
-function resolveTargetLlmSpec(string $rawToken): array
+function resolveTargetLlmSpec(string $rawToken, string $scheduleInterval = 'every_120m'): array
 {
     $clean = trim($rawToken);
     if ($clean === '') {
-        return ['id' => '', 'provider' => '', 'model' => '', 'eu_hosted' => false];
+        return [
+            'id'                      => '',
+            'provider'                => '',
+            'model'                   => '',
+            'eu_hosted'               => false,
+            'supports_prompt_caching' => false,
+            'supports_batch_api'      => false,
+            'execution_strategy'      => 'regular',
+        ];
     }
 
     $lower = strtolower($clean);
@@ -648,11 +662,145 @@ function resolveTargetLlmSpec(string $rawToken): array
     }
 
     $canonicalId = $model !== '' ? ($provider . '/' . $model) : $provider;
+    $modelLower = strtolower($model);
+    $canonicalSchedule = normalizeScheduleInterval($scheduleInterval);
+
+    // 3-Tier Provider Cost-Optimization Cascade: prompt_caching -> batch_api -> regular
+    $supportsPromptCaching = false;
+    $supportsBatchApi = false;
+    $executionStrategy = 'regular';
+
+    if ($provider === 'openai') {
+        // OpenAI supports prompt_cache_key + prompt_cache_retention="24h" and /v1/batches fallback
+        $supportsPromptCaching = true;
+        $supportsBatchApi = true;
+        $executionStrategy = 'prompt_caching';
+    } elseif ($provider === 'gemini') {
+        // Google Gemini supports Implicit Context Caching + Explicit cachedContents (ttl="86400s")
+        $supportsPromptCaching = true;
+        $supportsBatchApi = true;
+        $executionStrategy = 'prompt_caching';
+    } elseif ($provider === 'anthropic') {
+        // Anthropic Claude supports cache_control={"type":"ephemeral","ttl":"1h"} and /v1/messages/batches
+        $supportsPromptCaching = true;
+        $supportsBatchApi = true;
+        // On every_120m (2h gap), Claude's 1h maximum cache TTL expires between runs -> route via Batch API
+        $executionStrategy = ($canonicalSchedule === 'every_120m') ? 'batch_api' : 'prompt_caching';
+    } elseif ($provider === 'mistral') {
+        if (str_starts_with($modelLower, 'zai-glm') || str_starts_with($modelLower, 'glm-')) {
+            // Third-party hosted Z.ai GLM weights on Mistral EU do not expose prompt caching or batching
+            $supportsPromptCaching = false;
+            $supportsBatchApi = false;
+            $executionStrategy = 'regular';
+        } else {
+            // Native Mistral models support prompt_cache_key (90% cached token discount) and /v1/batch/jobs
+            $supportsPromptCaching = true;
+            $supportsBatchApi = true;
+            $executionStrategy = 'prompt_caching';
+        }
+    }
+
     return [
-        'id'        => $canonicalId,
-        'provider'  => $provider,
-        'model'     => $model,
-        'eu_hosted' => ($provider === 'mistral'),
+        'id'                      => $canonicalId,
+        'provider'                => $provider,
+        'model'                   => $model,
+        'eu_hosted'               => ($provider === 'mistral'),
+        'supports_prompt_caching' => $supportsPromptCaching,
+        'supports_batch_api'      => $supportsBatchApi,
+        'execution_strategy'      => $executionStrategy,
+    ];
+}
+
+/**
+ * Generates a deterministic, privacy-safe provider `prompt_cache_key` for a given
+ * configuration ID, prompt text, and model. Contains no secrets or PII.
+ *
+ * @param int $configId
+ * @param string $prompt
+ * @param string $model
+ * @return string
+ */
+function buildPromptCacheKey(int $configId, string $prompt, string $model = ''): string
+{
+    $hashInput = trim($prompt) . '|' . strtolower(trim($model));
+    $hash = substr(hash('sha256', $hashInput), 0, 24);
+    return sprintf('cl_cfg_%d_p_%s', max(0, $configId), $hash);
+}
+
+/**
+ * Builds the provider-specific native input prompt caching configuration object
+ * according to OpenAI, Google Gemini, Anthropic Claude, and Mistral AI API docs.
+ *
+ * @param string $provider
+ * @param string $model
+ * @param string $promptCacheKey
+ * @param string $scheduleInterval
+ * @return array<string, mixed>
+ */
+function buildProviderCachingConfig(string $provider, string $model, string $promptCacheKey, string $scheduleInterval = 'every_120m'): array
+{
+    $prov = strtolower(trim($provider));
+    $modelLower = strtolower(trim($model));
+    $canonicalSchedule = normalizeScheduleInterval($scheduleInterval);
+
+    if ($prov === 'openai') {
+        return [
+            'strategy'                => 'prompt_caching',
+            'prompt_cache_key'        => $promptCacheKey,
+            'prompt_cache_retention'  => '24h',
+            'min_cache_tokens'        => 1024,
+            'batch_fallback_endpoint' => '/v1/batches',
+            'telemetry_field'         => 'usage.prompt_tokens_details.cached_tokens',
+        ];
+    }
+
+    if ($prov === 'gemini' || $prov === 'google') {
+        return [
+            'strategy'                => 'prompt_caching',
+            'implicit_caching'        => true,
+            'explicit_cache_endpoint' => 'v1beta/cachedContents',
+            'explicit_ttl'            => '86400s',
+            'min_cache_tokens'        => 2048,
+            'telemetry_field'         => 'usageMetadata.cachedContentTokenCount',
+        ];
+    }
+
+    if ($prov === 'anthropic') {
+        if ($canonicalSchedule === 'every_120m') {
+            return [
+                'strategy'       => 'batch_api',
+                'batch_endpoint' => '/v1/messages/batches',
+                'reason'         => 'interval_120m_exceeds_claude_1h_max_cache_ttl',
+            ];
+        }
+        return [
+            'strategy'                => 'prompt_caching',
+            'cache_control'           => ['type' => 'ephemeral', 'ttl' => '1h'],
+            'min_cache_tokens'        => 1024,
+            'batch_fallback_endpoint' => '/v1/messages/batches',
+            'telemetry_field'         => 'usage.cache_read_input_tokens',
+        ];
+    }
+
+    if ($prov === 'mistral') {
+        if (str_starts_with($modelLower, 'zai-glm') || str_starts_with($modelLower, 'glm-')) {
+            return [
+                'strategy'         => 'regular',
+                'prompt_cache_key' => null,
+            ];
+        }
+        return [
+            'strategy'                => 'prompt_caching',
+            'prompt_cache_key'        => $promptCacheKey,
+            'discount_pct'            => 90,
+            'batch_fallback_endpoint' => '/v1/batch/jobs',
+            'telemetry_field'         => 'usage.prompt_tokens_details.cached_tokens',
+        ];
+    }
+
+    return [
+        'strategy'         => 'regular',
+        'prompt_cache_key' => null,
     ];
 }
 
@@ -699,48 +847,51 @@ function normalizeTargetLlmsList($rawTargetLlms, array $fallback = ['openai/gpt-
 }
 
 // -----------------------------------------------------------------------------
-// 7. Tracking Schedule Intervals & Tier Entitlements
+// 7. Data Mining Accuracy Schedules & Tier Entitlements
 // -----------------------------------------------------------------------------
 
 /**
  * Returns the canonical whitelist of persisted tracking_configs.schedule_interval values.
  *
+ * - every_120m: Starter   — 12 datasets/day per LLM (every 120 minutes)
+ * - every_60m:  Standard  — 24 datasets/day per LLM (every 60 minutes)
+ * - every_30m:  High      — 48 datasets/day per LLM (every 30 minutes)
+ * - every_15m:  Precision — 96 datasets/day per LLM (every 15 minutes)
+ *
  * @return array<int, string>
  */
 function getValidScheduleIntervals(): array
 {
-    return ['manual', 'every_2h', 'every_4h', 'every_6h', 'every_12h', 'daily', 'weekly', 'biweekly', 'monthly'];
+    return ['every_120m', 'every_60m', 'every_30m', 'every_15m'];
 }
 
 /**
- * Normalizes human/API interval aliases (e.g. 12x_daily, 2h) to canonical tokens.
+ * Normalizes human/API Data Mining Accuracy interval aliases to canonical tokens.
  */
 function normalizeScheduleInterval(string $raw): string
 {
     $clean = strtolower(trim($raw));
     return match ($clean) {
-        'every_2h', '2h', '12x', '12x_daily', '12x-daily'   => 'every_2h',
-        'every_4h', '4h', '6x', '6x_daily', '6x-daily'     => 'every_4h',
-        'every_6h', '6h', '4x', '4x_daily', '4x-daily'     => 'every_6h',
-        'every_12h', '12h', '2x', '2x_daily', '2x-daily'   => 'every_12h',
-        'daily', '1x', '1x_daily', '1x-daily', '24h'       => 'daily',
-        'weekly', '1x_weekly', '1x-weekly', '7d'           => 'weekly',
-        'biweekly', 'monthly', 'manual'                    => $clean,
-        default                                            => $clean,
+        'every_120m', '120m', 'every_2h', '2h', '12x', '12x_daily', '12x-daily', 'starter', '12'   => 'every_120m',
+        'every_60m', '60m', 'every_1h', '1h', '24x', '24x_daily', '24x-daily', 'standard', '24'   => 'every_60m',
+        'every_30m', '30m', '48x', '48x_daily', '48x-daily', 'high', '48'                         => 'every_30m',
+        'every_15m', '15m', '96x', '96x_daily', '96x-daily', 'precision', '96'                    => 'every_15m',
+        default                                                                                    => $clean,
     };
 }
 
 /**
- * Returns true if the interval triggers more than once per day.
+ * Returns true if the Data Mining Accuracy interval is above the Starter (every_120m / 12x) tier.
  */
 function isHighFrequencySchedule(string $interval): bool
 {
-    return in_array($interval, ['every_2h', 'every_4h', 'every_6h', 'every_12h'], true);
+    $canonical = normalizeScheduleInterval($interval);
+    return in_array($canonical, ['every_60m', 'every_30m', 'every_15m'], true);
 }
 
 /**
- * Checks whether the authenticated user's tier/role permits the requested frequency.
- * Free accounts are capped at 1x daily; paid tiers & admins can schedule up to 12x daily.
+ * Checks whether the authenticated user's tier/role permits the requested Data Mining Accuracy tier.
+ * Free accounts can use the Starter tier (every_120m / 12 datasets/day); paid tiers & admins can schedule up to 96x/day.
  */
 function canUserUseScheduleInterval(array $user, string $interval): bool
 {
@@ -755,19 +906,16 @@ function canUserUseScheduleInterval(array $user, string $interval): bool
 }
 
 /**
- * Returns the expected executions per day for credit consumption estimates.
+ * Returns the datasets per day per LLM for a given Data Mining Accuracy interval.
  */
 function getScheduleRunsPerDay(string $interval): float
 {
-    return match ($interval) {
-        'every_2h'  => 12.0,
-        'every_4h'  => 6.0,
-        'every_6h'  => 4.0,
-        'every_12h' => 2.0,
-        'daily'     => 1.0,
-        'weekly'    => round(1.0 / 7.0, 4),
-        'biweekly'  => round(1.0 / 14.0, 4),
-        'monthly'   => round(1.0 / 30.0, 4),
-        default     => 0.0,
+    $canonical = normalizeScheduleInterval($interval);
+    return match ($canonical) {
+        'every_120m' => 12.0,
+        'every_60m'  => 24.0,
+        'every_30m'  => 48.0,
+        'every_15m'  => 96.0,
+        default      => 0.0,
     };
 }

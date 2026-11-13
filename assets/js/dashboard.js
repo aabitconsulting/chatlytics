@@ -137,6 +137,53 @@ function buildSvgLinePath(points) {
   if (!Array.isArray(points) || points.length === 0) return '';
   return points.map((pt, idx) => `${idx === 0 ? 'M' : 'L'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`).join(' ');
 }
+
+const MODEL_SERIES_PALETTE = ['#2563eb', '#d97706', '#9333ea', '#0891b2', '#e11d48', '#4f46e5', '#0d9488'];
+
+/**
+ * Groups the flat per-model daily rows from reports.php (`model_timeline`) into
+ * one slot-aligned series per model (key = "provider/model"). Gaps stay null.
+ */
+function buildModelTimelineAlignedSeries(modelTimeline = [], totalSlots = 0, metricKey = 'som_score') {
+  const rows = Array.isArray(modelTimeline) ? modelTimeline : [];
+  const byModel = new Map();
+  let maxSlot = 0;
+  rows.forEach((row, idx) => {
+    if (!row) return;
+    const key = row.model_key || `${row.provider || 'llm'}/${row.model || 'unknown'}`;
+    const slotIdx = row.slot_index !== undefined && row.slot_index !== null ? Number(row.slot_index) : idx;
+    if (!Number.isFinite(slotIdx) || slotIdx < 0) return;
+    maxSlot = Math.max(maxSlot, slotIdx + 1);
+    if (!byModel.has(key)) {
+      byModel.set(key, { provider: row.provider || '', model: row.model || '', rowsBySlot: new Map() });
+    }
+    byModel.get(key).rowsBySlot.set(slotIdx, row);
+  });
+
+  const slotCount = Math.max(Number(totalSlots) || 0, maxSlot, 1);
+  return [...byModel.keys()].sort().map((key, colorIdx) => {
+    const entry = byModel.get(key);
+    const slots = [];
+    for (let i = 0; i < slotCount; i++) {
+      const r = entry.rowsBySlot.get(i) || null;
+      const v = r && r[metricKey] !== undefined && r[metricKey] !== null ? Number(r[metricKey]) : null;
+      slots.push({ slotIndex: i, value: Number.isFinite(v) ? v : null, row: r });
+    }
+    return {
+      modelKey: key,
+      label: entry.model || key,
+      provider: entry.provider,
+      color: MODEL_SERIES_PALETTE[colorIdx % MODEL_SERIES_PALETTE.length],
+      slots
+    };
+  });
+}
+
+function truncateText(val, maxLen = 110) {
+  const str = String(val ?? '');
+  return str.length > maxLen ? `${str.slice(0, maxLen - 1)}…` : str;
+}
+
 import { i18n } from './i18n.js';
 
 class DashboardController {
@@ -152,6 +199,17 @@ class DashboardController {
     this.compareStartDate = '';
     this.compareEndDate = '';
     this.activeTimelineMetric = 'som_score';
+    this.activePromptFilter = '';
+    this.disabledModelKeys = new Set();
+    this.userResultsPage = 1;
+    this.userResultsLimit = 25;
+    this.userResultsFilterPrompt = '';
+    this.userResultsFilterModel = '';
+    this.userResultsFilterMece = '';
+    this.userResultsSearch = '';
+    this.expandedResultIds = new Set();
+    this.lastUserResultsData = null;
+    this._resultsSearchTimer = null;
     this.lastReportsData = null;
     this.cooldownUntil = 0;
     this.activeRunState = null;
@@ -231,6 +289,7 @@ class DashboardController {
     // 3. Mutation controls strictly hidden or disabled in Magic Audit mode
     const elementsToHide = [
       '#btn-trigger-run',
+      '#btn-full-start-config',
       '#btn-new-config',
       '#btn-edit-config',
       '#btn-toggle-config-status',
@@ -314,7 +373,35 @@ class DashboardController {
         scheduleBadge.className = `badge ${isPaused ? 'badge-warning' : 'badge-success'}`;
       }
     }
+    const fullStartBtn = document.getElementById('btn-full-start-config');
+    if (fullStartBtn) {
+      const showFullStart = Boolean(cfg) && !cfg.full_started_at && !this.isAuditMode;
+      if (showFullStart) fullStartBtn.classList?.remove('hidden'); else fullStartBtn.classList?.add('hidden');
+      fullStartBtn.disabled = !showFullStart;
+    }
     this.syncRunButtonsState();
+  }
+
+  /**
+   * Flow B lifecycle: before Full Start exactly one manual test run is allowed;
+   * after Full Start the manual trigger is permanently locked.
+   * @returns {'' | 'full_started' | 'test_used'}
+   */
+  getTestRunLockReason(cfg = this.getSelectedConfigObject()) {
+    if (!cfg) return '';
+    if (cfg.full_started_at) return 'full_started';
+    if (Number(cfg.initial_test_used || 0) === 1) return 'test_used';
+    return '';
+  }
+
+  getTestRunLockMessage(reason) {
+    if (reason === 'full_started') {
+      return this.tMsg('run.locked_full_started', 'Full Start ist aktiv: Abfragen laufen automatisch nach Zeitplan. Manuelle Abfragen sind gesperrt.');
+    }
+    if (reason === 'test_used') {
+      return this.tMsg('run.locked_test_used', 'Die einmalige Test-Abfrage wurde bereits genutzt. Aktivieren Sie Full Start für die laufende Datenerhebung.');
+    }
+    return '';
   }
 
   syncPeriodBarVisibility() {
@@ -423,6 +510,11 @@ class DashboardController {
     configSelect?.addEventListener('change', async (e) => {
       const val = e.target.value;
       this.selectedConfigId = val ? Number(val) : null;
+      this.activePromptFilter = '';
+      this.userResultsFilterPrompt = '';
+      this.userResultsPage = 1;
+      this.expandedResultIds.clear();
+      this.disabledModelKeys.clear();
       this.updateConfigActionControls();
       if (this.selectedConfigId) {
         configs.setSelectedConfigId(this.selectedConfigId);
@@ -550,6 +642,85 @@ class DashboardController {
       }
     });
 
+    // 5b-2. Flow B: Full Start activation (one-way, confirmation-gated)
+    const btnFullStart = document.getElementById('btn-full-start-config');
+    btnFullStart?.addEventListener('click', (e) => {
+      e.preventDefault();
+      const cfg = this.getSelectedConfigObject();
+      if (!cfg || this.isAuditMode || cfg.full_started_at) return;
+      const cfgName = cfg.name || cfg.brand_name || `#${cfg.id}`;
+      this.openConfirmModal({
+        title: this.tMsg('run.full_start_confirm_title', 'Full Start für dieses Profil aktivieren?'),
+        message: this.tMsg(
+          'run.full_start_confirm_desc',
+          'Ab jetzt werden Ihre Prompts kontinuierlich über den Kalendertag verteilt abgefragt. Nach dem Start sind die Prompts gesperrt und die manuelle Test-Abfrage wird deaktiviert.'
+        ),
+        summaryRows: [
+          { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: cfgName },
+          { label: this.tMsg('run.confirm_label_accuracy', 'Data-Mining-Genauigkeit'), value: getScheduleLabel(cfg.schedule_interval) }
+        ],
+        confirmLabel: this.tMsg('run.full_start_confirm_cta', 'Full Start verbindlich aktivieren'),
+        confirmVariant: 'primary',
+        triggerEl: btnFullStart,
+        onConfirm: async () => {
+          try {
+            setButtonLoading(btnFullStart, true, this.tMsg('run.btn_full_starting', 'Wird aktiviert…'));
+            await configs.fullStartConfig(cfg);
+            showToast(this.tMsg('toast.config_full_started', 'Full Start aktiviert. Abfragen laufen ab jetzt automatisch.'), 'success');
+          } catch (err) {
+            showToast(err?.message || this.tMsg('toast.config_full_start_error', 'Full Start konnte nicht aktiviert werden.'), 'error');
+          } finally {
+            setButtonLoading(btnFullStart, false);
+            this.updateConfigActionControls();
+            await this.loadDashboard();
+          }
+        }
+      });
+    });
+
+    // 5b-3. Timeline prompt selector (All Prompts or one specific prompt)
+    const timelinePromptSelect = document.getElementById('timeline-prompt-select');
+    timelinePromptSelect?.addEventListener('change', async (e) => {
+      this.activePromptFilter = e.target.value || '';
+      await this.loadDashboard();
+    });
+
+    // 5b-4. Result archive filters, search & pagination
+    const bindResultsFilter = (id, prop) => {
+      document.getElementById(id)?.addEventListener('change', async (e) => {
+        this[prop] = e.target.value || '';
+        this.userResultsPage = 1;
+        await this.loadUserResults();
+      });
+    };
+    bindResultsFilter('results-prompt-filter', 'userResultsFilterPrompt');
+    bindResultsFilter('results-model-filter', 'userResultsFilterModel');
+    bindResultsFilter('results-mece-filter', 'userResultsFilterMece');
+
+    document.getElementById('results-search-input')?.addEventListener('input', (e) => {
+      const val = String(e.target.value || '').trim();
+      clearTimeout(this._resultsSearchTimer);
+      this._resultsSearchTimer = setTimeout(async () => {
+        this.userResultsSearch = val;
+        this.userResultsPage = 1;
+        await this.loadUserResults();
+      }, 350);
+    });
+
+    document.getElementById('btn-results-prev')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (this.userResultsPage <= 1) return;
+      this.userResultsPage -= 1;
+      await this.loadUserResults();
+    });
+    document.getElementById('btn-results-next')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const totalPages = Number(this.lastUserResultsData?.pagination?.total_pages || 1);
+      if (this.userResultsPage >= totalPages) return;
+      this.userResultsPage += 1;
+      await this.loadUserResults();
+    });
+
     // 5c. Comparison Mode & Custom Date Range Listeners
     const compareSelect = document.getElementById('compare-mode-select');
     compareSelect?.addEventListener('change', async (e) => {
@@ -616,6 +787,9 @@ class DashboardController {
         if (this.lastReportsData) {
           this.renderDashboard(this.lastReportsData);
         }
+        if (this.lastUserResultsData) {
+          this.renderUserResultsSection(this.lastUserResultsData);
+        }
       });
     }
   }
@@ -658,17 +832,31 @@ class DashboardController {
       label = this.tMsg('run.btn_locked_countdown', 'Analyse läuft ({seconds}s)…', { seconds: remainingSec });
     }
 
+    const lockReason = this.getTestRunLockReason();
+    const lockMessage = this.getTestRunLockMessage(lockReason);
+
     for (const btn of this.getRunButtons()) {
       if (isLocked) {
         btn._chatlyticsRunLocked = true;
         setButtonLoading(btn, true, label);
-      } else if (
+        continue;
+      }
+      if (
         btn._chatlyticsRunLocked ||
         btn._chatlyticsOrigNodes !== undefined ||
         btn._chatlyticsOrigText !== undefined
       ) {
         delete btn._chatlyticsRunLocked;
         setButtonLoading(btn, false);
+      }
+      if (lockReason) {
+        btn.disabled = true;
+        btn.title = lockMessage;
+        btn._chatlyticsLifecycleLocked = true;
+      } else if (btn._chatlyticsLifecycleLocked) {
+        btn.disabled = false;
+        btn.title = '';
+        delete btn._chatlyticsLifecycleLocked;
       }
     }
   }
@@ -1168,6 +1356,11 @@ class DashboardController {
     }
 
     const cfg = this.getSelectedConfigObject();
+    const lockReason = this.getTestRunLockReason(cfg);
+    if (lockReason) {
+      showToast(this.getTestRunLockMessage(lockReason), 'info');
+      return;
+    }
     const breakdown = getConfigRunBreakdown(cfg);
     const balance = this.getAvailableCredits();
     const afterBalance = balance - breakdown.expectedRuns;
@@ -1244,6 +1437,9 @@ class DashboardController {
 
     try {
       const res = await apiClient.triggerRun(this.selectedConfigId, { mode: options?.mode || 'async' });
+      if (cfg && !cfg.full_started_at) {
+        cfg.initial_test_used = true;
+      }
       const remaining = res?.credits_remaining;
       if (remaining !== undefined) {
         this.updateCreditBadge(remaining);
@@ -1328,6 +1524,9 @@ class DashboardController {
     if (this.selectedConfigId) {
       params.config_id = this.selectedConfigId;
     }
+    if (this.activePromptFilter) {
+      params.prompt = this.activePromptFilter;
+    }
 
     try {
       const res = await apiClient.getReports(params);
@@ -1337,6 +1536,10 @@ class DashboardController {
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     }
+
+    // The result archive is loaded independently so the 1x pre-start test run
+    // stays inspectable even on Day 1, when aggregate KPIs are suppressed.
+    await this.loadUserResults();
   }
 
   renderDashboard(data) {
@@ -1346,11 +1549,14 @@ class DashboardController {
     const emptyState = document.getElementById('empty-state');
     const dataGrid = document.getElementById('dashboard-data-grid');
     const timelineCard = document.getElementById('timeline-card');
+    const isFirstDay = data?.is_first_day === true;
     this.updateRangeBanner(data);
+    this.renderFirstDayBanner(data);
+    this.populatePromptAndModelFilters(data);
 
-    // Boundary 4.2: Zero-data empty state handling
+    // Boundary 4.2: Zero-data empty state handling (Day 1 shows the banner instead)
     if (totalRuns === 0) {
-      if (emptyState) emptyState.style.display = 'block';
+      if (emptyState) emptyState.style.display = isFirstDay ? 'none' : 'block';
       if (dataGrid) dataGrid.style.display = 'none';
       if (timelineCard) timelineCard.style.display = 'none';
       this.renderZeroKPIs(metrics);
@@ -1376,6 +1582,68 @@ class DashboardController {
 
     // 5. Render Grounding Citations
     this.renderCitations(data.citations || data.top_citations || {});
+  }
+
+  renderFirstDayBanner(data) {
+    const banner = document.getElementById('first-day-banner');
+    if (!banner?.classList) return;
+    if (data?.is_first_day !== true) {
+      banner.classList.add('hidden');
+      return;
+    }
+    const lang = i18n ? i18n.getLanguage() : 'de';
+    const descEl = document.getElementById('first-day-desc');
+    const msg = lang === 'en' ? data.first_day_message_en : data.first_day_message_de;
+    if (descEl && msg) descEl.textContent = msg;
+    banner.classList.remove('hidden');
+  }
+
+  fillSelectOptions(selectEl, allLabel, items, currentValue) {
+    if (!selectEl || typeof selectEl.replaceChildren !== 'function' || typeof document.createElement !== 'function') return;
+    const list = items.slice();
+    if (currentValue && !list.some(it => it.value === currentValue)) {
+      list.push({ value: currentValue, label: currentValue });
+    }
+    selectEl.replaceChildren();
+    const allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = allLabel;
+    selectEl.appendChild(allOpt);
+    list.forEach(({ value, label }) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = truncateText(label, 80);
+      opt.title = value;
+      selectEl.appendChild(opt);
+    });
+    selectEl.value = currentValue || '';
+  }
+
+  populatePromptAndModelFilters(data) {
+    const prompts = (Array.isArray(data?.available_prompts) ? data.available_prompts : [])
+      .map(p => ({ value: String(p), label: String(p) }));
+    const models = (Array.isArray(data?.available_models) ? data.available_models : [])
+      .filter(m => m && m.model_key)
+      .map(m => ({ value: String(m.model_key), label: m.model ? `${m.model} (${m.provider})` : String(m.model_key) }));
+
+    this.fillSelectOptions(
+      document.getElementById('timeline-prompt-select'),
+      i18n.t('timeline.all_prompts', 'Alle Prompts (Aggregiert)'),
+      prompts,
+      this.activePromptFilter
+    );
+    this.fillSelectOptions(
+      document.getElementById('results-prompt-filter'),
+      i18n.t('results.filter_all_prompts', 'Alle Prompts'),
+      prompts,
+      this.userResultsFilterPrompt
+    );
+    this.fillSelectOptions(
+      document.getElementById('results-model-filter'),
+      i18n.t('results.filter_all_models', 'Alle KI-Modelle'),
+      models,
+      this.userResultsFilterModel
+    );
   }
 
   updateRangeBanner(data) {
@@ -1439,7 +1707,7 @@ class DashboardController {
 
     const lang = i18n ? i18n.getLanguage() : 'de';
     const dr = data?.date_range || {};
-    const granularity = dr.granularity === 'hour' ? 'hour' : 'day';
+    const granularity = 'day';
     const metricKey = this.activeTimelineMetric || 'som_score';
     const metricMeta = getTimelineMetricMeta(metricKey);
 
@@ -1447,9 +1715,7 @@ class DashboardController {
       subtitleEl.textContent = i18n.t(metricMeta.i18nKey, metricMeta.fallback);
     }
     if (granPill) {
-      granPill.textContent = granularity === 'hour'
-        ? i18n.t('timeline.granularity_hour', 'Stündliche Auflösung')
-        : i18n.t('timeline.granularity_day', 'Tägliche Auflösung');
+      granPill.textContent = i18n.t('timeline.granularity_day', 'Tägliche Auflösung');
     }
 
     const aligned = buildTimelineAlignedSeries(
@@ -1459,7 +1725,12 @@ class DashboardController {
       metricKey
     );
 
-    const hasAnyValue = aligned.some(s => s.primaryValue !== null || s.compareValue !== null);
+    const modelSeries = buildModelTimelineAlignedSeries(data?.model_timeline || [], aligned.length, metricKey);
+    this.renderModelLegend(modelSeries);
+    const visibleModels = modelSeries.filter(m => !this.disabledModelKeys.has(m.modelKey));
+
+    const hasAnyValue = aligned.some(s => s.primaryValue !== null || s.compareValue !== null)
+      || visibleModels.some(m => m.slots.some(s => s.value !== null));
     if (typeof host.replaceChildren === 'function') host.replaceChildren(); else host.innerHTML = '';
     tooltip?.classList.add('hidden');
 
@@ -1545,6 +1816,29 @@ class DashboardController {
         r: '3.5',
         class: 'timeline-dot-compare'
       }));
+    });
+
+    // Per-model daily series (drawn under the aggregate primary line)
+    visibleModels.forEach(series => {
+      const pts = series.slots
+        .filter(s => s.value !== null && s.slotIndex < slotCount)
+        .map(s => ({ x: xForSlot(s.slotIndex), y: yForVal(s.value) }));
+      if (pts.length >= 2) {
+        svg.appendChild(this.createSvgEl('path', {
+          d: buildSvgLinePath(pts),
+          class: 'timeline-line-model',
+          stroke: series.color
+        }));
+      }
+      pts.forEach(pt => {
+        svg.appendChild(this.createSvgEl('circle', {
+          cx: pt.x.toFixed(2),
+          cy: pt.y.toFixed(2),
+          r: '3',
+          class: 'timeline-dot-model',
+          fill: series.color
+        }));
+      });
     });
 
     // Primary area & line
@@ -1670,13 +1964,14 @@ class DashboardController {
       head.textContent = pLabel;
       tooltip.appendChild(head);
 
-      const addRow = (swatchClass, labelStr, valNum, rowObj) => {
+      const addRow = (swatchClass, labelStr, valNum, rowObj, color = '') => {
         const rowDiv = document.createElement('div');
         rowDiv.className = 'timeline-tooltip-row';
         const leftSpan = document.createElement('span');
         leftSpan.className = 'timeline-tooltip-label-wrap';
         const dot = document.createElement('span');
         dot.className = `timeline-tooltip-dot ${swatchClass}`;
+        if (color) dot.style.background = color;
         const lbl = document.createElement('span');
         lbl.textContent = labelStr;
         leftSpan.append(dot, lbl);
@@ -1698,6 +1993,12 @@ class DashboardController {
         const cmpLbl = cLabel ? `${i18n.t('compare.vs_short', 'vs.')} ${cLabel}` : i18n.t('timeline.legend_compare', 'Vergleich');
         addRow('dot-compare', cmpLbl, slot.compareValue, slot.compareRow);
       }
+      visibleModels.forEach(series => {
+        const mSlot = series.slots[slotIdx];
+        if (mSlot && mSlot.value !== null) {
+          addRow('dot-model', series.label, mSlot.value, mSlot.row, series.color);
+        }
+      });
 
       if (slot.primaryValue !== null && slot.compareValue !== null && dr.compare_mode !== 'none') {
         const diff = slot.primaryValue - slot.compareValue;
@@ -1744,6 +2045,322 @@ class DashboardController {
 
     svg.append(crosshair, activeCompareDot, activePrimaryDot, hitRect);
     host.appendChild(svg);
+  }
+
+  renderModelLegend(modelSeries) {
+    const legend = document.getElementById('timeline-model-legend');
+    if (!legend || typeof legend.replaceChildren !== 'function') return;
+    legend.replaceChildren();
+    if (!Array.isArray(modelSeries) || modelSeries.length === 0) {
+      legend.classList?.add('hidden');
+      return;
+    }
+    legend.classList?.remove('hidden');
+    modelSeries.forEach(series => {
+      const isOn = !this.disabledModelKeys.has(series.modelKey);
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = isOn ? 'model-legend-pill' : 'model-legend-pill is-off';
+      pill.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+      pill.title = series.modelKey;
+      const swatch = document.createElement('span');
+      swatch.className = 'model-legend-swatch';
+      swatch.style.background = series.color;
+      const lbl = document.createElement('span');
+      lbl.textContent = series.label;
+      pill.append(swatch, lbl);
+      pill.addEventListener('click', () => {
+        if (this.disabledModelKeys.has(series.modelKey)) this.disabledModelKeys.delete(series.modelKey);
+        else this.disabledModelKeys.add(series.modelKey);
+        if (this.lastReportsData) this.renderTimelineChart(this.lastReportsData);
+      });
+      legend.appendChild(pill);
+    });
+  }
+
+  // ---------- Result archive (per-user table, expandable rows) ----------
+
+  async loadUserResults() {
+    if (typeof document === 'undefined') return;
+    const tbody = document.getElementById('user-results-tbody');
+    if (!tbody || typeof apiClient.getUserResults !== 'function') return;
+
+    const params = { page: this.userResultsPage, limit: this.userResultsLimit };
+    if (this.selectedConfigId) params.config_id = this.selectedConfigId;
+    if (this.userResultsFilterPrompt) params.prompt = this.userResultsFilterPrompt;
+    if (this.userResultsFilterModel) params.model = this.userResultsFilterModel;
+    if (this.userResultsFilterMece) params.mece = this.userResultsFilterMece;
+    if (this.userResultsSearch) params.search = this.userResultsSearch;
+
+    try {
+      const res = await apiClient.getUserResults(params);
+      const data = res?.results ? res : (res?.data || res || {});
+      this.lastUserResultsData = data;
+      this.renderUserResultsSection(data);
+    } catch (err) {
+      console.warn('Failed to load result archive:', err);
+      this.renderUserResultsMessage(tbody, this.tMsg('results.load_error', 'Einzelabfragen konnten nicht geladen werden.'));
+    }
+  }
+
+  renderUserResultsMessage(tbody, text) {
+    if (!tbody || typeof tbody.replaceChildren !== 'function') return;
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.className = 'text-center text-muted';
+    td.textContent = text;
+    tr.appendChild(td);
+    tbody.replaceChildren(tr);
+  }
+
+  renderUserResultsSection(resData) {
+    const tbody = document.getElementById('user-results-tbody');
+    if (!tbody || typeof tbody.replaceChildren !== 'function') return;
+
+    const results = Array.isArray(resData?.results) ? resData.results : [];
+    const pag = resData?.pagination || {};
+    const page = Math.max(1, Number(pag.page || this.userResultsPage || 1));
+    const totalPages = Math.max(1, Number(pag.total_pages || 1));
+    const total = Number(pag.total ?? results.length);
+
+    const totalBadge = document.getElementById('user-results-total-badge');
+    if (totalBadge) totalBadge.textContent = String(total);
+    const tableBadge = document.getElementById('user-results-table-badge');
+    if (tableBadge && resData?.results_table) tableBadge.textContent = String(resData.results_table);
+
+    const modelSelect = document.getElementById('results-model-filter');
+    if (modelSelect && results.length > 0 && typeof document.createElement === 'function' && modelSelect.children) {
+      const existingVals = new Set(Array.from(modelSelect.children).map(opt => String(opt.value || '')));
+      results.forEach(r => {
+        const key = String(r.canonical_model || (r.provider && r.model ? `${r.provider}/${r.model}` : ''));
+        if (key && !existingVals.has(key)) {
+          existingVals.add(key);
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = r.model ? `${r.model} (${r.provider})` : key;
+          modelSelect.appendChild(opt);
+        }
+      });
+    }
+
+    if (results.length === 0) {
+      this.renderUserResultsMessage(tbody, i18n.t('results.empty', 'Keine Einzelabfragen für diese Filterauswahl gefunden.'));
+    } else {
+      tbody.replaceChildren();
+      results.forEach(r => {
+        const { summary, detail } = this.buildResultRows(r);
+        tbody.append(summary, detail);
+      });
+    }
+
+    const pageInfo = document.getElementById('results-page-info');
+    if (pageInfo) pageInfo.textContent = this.tMsg('results.page_info', 'Seite {page} / {pages}', { page, pages: totalPages });
+    const prevBtn = document.getElementById('btn-results-prev');
+    const nextBtn = document.getElementById('btn-results-next');
+    if (prevBtn) prevBtn.disabled = page <= 1;
+    if (nextBtn) nextBtn.disabled = page >= totalPages;
+  }
+
+  getStrategyLabel(strategy) {
+    if (strategy === 'prompt_caching') return this.tMsg('results.strategy_prompt_caching', 'Prompt-Caching');
+    if (strategy === 'batch_api') return this.tMsg('results.strategy_batch_api', 'Batch-API');
+    return this.tMsg('results.strategy_regular', 'Standard-Abfrage');
+  }
+
+  buildResultRows(r) {
+    const lang = i18n ? i18n.getLanguage() : 'de';
+    const rowId = String(r.id ?? r.custom_id ?? Math.random().toString(36).slice(2));
+    const isOpen = this.expandedResultIds.has(rowId);
+    const detailId = `result-detail-${rowId}`;
+
+    const td = (className = '', label = '') => {
+      const cell = document.createElement('td');
+      if (className) cell.className = className;
+      if (label) cell.setAttribute('data-label', label);
+      return cell;
+    };
+    const badge = (text, className) => {
+      const b = document.createElement('span');
+      b.className = `badge ${className}`;
+      b.textContent = text;
+      return b;
+    };
+
+    // Summary row
+    const summary = document.createElement('tr');
+    summary.id = `result-summary-${rowId}`;
+    summary.className = isOpen ? 'accordion-summary-row is-open' : 'accordion-summary-row';
+
+    const toggleCell = td('accordion-toggle-cell');
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'accordion-toggle';
+    toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    toggleBtn.setAttribute('aria-controls', detailId);
+    toggleBtn.setAttribute('aria-label', this.tMsg('results.toggle_row', 'Details ein-/ausklappen'));
+    toggleBtn.textContent = '▸';
+    toggleCell.appendChild(toggleBtn);
+
+    const created = parseLocalSqlTimestamp(r.created_at);
+    const timeStr = created ? `${String(created.getHours()).padStart(2, '0')}:${String(created.getMinutes()).padStart(2, '0')}` : '';
+    const dateCell = td('font-mono text-sm', i18n.t('results.col_date', 'Datum'));
+    dateCell.textContent = `${formatFullDate(r.created_at, lang)} ${timeStr}`.trim();
+
+    const promptCell = td('accordion-prompt-cell', i18n.t('results.col_prompt', 'Prompt / Suchanfrage'));
+    const promptText = document.createElement('span');
+    promptText.textContent = truncateText(r.prompt, 110);
+    promptText.title = String(r.prompt || '');
+    promptCell.appendChild(promptText);
+    if (r.is_test_run) {
+      promptCell.append(' ', badge(this.tMsg('results.test_run_badge', 'Test-Abfrage'), 'badge-warning'));
+    }
+
+    const modelCell = td('', i18n.t('results.col_model', 'KI-Modell & Strategie'));
+    const modelName = document.createElement('div');
+    modelName.className = 'font-mono text-sm';
+    modelName.textContent = r.model ? `${r.model} (${r.provider})` : String(r.provider || '—');
+    const strategy = String(r.execution_strategy || 'regular');
+    modelCell.append(modelName, badge(this.getStrategyLabel(strategy), `strategy-badge strategy-${strategy}`));
+
+    const tierCell = td('', i18n.t('results.col_tier', 'Empfehlungs-Stufe'));
+    if (r.status === 'failed') {
+      tierCell.appendChild(badge(this.tMsg('results.status_failed', 'Fehlgeschlagen'), 'badge-inactive'));
+    } else {
+      const tier = String(r.mece_category || '4_GENERIC');
+      const tierClass = tier === '1_DIRECT_WIN' ? 'badge-success'
+        : tier === '2_BRAND_HALO' ? 'badge-primary'
+          : tier === '3_COMPETITOR_TAKEOVER' ? 'badge-warning' : 'badge-neutral';
+      tierCell.appendChild(badge(i18n.t(tier, tier), tierClass));
+    }
+
+    const posCell = td('text-right font-mono', i18n.t('results.col_position', 'Position & Quellen'));
+    const pos = r.relative_position_pct !== null && r.relative_position_pct !== undefined
+      ? `${Number(r.relative_position_pct).toFixed(1)}%`
+      : '—';
+    const citCount = Array.isArray(r.citations) ? r.citations.length : 0;
+    posCell.textContent = `${pos} · ${citCount}`;
+
+    summary.append(toggleCell, dateCell, promptCell, modelCell, tierCell, posCell);
+
+    // Detail row
+    const detail = document.createElement('tr');
+    detail.id = detailId;
+    detail.className = 'accordion-detail-row';
+    detail.hidden = !isOpen;
+    const detailCell = td();
+    detailCell.colSpan = 6;
+    const grid = document.createElement('div');
+    grid.className = 'accordion-detail-grid';
+
+    const block = (titleText, wide = false) => {
+      const wrap = document.createElement('div');
+      wrap.className = wide ? 'accordion-detail-block is-wide' : 'accordion-detail-block';
+      const h = document.createElement('h4');
+      h.className = 'accordion-detail-title';
+      h.textContent = titleText;
+      wrap.appendChild(h);
+      grid.appendChild(wrap);
+      return wrap;
+    };
+    const pre = (text) => {
+      const p = document.createElement('pre');
+      p.className = 'accordion-pre';
+      p.textContent = text;
+      return p;
+    };
+
+    block(i18n.t('results.detail_prompt', 'Ausgeführter User-Prompt'), true).appendChild(pre(String(r.prompt || '')));
+    const answerText = r.status === 'failed'
+      ? String(r.error_message || this.tMsg('results.status_failed', 'Fehlgeschlagen'))
+      : String(r.llm_answer || '—');
+    block(i18n.t('results.detail_answer', 'Vollständige KI-Antwort'), true).appendChild(pre(answerText));
+
+    const telemetry = block(i18n.t('results.detail_telemetry', 'Provider-Korrelation & Token-Caching'));
+    const dl = document.createElement('dl');
+    dl.className = 'accordion-telemetry';
+    [
+      [this.tMsg('results.label_strategy', 'Ausführung'), this.getStrategyLabel(strategy)],
+      [this.tMsg('results.label_cached_tokens', 'Gecachte Input-Tokens'), String(Number(r.cached_tokens || 0))],
+      ['custom_id', r.custom_id || '—'],
+      ['prompt_cache_key', r.prompt_cache_key || '—'],
+      ['batch_id', r.batch_id || '—']
+    ].forEach(([k, v]) => {
+      const dt = document.createElement('dt');
+      dt.textContent = k;
+      const dd = document.createElement('dd');
+      dd.className = 'font-mono';
+      dd.textContent = String(v);
+      dl.append(dt, dd);
+    });
+    telemetry.appendChild(dl);
+
+    const compBlock = block(i18n.t('results.detail_competitors', 'Erkannte Wettbewerber in dieser Antwort'));
+    const comps = Array.isArray(r.competitors) ? r.competitors : [];
+    if (comps.length === 0) {
+      compBlock.appendChild(document.createTextNode('—'));
+    } else {
+      const ul = document.createElement('ul');
+      ul.className = 'accordion-list';
+      comps.forEach(c => {
+        const li = document.createElement('li');
+        li.textContent = typeof c === 'string' ? c : String(c?.competitor_name || c?.name || '—');
+        ul.appendChild(li);
+      });
+      compBlock.appendChild(ul);
+    }
+
+    const citBlock = block(i18n.t('results.detail_citations', 'Grounding-Quellen & URLs'));
+    const cits = Array.isArray(r.citations) ? r.citations : [];
+    if (cits.length === 0) {
+      citBlock.appendChild(document.createTextNode('—'));
+    } else {
+      const ul = document.createElement('ul');
+      ul.className = 'accordion-list';
+      cits.forEach(c => {
+        const url = typeof c === 'string' ? c : String(c?.citation_url || c?.url || '');
+        const domain = typeof c === 'string' ? '' : String(c?.citation_domain || c?.domain || '');
+        const li = document.createElement('li');
+        if (/^https?:\/\//i.test(url)) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.textContent = truncateText(url, 90);
+          li.appendChild(a);
+        } else {
+          li.textContent = url || domain || '—';
+        }
+        ul.appendChild(li);
+      });
+      citBlock.appendChild(ul);
+    }
+
+    detailCell.appendChild(grid);
+    detail.appendChild(detailCell);
+
+    const onToggle = (e) => {
+      if (e?.target?.closest?.('a')) return;
+      this.toggleAccordionRow(rowId);
+    };
+    summary.addEventListener('click', onToggle);
+
+    return { summary, detail };
+  }
+
+  toggleAccordionRow(rowId) {
+    const key = String(rowId);
+    const isOpen = !this.expandedResultIds.has(key);
+    if (isOpen) this.expandedResultIds.add(key); else this.expandedResultIds.delete(key);
+
+    const summary = document.getElementById(`result-summary-${key}`);
+    const detail = document.getElementById(`result-detail-${key}`);
+    if (detail) detail.hidden = !isOpen;
+    if (summary?.classList) {
+      if (isOpen) summary.classList.add('is-open'); else summary.classList.remove('is-open');
+      summary.querySelector?.('.accordion-toggle')?.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+    return isOpen;
   }
 
   renderZeroKPIs(metrics) {
@@ -2015,6 +2632,7 @@ if (typeof module !== 'undefined' && module.exports) {
     computeSlotTimestamp,
     formatTimelineAxisLabel,
     buildTimelineAlignedSeries,
+    buildModelTimelineAlignedSeries,
     buildSvgLinePath,
     escapeHtml
   };
@@ -2028,6 +2646,7 @@ export {
   computeSlotTimestamp,
   formatTimelineAxisLabel,
   buildTimelineAlignedSeries,
+  buildModelTimelineAlignedSeries,
   buildSvgLinePath
 };
 export default dashboard;

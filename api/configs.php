@@ -2,14 +2,14 @@
 declare(strict_types=1);
 
 /**
- * Chatlytics.de - Tracking Configuration CRUD Endpoint
+ * Chatlytics.de - Tracking Configuration CRUD & Lifecycle Endpoint
  * File: api/configs.php
  *
  * Supported Operations:
  * - GET    /api/configs.php          (Lists tracking configs for authenticated user; read-only Magic Audit allowed)
  * - GET    /api/configs.php?id={id}  (Retrieves single config; read-only Magic Audit allowed if matches owner)
- * - POST   /api/configs.php          (Creates new tracking configuration; requires full auth)
- * - PUT    /api/configs.php?id={id}  (Updates existing configuration; requires full auth)
+ * - POST   /api/configs.php          (Creates new tracking configuration; defaults to every_120m Starter tier)
+ * - PUT    /api/configs.php?id={id}  (Updates configuration, toggles active/paused, or activates Full Start)
  * - DELETE /api/configs.php?id={id}  (Deletes configuration with cascade run deletion; requires full auth)
  */
 
@@ -29,7 +29,7 @@ $overrideMethod = strtoupper(
     ?? ''
 );
 
-if (in_array($overrideMethod, ['PUT', 'UPDATE'], true)) {
+if (in_array($overrideMethod, ['PUT', 'UPDATE', 'FULL_START'], true)) {
     $requestMethod = 'PUT';
 } elseif (in_array($overrideMethod, ['DELETE', 'DESTROY'], true)) {
     $requestMethod = 'DELETE';
@@ -66,6 +66,7 @@ switch ($requestMethod) {
 function handleGetConfig(?int $id): void {
     $currentUser = requireAuth(true); // allowMagicAudit = true
     $db = getDb();
+    ensureCoreSchemaColumns($db);
     $userId = (int)$currentUser['id'];
     $isAdmin = ($currentUser['role'] ?? '') === 'admin';
 
@@ -134,7 +135,7 @@ function handleCreateConfig(array $data): void {
 
     if (!canUserUseScheduleInterval($currentUser, $validated['schedule_interval'])) {
         jsonError(
-            "High-frequency tracking ({$validated['schedule_interval']}) requires a paid plan (Starter, Growth, or Enterprise). Free accounts are limited to 1x daily.",
+            "High-frequency Data Mining ({$validated['schedule_interval']}) requires a paid plan (Starter, Growth, or Enterprise). Free accounts are limited to the Starter tier (every_120m / 12 datasets per day).",
             403,
             [
                 'required_tier'     => 'starter',
@@ -145,8 +146,16 @@ function handleCreateConfig(array $data): void {
     }
 
     $db = getDb();
+    ensureCoreSchemaColumns($db);
+    ensureUserResultsTable($db, $userId);
 
-    $nextRunAt = ($validated['status'] === 'active')
+    $fullStartRequested = !empty($data['full_start'])
+        || (isset($data['action']) && strtolower(trim((string)$data['action'])) === 'full_start');
+
+    $datasetsPerDay = (int)getScheduleRunsPerDay($validated['schedule_interval']);
+    $initialTestUsed = $fullStartRequested ? 1 : 0;
+    $fullStartedAt = $fullStartRequested ? date('Y-m-d H:i:s') : null;
+    $nextRunAt = ($fullStartRequested && $validated['status'] === 'active')
         ? calculateNextRunAt($validated['schedule_interval'])
         : null;
 
@@ -154,10 +163,12 @@ function handleCreateConfig(array $data): void {
         INSERT INTO tracking_configs (
             user_id, name, brand_name, brand_domains, keywords_prompts,
             competitors, target_llms, search_enabled, schedule_interval,
+            datasets_per_day, initial_test_used, full_started_at,
             status, next_run_at
         ) VALUES (
             :user_id, :name, :brand_name, :brand_domains, :keywords_prompts,
             :competitors, :target_llms, :search_enabled, :schedule_interval,
+            :datasets_per_day, :initial_test_used, :full_started_at,
             :status, :next_run_at
         )
     ";
@@ -173,6 +184,9 @@ function handleCreateConfig(array $data): void {
         ':target_llms'       => json_encode($validated['target_llms'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':search_enabled'    => $validated['search_enabled'],
         ':schedule_interval' => $validated['schedule_interval'],
+        ':datasets_per_day'  => $datasetsPerDay,
+        ':initial_test_used' => $initialTestUsed,
+        ':full_started_at'   => $fullStartedAt,
         ':status'            => $validated['status'],
         ':next_run_at'       => $nextRunAt,
     ]);
@@ -194,8 +208,8 @@ function handleCreateConfig(array $data): void {
 }
 
 /**
- * Handle PUT request: update existing configuration properties.
- * Guarded by requireAuth(allowMagicAudit: true) and assertNotAuditMode.
+ * Handle PUT request: update existing configuration properties, toggle active/paused,
+ * or transition to Full Start (`action = 'full_start'`).
  */
 function handleUpdateConfig(?int $id, array $data): void {
     $currentUser = requireAuth(true);
@@ -206,6 +220,7 @@ function handleUpdateConfig(?int $id, array $data): void {
     }
 
     $db = getDb();
+    ensureCoreSchemaColumns($db);
     $userId = (int)$currentUser['id'];
     $isAdmin = ($currentUser['role'] ?? '') === 'admin';
 
@@ -222,11 +237,32 @@ function handleUpdateConfig(?int $id, array $data): void {
         jsonError("Configuration not found.", 404);
     }
 
+    $alreadyFullStarted = !empty($existing['full_started_at']);
+    $action = strtolower(trim((string)($_GET['action'] ?? $data['action'] ?? '')));
+    $isActivatingFullStart = ($action === 'full_start') || !empty($data['full_start']);
+
+    // Enforce prompt immutability after Full Start to preserve provider Input Prompt Caching prefix
+    if ($alreadyFullStarted && (isset($data['keywords_prompts']) || isset($data['prompts']))) {
+        $existingPrompts = json_decode($existing['keywords_prompts'] ?: '[]', true) ?? [];
+        $incomingRaw = $data['keywords_prompts'] ?? $data['prompts'];
+        if (is_string($incomingRaw)) {
+            $incomingRaw = array_values(array_filter(array_map('trim', explode("\n", $incomingRaw)), fn($s) => $s !== ''));
+        } elseif (is_array($incomingRaw)) {
+            $incomingRaw = array_values(array_filter(array_map(fn($s) => trim((string)$s), $incomingRaw), fn($s) => $s !== ''));
+        }
+        if ($incomingRaw !== $existingPrompts) {
+            jsonError(
+                "Prompts are locked after Full Start to preserve LLM provider Input Prompt Caching and daily time-series consistency. Configuration can only be paused or resumed.",
+                409
+            );
+        }
+    }
+
     $validated = validateAndSanitizeConfigInput($data, true, $existing);
 
     if (isset($data['schedule_interval']) && !canUserUseScheduleInterval($currentUser, $validated['schedule_interval'])) {
         jsonError(
-            "High-frequency tracking ({$validated['schedule_interval']}) requires a paid plan (Starter, Growth, or Enterprise). Free accounts are limited to 1x daily.",
+            "High-frequency Data Mining ({$validated['schedule_interval']}) requires a paid plan (Starter, Growth, or Enterprise). Free accounts are limited to the Starter tier (every_120m / 12 datasets per day).",
             403,
             [
                 'required_tier'     => 'starter',
@@ -236,17 +272,28 @@ function handleUpdateConfig(?int $id, array $data): void {
         );
     }
 
-    $intervalChanged = ($validated['schedule_interval'] !== (string)($existing['schedule_interval'] ?? ''));
-    $reactivated = ((string)($existing['status'] ?? 'active') !== 'active' && $validated['status'] === 'active');
+    $datasetsPerDay = (int)getScheduleRunsPerDay($validated['schedule_interval']);
+    $fullStartedAt = $existing['full_started_at'] ?? null;
+    $initialTestUsed = (int)($existing['initial_test_used'] ?? 0);
 
-    if ($validated['schedule_interval'] === 'manual') {
-        $nextRunAt = null;
-    } elseif ($validated['status'] !== 'active') {
-        $nextRunAt = $existing['next_run_at'] ?? null;
-    } elseif ($intervalChanged || $reactivated || empty($existing['next_run_at'])) {
+    if ($isActivatingFullStart && !$alreadyFullStarted) {
+        $fullStartedAt = date('Y-m-d H:i:s');
+        $initialTestUsed = 1;
+        $validated['status'] = 'active';
         $nextRunAt = calculateNextRunAt($validated['schedule_interval']);
     } else {
-        $nextRunAt = $existing['next_run_at'];
+        $intervalChanged = ($validated['schedule_interval'] !== normalizeScheduleInterval((string)($existing['schedule_interval'] ?? 'every_120m')));
+        $reactivated = ((string)($existing['status'] ?? 'active') !== 'active' && $validated['status'] === 'active');
+
+        if ($validated['status'] !== 'active') {
+            $nextRunAt = null;
+        } elseif (!empty($fullStartedAt) && ($intervalChanged || $reactivated || empty($existing['next_run_at']))) {
+            $nextRunAt = calculateNextRunAt($validated['schedule_interval']);
+        } elseif (empty($fullStartedAt) && ($intervalChanged || $reactivated)) {
+            $nextRunAt = calculateNextRunAt($validated['schedule_interval']);
+        } else {
+            $nextRunAt = $existing['next_run_at'] ?? null;
+        }
     }
 
     $sql = "
@@ -259,6 +306,9 @@ function handleUpdateConfig(?int $id, array $data): void {
             target_llms = :target_llms,
             search_enabled = :search_enabled,
             schedule_interval = :schedule_interval,
+            datasets_per_day = :datasets_per_day,
+            initial_test_used = :initial_test_used,
+            full_started_at = :full_started_at,
             status = :status,
             next_run_at = :next_run_at
         WHERE id = :id
@@ -274,6 +324,9 @@ function handleUpdateConfig(?int $id, array $data): void {
         ':target_llms'       => json_encode($validated['target_llms'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':search_enabled'    => $validated['search_enabled'],
         ':schedule_interval' => $validated['schedule_interval'],
+        ':datasets_per_day'  => $datasetsPerDay,
+        ':initial_test_used' => $initialTestUsed,
+        ':full_started_at'   => $fullStartedAt,
         ':status'            => $validated['status'],
         ':next_run_at'       => $nextRunAt,
         ':id'                => $id,
@@ -286,7 +339,9 @@ function handleUpdateConfig(?int $id, array $data): void {
 
     jsonResponse([
         'config'  => formatConfigRecord($updated),
-        'message' => 'Configuration updated successfully.',
+        'message' => $isActivatingFullStart
+            ? 'Full Data Mining activated successfully.'
+            : 'Configuration updated successfully.',
     ], 200);
 }
 
@@ -303,6 +358,7 @@ function handleDeleteConfig(?int $id): void {
     }
 
     $db = getDb();
+    ensureCoreSchemaColumns($db);
     $userId = (int)$currentUser['id'];
     $isAdmin = ($currentUser['role'] ?? '') === 'admin';
 
@@ -462,7 +518,7 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
         $targetLLMs = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'];
     }
 
-    // 6. schedule_interval
+    // 6. schedule_interval (Data Mining Accuracy: every_120m, every_60m, every_30m, every_15m)
     $VALID_INTERVALS = getValidScheduleIntervals();
     if (isset($data['schedule_interval'])) {
         $scheduleInterval = normalizeScheduleInterval((string)$data['schedule_interval']);
@@ -470,9 +526,10 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
             jsonError("Invalid schedule_interval. Allowed: " . implode(', ', $VALID_INTERVALS), 422);
         }
     } elseif ($isUpdate && $existing) {
-        $scheduleInterval = normalizeScheduleInterval((string)$existing['schedule_interval']);
+        $existingInterval = normalizeScheduleInterval((string)($existing['schedule_interval'] ?? 'every_120m'));
+        $scheduleInterval = in_array($existingInterval, $VALID_INTERVALS, true) ? $existingInterval : 'every_120m';
     } else {
-        $scheduleInterval = 'daily';
+        $scheduleInterval = 'every_120m';
     }
 
     // 7. search_enabled
@@ -522,7 +579,7 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
  */
 function calculateNextRunAt(string $interval): ?string {
     $canonical = normalizeScheduleInterval($interval);
-    if ($canonical === 'manual') {
+    if (!in_array($canonical, getValidScheduleIntervals(), true)) {
         return null;
     }
     return date('Y-m-d H:i:s');
@@ -536,25 +593,56 @@ function formatConfigRecord(array $row): array {
     $prompts = json_decode($row['keywords_prompts'] ?: '[]', true) ?? [];
     $competitors = json_decode($row['competitors'] ?: '[]', true) ?? [];
     $targetLLMs = json_decode($row['target_llms'] ?: '[]', true) ?? [];
-    $scheduleInterval = (string)($row['schedule_interval'] ?? 'daily');
+    $rawInterval = (string)($row['schedule_interval'] ?? 'every_120m');
+    $scheduleInterval = normalizeScheduleInterval($rawInterval);
+    if (!in_array($scheduleInterval, getValidScheduleIntervals(), true)) {
+        $scheduleInterval = 'every_120m';
+    }
+
+    $runsPerDay = getScheduleRunsPerDay($scheduleInterval);
+    $datasetsPerDay = isset($row['datasets_per_day']) && (int)$row['datasets_per_day'] > 0
+        ? (int)$row['datasets_per_day']
+        : (int)$runsPerDay;
+
+    $initialTestUsed = !empty($row['initial_test_used']);
+    $fullStartedAt = !empty($row['full_started_at']) ? (string)$row['full_started_at'] : null;
+    $status = (string)($row['status'] ?? 'active');
+    $canTriggerTestRun = ($fullStartedAt === null && !$initialTestUsed && $status !== 'archived');
+
+    $referenceDate = $fullStartedAt ?? ($row['created_at'] ?? null);
+    $isFirstDay = $referenceDate !== null && substr((string)$referenceDate, 0, 10) === date('Y-m-d');
+
+    $executionStrategies = [];
+    foreach ($targetLLMs as $llmToken) {
+        $spec = resolveTargetLlmSpec((string)$llmToken, $scheduleInterval);
+        if ($spec['id'] !== '') {
+            $executionStrategies[$spec['id']] = $spec['execution_strategy'];
+        }
+    }
 
     return [
-        'id'                => (int)$row['id'],
-        'user_id'           => (int)$row['user_id'],
-        'name'              => $row['name'],
-        'brand_name'        => $row['brand_name'],
-        'brand_domains'     => $domains,
-        'keywords_prompts'  => $prompts,
-        'prompts'           => $prompts, // Alias for client/test compatibility
-        'competitors'       => $competitors,
-        'target_llms'       => $targetLLMs,
-        'search_enabled'    => (bool)$row['search_enabled'],
-        'schedule_interval' => $scheduleInterval,
-        'runs_per_day'      => getScheduleRunsPerDay($scheduleInterval),
-        'status'            => $row['status'],
-        'last_run_at'       => $row['last_run_at'],
-        'next_run_at'       => $row['next_run_at'],
-        'created_at'        => $row['created_at'],
-        'updated_at'        => $row['updated_at'],
+        'id'                   => (int)$row['id'],
+        'user_id'              => (int)$row['user_id'],
+        'name'                 => $row['name'],
+        'brand_name'           => $row['brand_name'],
+        'brand_domains'        => $domains,
+        'keywords_prompts'     => $prompts,
+        'prompts'              => $prompts, // Alias for client/test compatibility
+        'competitors'          => $competitors,
+        'target_llms'          => $targetLLMs,
+        'search_enabled'       => (bool)$row['search_enabled'],
+        'schedule_interval'    => $scheduleInterval,
+        'datasets_per_day'     => $datasetsPerDay,
+        'runs_per_day'         => $runsPerDay,
+        'initial_test_used'    => $initialTestUsed,
+        'full_started_at'      => $fullStartedAt,
+        'can_trigger_test_run' => $canTriggerTestRun,
+        'is_first_day'         => $isFirstDay,
+        'execution_strategies' => $executionStrategies,
+        'status'               => $status,
+        'last_run_at'          => $row['last_run_at'],
+        'next_run_at'          => $row['next_run_at'],
+        'created_at'           => $row['created_at'],
+        'updated_at'           => $row['updated_at'],
     ];
 }

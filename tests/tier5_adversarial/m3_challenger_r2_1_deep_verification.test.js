@@ -105,7 +105,10 @@ class MockStmt {
                 'competitors' => json_encode(['Workday']),
                 'target_llms' => json_encode(['openai']),
                 'search_enabled' => 1,
-                'schedule_interval' => 'daily',
+                'schedule_interval' => 'every_120m',
+                'datasets_per_day' => 12,
+                'initial_test_used' => 0,
+                'full_started_at' => null,
                 'status' => 'active',
                 'created_at' => '2026-11-01 10:00:00',
                 'updated_at' => '2026-11-01 10:00:00',
@@ -127,7 +130,10 @@ class MockStmt {
             'competitors' => json_encode(['Workday']),
             'target_llms' => json_encode(['openai']),
             'search_enabled' => 1,
-            'schedule_interval' => 'daily',
+            'schedule_interval' => 'every_120m',
+            'datasets_per_day' => 12,
+            'initial_test_used' => 0,
+            'full_started_at' => null,
             'status' => 'active',
             'created_at' => '2026-11-01 10:00:00',
             'updated_at' => '2026-11-01 10:00:00',
@@ -333,7 +339,7 @@ test('CHALLENGE-R2-4.1: POST /api/configs.php with valid Bearer token creates co
         'competitors' => ['Workday', 'SAP'],
         'target_llms' => ['openai', 'gemini'],
         'search_enabled' => true,
-        'schedule_interval' => 'daily'
+        'schedule_interval' => 'every_120m'
     ];
 
     require 'api/configs.php';
@@ -357,7 +363,7 @@ test('CHALLENGE-R2-4.2: PUT /api/configs.php with valid Bearer token updates con
     $_POST = [
         'name' => 'Updated HR Config',
         'brand_name' => 'Personio Updated',
-        'schedule_interval' => 'weekly'
+        'schedule_interval' => 'every_120m'
     ];
 
     require 'api/configs.php';

@@ -107,8 +107,9 @@ function handleListUsers(array $data): void {
     $rawUsers = $stmt->fetchAll();
 
     $formattedUsers = array_map(function (array $u): array {
+        $uid = (int)$u['id'];
         return [
-            'id'                => (int)$u['id'],
+            'id'                => $uid,
             'email'             => $u['email'],
             'company_name'      => $u['company_name'],
             'role'              => $u['role'],
@@ -119,6 +120,7 @@ function handleListUsers(array $data): void {
             'created_at'        => $u['created_at'],
             'updated_at'        => $u['updated_at'],
             'magic_audit_token' => $u['magic_audit_token'],
+            'results_table'     => getUserResultsTableName($uid),
         ];
     }, $rawUsers);
 
@@ -160,10 +162,13 @@ function handleAdjustCredits(array $data): void {
 
     if ($hasDelta) {
         $delta = (int)$data['delta'];
-        // Atomic delta calculation with non-negative lower bound
+        $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
+        $clampExpr = $driver === 'sqlite'
+            ? 'MAX(0, credits_remaining + :delta)'
+            : 'GREATEST(0, credits_remaining + :delta)';
         $stmt = $db->prepare("
             UPDATE users 
-            SET credits_remaining = GREATEST(0, credits_remaining + :delta) 
+            SET credits_remaining = {$clampExpr}
             WHERE id = :id
         ");
         $stmt->execute([':delta' => $delta, ':id' => $userId]);
@@ -229,108 +234,109 @@ function handleGenerateMagicToken(array $data): void {
 /**
  * 1-Click Realistic Demo Data Seeder.
  * Injects 3 German B2B SaaS accounts (Personio, Celonis, DeepL) with configs,
- * historical runs across OpenAI, Claude, and Gemini, competitors, and grounding citations
- * spanning all 4 MECE categories and all 4 GEO quadrants over a 30-day timeline.
+ * physical `user_results_<user_id>` tables, historical runs across OpenAI, Mistral,
+ * and Gemini, competitors, and grounding citations spanning all 4 MECE categories
+ * and all 4 GEO quadrants over a multi-week daily timeline.
  */
 function handleSeedDemoData(): void {
     $db = getDb();
-    $db->beginTransaction();
+    ensureCoreSchemaColumns($db);
+
+    $algo = defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT;
+    $options = defined('PASSWORD_ARGON2ID') ? [
+        'memory_cost' => 65536,
+        'time_cost'   => 4,
+        'threads'     => 1,
+    ] : ['cost' => 12];
+    $defaultHash = password_hash('DemoAccount2026!', $algo, $options);
+
+    // Account Definitions using the 4 Data Mining Accuracy tiers
+    $accounts = [
+        [
+            'email'        => 'demo@personio.de',
+            'company_name' => 'Personio SE & Co. KG',
+            'tier'         => 'growth',
+            'credits'      => 500,
+            'config'       => [
+                'name'              => 'Personio HR Tech Visibility',
+                'brand_name'        => 'Personio',
+                'brand_domains'     => ['personio.de', 'personio.com'],
+                'keywords_prompts'  => [
+                    'Welche HR-Software eignet sich am besten für den Mittelstand in Deutschland?',
+                    'Beste Personalmanagement Software für KMU',
+                    'Personio Alternativen und Zeiterfassung Software Vergleich'
+                ],
+                'competitors'       => [
+                    ['name' => 'Workday', 'domain' => 'workday.com'],
+                    ['name' => 'BambooHR', 'domain' => 'bamboohr.com'],
+                    ['name' => 'Factorial', 'domain' => 'factorial.de'],
+                    ['name' => 'Kenjo', 'domain' => 'kenjo.io']
+                ],
+                'target_llms'       => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash', 'mistral/mistral-large-latest'],
+                'schedule_interval' => 'every_60m',
+                'datasets_per_day'  => 24,
+                'search_enabled'    => 1,
+            ]
+        ],
+        [
+            'email'        => 'demo@celonis.com',
+            'company_name' => 'Celonis SE',
+            'tier'         => 'enterprise_managed',
+            'credits'      => 2000,
+            'config'       => [
+                'name'              => 'Celonis Process Mining Intelligence',
+                'brand_name'        => 'Celonis',
+                'brand_domains'     => ['celonis.com', 'celonis.de'],
+                'keywords_prompts'  => [
+                    'Führende Process Mining Software für Großunternehmen',
+                    'Celonis vs SAP Signavio Prozessoptimierung',
+                    'Process Intelligence und Automatisierungs-Plattformen'
+                ],
+                'competitors'       => [
+                    ['name' => 'SAP Signavio', 'domain' => 'signavio.com'],
+                    ['name' => 'UiPath', 'domain' => 'uipath.com'],
+                    ['name' => 'ARIS', 'domain' => 'softwareag.com']
+                ],
+                'target_llms'       => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash', 'mistral/mistral-large-latest'],
+                'schedule_interval' => 'every_15m',
+                'datasets_per_day'  => 96,
+                'search_enabled'    => 1,
+            ]
+        ],
+        [
+            'email'        => 'demo@deepl.com',
+            'company_name' => 'DeepL SE',
+            'tier'         => 'starter',
+            'credits'      => 300,
+            'config'       => [
+                'name'              => 'DeepL AI Translation Benchmark',
+                'brand_name'        => 'DeepL',
+                'brand_domains'     => ['deepl.com'],
+                'keywords_prompts'  => [
+                    'Präziseste KI Übersetzungssoftware für Unternehmen',
+                    'DeepL vs Google Translate Business Translation',
+                    'Beste KI-Tools für professionelle Übersetzungen'
+                ],
+                'competitors'       => [
+                    ['name' => 'Google Translate', 'domain' => 'translate.google.com'],
+                    ['name' => 'Microsoft Translator', 'domain' => 'translator.microsoft.com'],
+                    ['name' => 'NeuroFlash', 'domain' => 'neuroflash.com']
+                ],
+                'target_llms'       => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'],
+                'schedule_interval' => 'every_120m',
+                'datasets_per_day'  => 12,
+                'search_enabled'    => 1,
+            ]
+        ]
+    ];
 
     try {
-        $algo = defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT;
-        $options = defined('PASSWORD_ARGON2ID') ? [
-            'memory_cost' => 65536,
-            'time_cost'   => 4,
-            'threads'     => 1,
-        ] : ['cost' => 12];
-        $defaultHash = password_hash('DemoAccount2026!', $algo, $options);
-
-        // Account Definitions
-        $accounts = [
-            [
-                'email'        => 'demo@personio.de',
-                'company_name' => 'Personio SE & Co. KG',
-                'tier'         => 'growth',
-                'credits'      => 500,
-                'config'       => [
-                    'name'              => 'Personio HR Tech Visibility',
-                    'brand_name'        => 'Personio',
-                    'brand_domains'     => ['personio.de', 'personio.com'],
-                    'keywords_prompts'  => [
-                        'Welche HR-Software eignet sich am besten für den Mittelstand in Deutschland?',
-                        'Beste Personalmanagement Software für KMU',
-                        'Personio Alternativen und Zeiterfassung Software Vergleich'
-                    ],
-                    'competitors'       => [
-                        ['name' => 'Workday', 'domain' => 'workday.com'],
-                        ['name' => 'BambooHR', 'domain' => 'bamboohr.com'],
-                        ['name' => 'Factorial', 'domain' => 'factorial.de'],
-                        ['name' => 'Kenjo', 'domain' => 'kenjo.io']
-                    ],
-                    'target_llms'       => ['openai/gpt-4o', 'anthropic/claude-3-5-sonnet', 'google/gemini-1.5-pro'],
-                    'schedule_interval' => 'daily',
-                    'search_enabled'    => 1,
-                ]
-            ],
-            [
-                'email'        => 'demo@celonis.com',
-                'company_name' => 'Celonis SE',
-                'tier'         => 'enterprise_managed',
-                'credits'      => 2000,
-                'config'       => [
-                    'name'              => 'Celonis Process Mining Intelligence',
-                    'brand_name'        => 'Celonis',
-                    'brand_domains'     => ['celonis.com', 'celonis.de'],
-                    'keywords_prompts'  => [
-                        'Führende Process Mining Software für Großunternehmen',
-                        'Celonis vs SAP Signavio Prozessoptimierung',
-                        'Process Intelligence und Automatisierungs-Plattformen'
-                    ],
-                    'competitors'       => [
-                        ['name' => 'SAP Signavio', 'domain' => 'signavio.com'],
-                        ['name' => 'UiPath', 'domain' => 'uipath.com'],
-                        ['name' => 'ARIS', 'domain' => 'softwareag.com']
-                    ],
-                    'target_llms'       => ['openai/gpt-4o', 'anthropic/claude-3-5-sonnet', 'google/gemini-1.5-pro'],
-                    'schedule_interval' => 'daily',
-                    'search_enabled'    => 1,
-                ]
-            ],
-            [
-                'email'        => 'demo@deepl.com',
-                'company_name' => 'DeepL SE',
-                'tier'         => 'starter',
-                'credits'      => 300,
-                'config'       => [
-                    'name'              => 'DeepL AI Translation Benchmark',
-                    'brand_name'        => 'DeepL',
-                    'brand_domains'     => ['deepl.com'],
-                    'keywords_prompts'  => [
-                        'Präziseste KI Übersetzungssoftware für Unternehmen',
-                        'DeepL vs Google Translate Business Translation',
-                        'Beste KI-Tools für professionelle Übersetzungen'
-                    ],
-                    'competitors'       => [
-                        ['name' => 'Google Translate', 'domain' => 'translate.google.com'],
-                        ['name' => 'Microsoft Translator', 'domain' => 'translator.microsoft.com'],
-                        ['name' => 'NeuroFlash', 'domain' => 'neuroflash.com']
-                    ],
-                    'target_llms'       => ['openai/gpt-4o', 'anthropic/claude-3-5-sonnet', 'google/gemini-1.5-pro'],
-                    'schedule_interval' => 'daily',
-                    'search_enabled'    => 1,
-                ]
-            ]
-        ];
-
-        $seededAccountNames = [];
-        $totalConfigsCreated = 0;
-        $totalRunsCreated = 0;
-
-        foreach ($accounts as $acc) {
+        // Step 1: Upsert users & provision physical per-user tables BEFORE starting transaction
+        // (MySQL CREATE TABLE IF NOT EXISTS causes an implicit commit if run inside a transaction)
+        $resolvedUserIds = [];
+        $provisionedTables = [];
+        foreach ($accounts as $idx => $acc) {
             $email = $acc['email'];
-            $seededAccountNames[] = $acc['config']['brand_name'];
-
-            // Upsert user
             $findUser = $db->prepare("SELECT id FROM users WHERE email = :email");
             $findUser->execute([':email' => $email]);
             $existingUserId = $findUser->fetchColumn();
@@ -372,17 +378,36 @@ function handleSeedDemoData(): void {
                 $userId = (int)$db->lastInsertId();
             }
 
-            // Create tracking config
+            $resolvedUserIds[$idx] = $userId;
+            $provisionedTables[] = ensureUserResultsTable($db, $userId);
+        }
+
+        // Step 2: Transactionally seed configs, llm_runs, child entities, and user_results_<user_id>
+        $db->beginTransaction();
+
+        $seededAccountNames = [];
+        $totalConfigsCreated = 0;
+        $totalRunsCreated = 0;
+
+        foreach ($accounts as $idx => $acc) {
+            $userId = $resolvedUserIds[$idx];
             $cfg = $acc['config'];
+            $seededAccountNames[] = $cfg['brand_name'];
+
+            $fullStartedAt = date('Y-m-d H:i:s', strtotime('-35 days'));
+            $nextRunAt = date('Y-m-d H:i:s', strtotime('+60 minutes'));
+
             $insConfig = $db->prepare("
                 INSERT INTO tracking_configs (
                     user_id, name, brand_name, brand_domains, keywords_prompts,
                     competitors, target_llms, search_enabled, schedule_interval,
-                    status, next_run_at
+                    datasets_per_day, initial_test_used, full_started_at,
+                    status, next_run_at, created_at
                 ) VALUES (
                     :user_id, :name, :brand_name, :brand_domains, :keywords_prompts,
                     :competitors, :target_llms, :search_enabled, :schedule_interval,
-                    'active', DATE_ADD(NOW(), INTERVAL 1 DAY)
+                    :datasets_per_day, 1, :full_started_at,
+                    'active', :next_run_at, :created_at
                 )
             ");
             $insConfig->execute([
@@ -395,13 +420,16 @@ function handleSeedDemoData(): void {
                 ':target_llms'       => json_encode($cfg['target_llms']),
                 ':search_enabled'    => $cfg['search_enabled'],
                 ':schedule_interval' => $cfg['schedule_interval'],
+                ':datasets_per_day'  => $cfg['datasets_per_day'],
+                ':full_started_at'   => $fullStartedAt,
+                ':next_run_at'       => $nextRunAt,
+                ':created_at'        => $fullStartedAt,
             ]);
             $configId = (int)$db->lastInsertId();
             $totalConfigsCreated++;
 
             // Matrix of Run Templates covering all 4 MECE categories and all 4 GEO quadrants
             $runTemplates = [
-                // 1. Direct Win (Clean)
                 [
                     'mece'             => '1_DIRECT_WIN',
                     'geo'              => 'NONE',
@@ -417,7 +445,6 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => 420,
                     'day_offset'       => 2,
                 ],
-                // 2. Buried Winner (Brand wins text and citation, but placed >50%)
                 [
                     'mece'             => '1_DIRECT_WIN',
                     'geo'              => '4_BURIED_WINNER',
@@ -433,7 +460,6 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => null,
                     'day_offset'       => 5,
                 ],
-                // 3. Brand Halo Trap (Competitor leads, brand trapped secondarily)
                 [
                     'mece'             => '2_BRAND_HALO',
                     'geo'              => '3_BRAND_HALO_TRAP',
@@ -449,7 +475,6 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => 92,
                     'day_offset'       => 8,
                 ],
-                // 4. Citation Hijack (Brand mentioned, but citations hijack to competitor domain)
                 [
                     'mece'             => '1_DIRECT_WIN',
                     'geo'              => '1_CITATION_HIJACK',
@@ -465,7 +490,6 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => 490,
                     'day_offset'       => 12,
                 ],
-                // 5. Parametric Blindspot (Brand cited in grounding, but missing from synthesized text)
                 [
                     'mece'             => '3_COMPETITOR_TAKEOVER',
                     'geo'              => '2_PARAMETRIC_BLINDSPOT',
@@ -481,7 +505,6 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => 75,
                     'day_offset'       => 18,
                 ],
-                // 6. Generic (Neither brand nor competitor mentioned)
                 [
                     'mece'             => '4_GENERIC',
                     'geo'              => 'NONE',
@@ -497,7 +520,6 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => null,
                     'day_offset'       => 24,
                 ],
-                // 7. Intraday High-Frequency Win (Last 4 hours)
                 [
                     'mece'             => '1_DIRECT_WIN',
                     'geo'              => 'NONE',
@@ -511,10 +533,8 @@ function handleSeedDemoData(): void {
                     'comp_mentioned'   => 1,
                     'comp_rec'         => 0,
                     'comp_earliness'   => 460,
-                    'day_offset'       => 0,
-                    'hour_offset'      => 4,
+                    'day_offset'       => 1,
                 ],
-                // 8. Intraday Halo (Last 12 hours)
                 [
                     'mece'             => '2_BRAND_HALO',
                     'geo'              => '3_BRAND_HALO_TRAP',
@@ -528,10 +548,8 @@ function handleSeedDemoData(): void {
                     'comp_mentioned'   => 1,
                     'comp_rec'         => 1,
                     'comp_earliness'   => 84,
-                    'day_offset'       => 0,
-                    'hour_offset'      => 12,
+                    'day_offset'       => 3,
                 ],
-                // 9. Previous 30d Baseline Win (34 days ago)
                 [
                     'mece'             => '1_DIRECT_WIN',
                     'geo'              => 'NONE',
@@ -547,7 +565,6 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => 510,
                     'day_offset'       => 34,
                 ],
-                // 10. Previous 30d Baseline Takeover (42 days ago)
                 [
                     'mece'             => '3_COMPETITOR_TAKEOVER',
                     'geo'              => '1_CITATION_HIJACK',
@@ -563,7 +580,6 @@ function handleSeedDemoData(): void {
                     'comp_earliness'   => 60,
                     'day_offset'       => 42,
                 ],
-                // 11. Previous 30d Baseline Halo (51 days ago)
                 [
                     'mece'             => '2_BRAND_HALO',
                     'geo'              => '3_BRAND_HALO_TRAP',
@@ -582,32 +598,35 @@ function handleSeedDemoData(): void {
             ];
 
             $providers = [
-                ['provider' => 'openai',    'model' => 'gpt-4o'],
-                ['provider' => 'anthropic', 'model' => 'claude-3-5-sonnet'],
-                ['provider' => 'gemini',    'model' => 'gemini-1.5-pro'],
+                ['provider' => 'openai',  'model' => 'gpt-6-luna',              'strategy' => 'prompt_caching', 'cached_tokens' => 1152],
+                ['provider' => 'mistral', 'model' => 'mistral-large-latest',    'strategy' => 'prompt_caching', 'cached_tokens' => 1024],
+                ['provider' => 'gemini',  'model' => 'models/gemini-3.5-flash', 'strategy' => 'prompt_caching', 'cached_tokens' => 2048],
             ];
 
             $primaryCompetitor = $cfg['competitors'][0];
+            $promptCount = count($cfg['keywords_prompts']);
 
-            foreach ($runTemplates as $tmpl) {
-                foreach ($providers as $prov) {
-                    $promptText = $cfg['keywords_prompts'][array_rand($cfg['keywords_prompts'])];
-                    $hourOffset = (int)($tmpl['hour_offset'] ?? 0);
-                    $dayOffset = (int)($tmpl['day_offset'] ?? 0);
-                    $createdAt = $hourOffset > 0
-                        ? date('Y-m-d H:i:s', strtotime("-{$hourOffset} hours"))
-                        : date('Y-m-d H:i:s', strtotime("-{$dayOffset} days"));
+            foreach ($runTemplates as $tIdx => $tmpl) {
+                foreach ($providers as $pIdx => $prov) {
+                    $promptText = $cfg['keywords_prompts'][($tIdx + $pIdx) % $promptCount];
+                    $dayOffset = (int)($tmpl['day_offset'] ?? 1);
+                    $createdAt = date('Y-m-d H:i:s', strtotime("-{$dayOffset} days"));
+                    $customId = sprintf('cl_u%d_c%d_seed_%d_%d_%s', $userId, $configId, $tIdx, $pIdx, substr(bin2hex(random_bytes(3)), 0, 6));
+                    $promptCacheKey = buildPromptCacheKey($configId, $promptText, $prov['provider'] . '/' . $prov['model']);
+                    $responseText = "Synthesized AI visibility evaluation for {$cfg['brand_name']} ({$prov['provider']}/{$prov['model']}) on prompt: {$promptText}.";
 
                     $insRun = $db->prepare("
                         INSERT INTO llm_runs (
-                            config_id, user_id, prompt, provider, model, brand_name, status,
+                            config_id, user_id, custom_id, execution_strategy, prompt_cache_key, cached_tokens, is_test_run,
+                            prompt, provider, model, brand_name, status,
                             brand_mentioned, brand_prominence_rank, char_earliness,
                             word_earliness, relative_position_pct, total_chars, total_words,
                             mece_category, geo_quadrant, has_citations, brand_cited,
                             competitor_cited, raw_response_text, run_duration_ms, cost_credits,
                             created_at
                         ) VALUES (
-                            :config_id, :user_id, :prompt, :provider, :model, :brand_name, 'completed',
+                            :config_id, :user_id, :custom_id, :execution_strategy, :prompt_cache_key, :cached_tokens, 0,
+                            :prompt, :provider, :model, :brand_name, 'completed',
                             :brand_mentioned, :brand_prominence_rank, :char_earliness,
                             :word_earliness, :relative_position_pct, 1280, 185,
                             :mece_category, :geo_quadrant, :has_citations, :brand_cited,
@@ -619,6 +638,10 @@ function handleSeedDemoData(): void {
                     $insRun->execute([
                         ':config_id'              => $configId,
                         ':user_id'                => $userId,
+                        ':custom_id'              => $customId,
+                        ':execution_strategy'     => $prov['strategy'],
+                        ':prompt_cache_key'       => $promptCacheKey,
+                        ':cached_tokens'          => $prov['cached_tokens'],
                         ':prompt'                 => $promptText,
                         ':provider'               => $prov['provider'],
                         ':model'                  => $prov['model'],
@@ -633,15 +656,26 @@ function handleSeedDemoData(): void {
                         ':has_citations'          => $tmpl['has_cit'],
                         ':brand_cited'            => $tmpl['brand_cited'],
                         ':competitor_cited'       => $tmpl['comp_cited'],
-                        ':raw_response_text'      => "Synthesized analysis for {$cfg['brand_name']}.",
+                        ':raw_response_text'      => $responseText,
                         ':created_at'             => $createdAt,
                     ]);
 
                     $runId = (int)$db->lastInsertId();
                     $totalRunsCreated++;
 
-                    // Insert competitor record if competitor was present
+                    $competitorsList = [];
                     if ($tmpl['comp_mentioned']) {
+                        $compRow = [
+                            'competitor_name'       => $primaryCompetitor['name'],
+                            'competitor_domain'     => $primaryCompetitor['domain'] ?? null,
+                            'mentioned'             => 1,
+                            'char_earliness'        => $tmpl['comp_earliness'],
+                            'word_earliness'        => $tmpl['comp_earliness'] ? (int)ceil($tmpl['comp_earliness'] / 7) : null,
+                            'relative_position_pct' => $tmpl['comp_earliness'] ? round(($tmpl['comp_earliness'] / 1280) * 100, 2) : null,
+                            'recommended'           => $tmpl['comp_rec'],
+                        ];
+                        $competitorsList[] = $compRow;
+
                         $insComp = $db->prepare("
                             INSERT INTO run_competitors (
                                 run_id, competitor_name, competitor_domain, mentioned, char_earliness,
@@ -655,19 +689,28 @@ function handleSeedDemoData(): void {
                         ");
                         $insComp->execute([
                             ':run_id'            => $runId,
-                            ':competitor_name'   => $primaryCompetitor['name'],
-                            ':competitor_domain' => $primaryCompetitor['domain'] ?? null,
-                            ':char_earliness'    => $tmpl['comp_earliness'],
-                            ':word_earliness'    => $tmpl['comp_earliness'] ? (int)ceil($tmpl['comp_earliness'] / 7) : null,
-                            ':relative_pos'      => $tmpl['comp_earliness'] ? round(($tmpl['comp_earliness'] / 1280) * 100, 2) : null,
-                            ':recommended'       => $tmpl['comp_rec'],
+                            ':competitor_name'   => $compRow['competitor_name'],
+                            ':competitor_domain' => $compRow['competitor_domain'],
+                            ':char_earliness'    => $compRow['char_earliness'],
+                            ':word_earliness'    => $compRow['word_earliness'],
+                            ':relative_pos'      => $compRow['relative_position_pct'],
+                            ':recommended'       => $compRow['recommended'],
                             ':created_at'        => $createdAt,
                         ]);
                     }
 
-                    // Insert citations
+                    $citationsList = [];
                     if ($tmpl['has_cit']) {
                         if ($tmpl['brand_cited']) {
+                            $citRow = [
+                                'citation_domain'      => $cfg['brand_domains'][0],
+                                'citation_url'         => "https://www.{$cfg['brand_domains'][0]}/overview",
+                                'citation_title'       => "{$cfg['brand_name']} Official Platform",
+                                'is_brand_domain'      => 1,
+                                'is_competitor_domain' => 0,
+                            ];
+                            $citationsList[] = $citRow;
+
                             $insCit = $db->prepare("
                                 INSERT INTO run_citations (
                                     run_id, citation_domain, citation_url, citation_title, is_brand_domain,
@@ -678,15 +721,24 @@ function handleSeedDemoData(): void {
                             ");
                             $insCit->execute([
                                 ':run_id'     => $runId,
-                                ':domain'     => $cfg['brand_domains'][0],
-                                ':url'        => "https://www.{$cfg['brand_domains'][0]}/overview",
-                                ':title'      => "{$cfg['brand_name']} Official Platform",
+                                ':domain'     => $citRow['citation_domain'],
+                                ':url'        => $citRow['citation_url'],
+                                ':title'      => $citRow['citation_title'],
                                 ':created_at' => $createdAt,
                             ]);
                         }
 
                         if ($tmpl['comp_cited']) {
                             $compDomain = $primaryCompetitor['domain'] ?? 'competitor.com';
+                            $citRow = [
+                                'citation_domain'      => $compDomain,
+                                'citation_url'         => "https://www.{$compDomain}/product",
+                                'citation_title'       => "{$primaryCompetitor['name']} Product Overview",
+                                'is_brand_domain'      => 0,
+                                'is_competitor_domain' => 1,
+                            ];
+                            $citationsList[] = $citRow;
+
                             $insCit = $db->prepare("
                                 INSERT INTO run_citations (
                                     run_id, citation_domain, citation_url, citation_title, is_brand_domain,
@@ -697,13 +749,45 @@ function handleSeedDemoData(): void {
                             ");
                             $insCit->execute([
                                 ':run_id'     => $runId,
-                                ':domain'     => $compDomain,
-                                ':url'        => "https://www.{$compDomain}/product",
-                                ':title'      => "{$primaryCompetitor['name']} Product Overview",
+                                ':domain'     => $citRow['citation_domain'],
+                                ':url'        => $citRow['citation_url'],
+                                ':title'      => $citRow['citation_title'],
                                 ':created_at' => $createdAt,
                             ]);
                         }
                     }
+
+                    // Persist in user's dedicated physical table user_results_<user_id>
+                    insertUserResultRow($db, $userId, [
+                        'run_id'                => $runId,
+                        'config_id'             => $configId,
+                        'custom_id'             => $customId,
+                        'execution_strategy'    => $prov['strategy'],
+                        'prompt_cache_key'      => $promptCacheKey,
+                        'cached_tokens'         => $prov['cached_tokens'],
+                        'trigger_source'        => 'seed_demo',
+                        'is_test_run'           => 0,
+                        'prompt'                => $promptText,
+                        'llm_answer'            => $responseText,
+                        'provider'              => $prov['provider'],
+                        'model'                 => $prov['model'],
+                        'brand_name'            => $cfg['brand_name'],
+                        'status'                => 'completed',
+                        'brand_mentioned'       => $tmpl['brand_mentioned'],
+                        'char_earliness'        => $tmpl['char_earliness'],
+                        'word_earliness'        => $tmpl['word_earliness'],
+                        'relative_position_pct' => $tmpl['rel_pos'],
+                        'total_chars'           => 1280,
+                        'total_words'           => 185,
+                        'mece_category'         => $tmpl['mece'],
+                        'geo_quadrant'          => $tmpl['geo'],
+                        'brand_cited'           => $tmpl['brand_cited'],
+                        'competitor_cited'      => $tmpl['comp_cited'],
+                        'competitors_json'      => $competitorsList,
+                        'citations_json'        => $citationsList,
+                        'scheduled_at'          => $createdAt,
+                        'created_at'            => $createdAt,
+                    ]);
                 }
             }
         }
@@ -711,15 +795,18 @@ function handleSeedDemoData(): void {
         $db->commit();
 
         jsonResponse([
-            'success'          => true,
-            'seeded_accounts'  => $seededAccountNames,
-            'configs_created'  => $totalConfigsCreated,
-            'runs_created'     => $totalRunsCreated,
-            'message'          => 'Demo data successfully seeded across 3 German B2B accounts with MECE and GEO history.',
+            'success'            => true,
+            'seeded_accounts'    => $seededAccountNames,
+            'provisioned_tables' => $provisionedTables,
+            'configs_created'    => $totalConfigsCreated,
+            'runs_created'       => $totalRunsCreated,
+            'message'            => 'Demo data successfully seeded across 3 German B2B accounts with MECE, GEO, and per-user result tables.',
         ], 200);
 
     } catch (Throwable $e) {
-        $db->rollBack();
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
         error_log("Seed demo data failure: " . $e->getMessage());
         jsonError("Failed to seed demo data: " . $e->getMessage(), 500);
     }

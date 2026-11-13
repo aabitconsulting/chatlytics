@@ -2,16 +2,18 @@
 declare(strict_types=1);
 
 /**
- * Chatlytics.de — Ingestion Webhook Pipeline
+ * Chatlytics.de — Ingestion Webhook Pipeline with Batch Correlation & Per-User Result Tables
  * File: api/ingest.php
- * Feature 20 (Milestone 4)
+ * Feature 20 (Milestone 4) & Per-User Physical Result Archive
  *
- * Secure webhook endpoint invoked by n8n "Dispatch Ingest API" node.
+ * Secure webhook endpoint invoked by n8n "Dispatch Ingest API" node (or deferred Batch API collector).
  * Features:
  * - Shared secret / Bearer authentication
+ * - Authoritative `custom_id` lookup against `batch_requests` for deferred Batch API & Prompt Caching runs
  * - Strict payload validation and alias normalization
- * - Idempotency guard for redelivered run_id
- * - Transactional insertion across llm_runs, run_competitors, run_citations
+ * - Compound idempotency guard for redelivered `custom_id` or `run_id`
+ * - Transactional insertion across `llm_runs`, `run_competitors`, `run_citations`, AND the
+ *   dedicated per-user physical table `user_results_<user_id>`
  */
 
 require_once __DIR__ . '/bootstrap.php';
@@ -21,7 +23,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     jsonError("Method not allowed. Only POST requests are accepted.", 405);
 }
 
-// 1. Authentication
+$db = null;
+$resolveDb = static function () use (&$db): PDO {
+    if ($db === null) {
+        $db = getDb();
+        ensureCoreSchemaColumns($db);
+    }
+    return $db;
+};
+
+// 1. Authentication (verify shared secrets before touching the database)
 $config = getConfig();
 $expectedSecret = (string)($config['n8n']['shared_secret'] ?? '');
 $headerKey = $_SERVER['HTTP_X_CHATLYTICS_INGEST_KEY'] ?? $_SERVER['HTTP_X_N8N_SECRET'] ?? null;
@@ -44,8 +55,7 @@ if (!$isAuthorized && $bearerToken !== null && $bearerToken !== '') {
         $isAuthorized = true;
     } else {
         // Allow valid user API keys
-        $db = getDb();
-        $stmt = $db->prepare("SELECT id FROM users WHERE api_key = :key AND status = 'active' LIMIT 1");
+        $stmt = $resolveDb()->prepare("SELECT id FROM users WHERE api_key = :key AND status = 'active' LIMIT 1");
         $stmt->execute([':key' => $bearerToken]);
         if ($stmt->fetch()) {
             $isAuthorized = true;
@@ -57,28 +67,46 @@ if (!$isAuthorized) {
     jsonError("Unauthorized: Invalid ingest authorization key.", 401);
 }
 
-// 2. Parse & Validate Payload
+// 2. Parse Payload & Resolve `custom_id` from `batch_requests` if present
 $payload = getRequestData();
 if (empty($payload) || !is_array($payload)) {
     jsonError("Invalid or empty JSON payload.", 400);
 }
 
-$configId = isset($payload['config_id']) ? (int)$payload['config_id'] : 0;
+$customId = isset($payload['custom_id']) && trim((string)$payload['custom_id']) !== ''
+    ? trim((string)$payload['custom_id'])
+    : null;
+
+$batchRecord = null;
+if ($customId !== null) {
+    try {
+        $brStmt = $resolveDb()->prepare("SELECT * FROM batch_requests WHERE custom_id = :custom_id LIMIT 1");
+        $brStmt->execute([':custom_id' => $customId]);
+        $batchRecord = $brStmt->fetch() ?: null;
+    } catch (Throwable $e) {
+        $batchRecord = null;
+    }
+}
+
+$configId = isset($payload['config_id']) && (int)$payload['config_id'] > 0
+    ? (int)$payload['config_id']
+    : ($batchRecord ? (int)$batchRecord['config_id'] : 0);
+
 if ($configId <= 0) {
     jsonError("Validation error: 'config_id' is required and must be a positive integer.", 400);
 }
 
-$prompt = trim((string)($payload['prompt'] ?? $payload['prompt_text'] ?? ''));
+$prompt = trim((string)($payload['prompt'] ?? $payload['prompt_text'] ?? ($batchRecord['prompt'] ?? '')));
 if ($prompt === '') {
     jsonError("Validation error: 'prompt' or 'prompt_text' is required.", 400);
 }
 
-$provider = trim((string)($payload['provider'] ?? $payload['llm_provider'] ?? ''));
+$provider = trim((string)($payload['provider'] ?? $payload['llm_provider'] ?? ($batchRecord['provider'] ?? '')));
 if ($provider === '') {
     jsonError("Validation error: 'provider' or 'llm_provider' is required.", 400);
 }
 
-$model = trim((string)($payload['model'] ?? $payload['model_name'] ?? 'default-model'));
+$model = trim((string)($payload['model'] ?? $payload['model_name'] ?? ($batchRecord['model'] ?? 'default-model')));
 
 $rawStatus = strtolower(trim((string)($payload['status'] ?? 'completed')));
 if ($rawStatus === 'error') {
@@ -109,53 +137,137 @@ if (!in_array($geoQuadrant, $validGeo, true)) {
     $geoQuadrant = 'NONE';
 }
 
-$db = getDb();
+$db = $resolveDb();
 
-// Resolve user_id and brand_name from tracking_configs if not provided
-$cfgStmt = $db->prepare("SELECT id, user_id, brand_name FROM tracking_configs WHERE id = :id LIMIT 1");
+// Resolve user_id and brand_name from tracking_configs / batch_requests
+$cfgStmt = $db->prepare("SELECT id, user_id, brand_name, schedule_interval FROM tracking_configs WHERE id = :id LIMIT 1");
 $cfgStmt->execute([':id' => $configId]);
 $cfgRecord = $cfgStmt->fetch();
 if (!$cfgRecord) {
     jsonError("Configuration with id {$configId} does not exist.", 404);
 }
 
-$userId = isset($payload['user_id']) ? (int)$payload['user_id'] : (int)$cfgRecord['user_id'];
-$brandName = trim((string)($payload['brand_name'] ?? $cfgRecord['brand_name']));
+$userId = isset($payload['user_id']) && (int)$payload['user_id'] > 0
+    ? (int)$payload['user_id']
+    : ($batchRecord ? (int)$batchRecord['user_id'] : (int)$cfgRecord['user_id']);
+
+$brandName = trim((string)($payload['brand_name'] ?? ($batchRecord['brand_name'] ?? $cfgRecord['brand_name'])));
+$scheduleInterval = normalizeScheduleInterval((string)($cfgRecord['schedule_interval'] ?? 'every_120m'));
+
+// Resolve execution_strategy, prompt_cache_key, batch_id, cached_tokens, and is_test_run
+$spec = resolveTargetLlmSpec($provider . '/' . $model, $scheduleInterval);
+$executionStrategy = trim((string)($payload['execution_strategy'] ?? ($batchRecord['execution_strategy'] ?? $spec['execution_strategy'])));
+if (!in_array($executionStrategy, ['prompt_caching', 'batch_api', 'regular'], true)) {
+    $executionStrategy = $spec['execution_strategy'];
+}
+
+$promptCacheKey = isset($payload['prompt_cache_key']) && trim((string)$payload['prompt_cache_key']) !== ''
+    ? trim((string)$payload['prompt_cache_key'])
+    : ($batchRecord['prompt_cache_key'] ?? buildPromptCacheKey($configId, $prompt, $spec['id']));
+
+$batchId = isset($payload['batch_id']) && trim((string)$payload['batch_id']) !== ''
+    ? trim((string)$payload['batch_id'])
+    : ($batchRecord['provider_batch_id'] ?? null);
+
+// Extract provider-reported cached input tokens from payload or raw usage metadata
+$cachedTokens = 0;
+if (isset($payload['cached_tokens']) && is_numeric($payload['cached_tokens'])) {
+    $cachedTokens = max(0, (int)$payload['cached_tokens']);
+} elseif (isset($payload['usage']) && is_array($payload['usage'])) {
+    $u = $payload['usage'];
+    $cachedTokens = max(0, (int)(
+        $u['prompt_tokens_details']['cached_tokens']
+        ?? $u['input_tokens_details']['cached_tokens']
+        ?? $u['cache_read_input_tokens']
+        ?? $u['cached_tokens']
+        ?? 0
+    ));
+} elseif (isset($payload['usageMetadata']) && is_array($payload['usageMetadata'])) {
+    $cachedTokens = max(0, (int)($payload['usageMetadata']['cachedContentTokenCount'] ?? 0));
+}
+
+$isTestRun = !empty($payload['is_test_run']) || !empty($batchRecord['is_test_run']) ? 1 : 0;
+$scheduledAt = $batchRecord['scheduled_for'] ?? ($payload['scheduled_at'] ?? null);
+$triggerSource = trim((string)($payload['trigger_source'] ?? ($isTestRun ? 'test_run' : ($batchId ? 'batch_api' : 'scheduled_queue'))));
 
 $externalRunId = isset($payload['run_id']) ? trim((string)$payload['run_id']) : null;
 
-// 3. Compound Idempotency Guard (supports multi-model, Mistral+GLM shared provider, and multi-prompt batches)
+// 3. Compound Idempotency Guard
+// 3.1 First check by unique custom_id if provided
+if ($customId !== null) {
+    $custChk = $db->prepare("SELECT id, status FROM llm_runs WHERE custom_id = :custom_id LIMIT 1");
+    $custChk->execute([':custom_id' => $customId]);
+    $existingByCustomId = $custChk->fetch();
+    if ($existingByCustomId) {
+        jsonResponse([
+            'run_id'          => (int)$existingByCustomId['id'],
+            'custom_id'       => $customId,
+            'external_run_id' => $externalRunId,
+            'idempotent'      => true,
+            'status'          => $existingByCustomId['status'] ?? 'completed',
+            'message'         => 'Run already ingested for custom_id (duplicate ignored).'
+        ], 200);
+    }
+}
+
+// 3.2 Second check by external run_id + provider + model + prompt
 if ($externalRunId !== null && $externalRunId !== '') {
-    $chkStmt = $db->prepare("
-        SELECT id, status FROM llm_runs 
-        WHERE config_id = :cfg_id 
-          AND JSON_UNQUOTE(JSON_EXTRACT(raw_prompt_payload, '$.run_id')) = :run_id 
-          AND LOWER(provider) = LOWER(:provider)
-          AND LOWER(model) = LOWER(:model)
-          AND prompt = :prompt
-        LIMIT 1
-    ");
-    $chkStmt->execute([
-        ':cfg_id'   => $configId,
-        ':run_id'   => $externalRunId,
-        ':provider' => $provider,
-        ':model'    => $model,
-        ':prompt'   => $prompt,
-    ]);
-    $existing = $chkStmt->fetch();
+    $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
+    if ($driver === 'sqlite') {
+        $chkStmt = $db->prepare("
+            SELECT id, status, raw_prompt_payload FROM llm_runs 
+            WHERE config_id = :cfg_id 
+              AND LOWER(provider) = LOWER(:provider)
+              AND LOWER(model) = LOWER(:model)
+              AND prompt = :prompt
+        ");
+        $chkStmt->execute([
+            ':cfg_id'   => $configId,
+            ':provider' => $provider,
+            ':model'    => $model,
+            ':prompt'   => $prompt,
+        ]);
+        $existing = null;
+        foreach ($chkStmt->fetchAll() as $cand) {
+            $decodedPayload = json_decode((string)($cand['raw_prompt_payload'] ?? ''), true);
+            if (is_array($decodedPayload) && ($decodedPayload['run_id'] ?? '') === $externalRunId) {
+                $existing = $cand;
+                break;
+            }
+        }
+    } else {
+        $chkStmt = $db->prepare("
+            SELECT id, status FROM llm_runs 
+            WHERE config_id = :cfg_id 
+              AND JSON_UNQUOTE(JSON_EXTRACT(raw_prompt_payload, '$.run_id')) = :run_id 
+              AND LOWER(provider) = LOWER(:provider)
+              AND LOWER(model) = LOWER(:model)
+              AND prompt = :prompt
+            LIMIT 1
+        ");
+        $chkStmt->execute([
+            ':cfg_id'   => $configId,
+            ':run_id'   => $externalRunId,
+            ':provider' => $provider,
+            ':model'    => $model,
+            ':prompt'   => $prompt,
+        ]);
+        $existing = $chkStmt->fetch();
+    }
+
     if ($existing) {
         jsonResponse([
-            'run_id' => (int)$existing['id'],
+            'run_id'          => (int)$existing['id'],
             'external_run_id' => $externalRunId,
-            'idempotent' => true,
-            'status' => $existing['status'] ?? 'completed',
-            'message' => 'Run already ingested (duplicate ignored).'
+            'idempotent'      => true,
+            'status'          => $existing['status'] ?? 'completed',
+            'message'         => 'Run already ingested (duplicate ignored).'
         ], 200);
     }
 }
 
 // 4. Extract Metrics & Fields
-$rawResponseText = (string)($payload['raw_response_text'] ?? $payload['raw_response'] ?? $payload['response_raw'] ?? '');
+$rawResponseText = (string)($payload['raw_response_text'] ?? $payload['raw_response'] ?? $payload['response_raw'] ?? $payload['llm_answer'] ?? '');
 $totalChars = isset($payload['total_chars']) ? (int)$payload['total_chars'] : strlen($rawResponseText);
 $totalWords = isset($payload['total_words']) ? (int)$payload['total_words'] : count(preg_split('/\s+/', trim($rawResponseText), -1, PREG_SPLIT_NO_EMPTY));
 
@@ -178,34 +290,50 @@ $euHosted = isset($payload['eu_hosted'])
     : (strtolower($provider) === 'mistral' || str_contains(strtolower($model), 'zai-glm'));
 
 $promptPayload = json_encode(array_merge($payload, [
-    'run_id'    => $externalRunId ?? ('run_' . time()),
-    'eu_hosted' => $euHosted,
+    'run_id'             => $externalRunId ?? ('run_' . time()),
+    'custom_id'          => $customId,
+    'execution_strategy' => $executionStrategy,
+    'prompt_cache_key'   => $promptCacheKey,
+    'cached_tokens'      => $cachedTokens,
+    'is_test_run'        => (bool)$isTestRun,
+    'eu_hosted'          => $euHosted,
 ]), JSON_UNESCAPED_UNICODE);
+
 $responsePayload = json_encode([
-    'response_text' => $rawResponseText,
-    'mece_category' => $meceCategory,
-    'geo_quadrant'  => $geoQuadrant,
-    'status'        => $runStatus,
-    'error_message' => $errorMessage,
-    'eu_hosted'     => $euHosted,
+    'response_text'      => $rawResponseText,
+    'mece_category'      => $meceCategory,
+    'geo_quadrant'       => $geoQuadrant,
+    'status'             => $runStatus,
+    'error_message'      => $errorMessage,
+    'execution_strategy' => $executionStrategy,
+    'cached_tokens'      => $cachedTokens,
+    'eu_hosted'          => $euHosted,
 ], JSON_UNESCAPED_UNICODE);
 
 $competitors = ($runStatus === 'completed' && is_array($payload['competitors'] ?? null)) ? $payload['competitors'] : [];
 $citations = ($runStatus === 'completed' && is_array($payload['citations'] ?? null)) ? $payload['citations'] : [];
 
-// 5. Transactional Atomic Insertion
+// Provision physical per-user result table BEFORE starting transaction
+// (MySQL CREATE TABLE IF NOT EXISTS causes an implicit commit if run inside a transaction)
+$userResultsTable = ensureUserResultsTable($db, $userId);
+
+// 5. Transactional Atomic Insertion across llm_runs AND user_results_<user_id>
 $db->beginTransaction();
 try {
     // 5.1 Insert llm_runs
     $insRun = $db->prepare("
         INSERT INTO llm_runs (
-            config_id, user_id, prompt, provider, model, brand_name, status, error_message,
+            config_id, user_id, custom_id, batch_id, execution_strategy,
+            prompt_cache_key, cached_tokens, is_test_run,
+            prompt, provider, model, brand_name, status, error_message,
             brand_mentioned, brand_prominence_rank, char_earliness, word_earliness,
             relative_position_pct, total_chars, total_words, mece_category, geo_quadrant,
             has_citations, brand_cited, competitor_cited, raw_prompt_payload,
             raw_response_text, raw_response_payload, run_duration_ms, cost_credits, created_at
         ) VALUES (
-            :config_id, :user_id, :prompt, :provider, :model, :brand_name, :status, :error_message,
+            :config_id, :user_id, :custom_id, :batch_id, :execution_strategy,
+            :prompt_cache_key, :cached_tokens, :is_test_run,
+            :prompt, :provider, :model, :brand_name, :status, :error_message,
             :brand_mentioned, :brand_prominence_rank, :char_earliness, :word_earliness,
             :relative_position_pct, :total_chars, :total_words, :mece_category, :geo_quadrant,
             :has_citations, :brand_cited, :competitor_cited, :raw_prompt_payload,
@@ -215,6 +343,12 @@ try {
     $insRun->execute([
         ':config_id'              => $configId,
         ':user_id'                => $userId,
+        ':custom_id'              => $customId,
+        ':batch_id'               => $batchId,
+        ':execution_strategy'     => $executionStrategy,
+        ':prompt_cache_key'       => $promptCacheKey,
+        ':cached_tokens'          => $cachedTokens,
+        ':is_test_run'            => $isTestRun,
         ':prompt'                 => $prompt,
         ':provider'               => $provider,
         ':model'                  => $model,
@@ -243,6 +377,7 @@ try {
     $insertedRunId = (int)$db->lastInsertId();
 
     // 5.2 Insert Competitors
+    $normalizedCompetitors = [];
     if (!empty($competitors)) {
         $insComp = $db->prepare("
             INSERT INTO run_competitors (
@@ -255,24 +390,38 @@ try {
             )
         ");
         foreach ($competitors as $c) {
+            if (!is_array($c)) continue;
             $cName = trim((string)($c['competitor_name'] ?? $c['name'] ?? ''));
             if ($cName === '') continue;
+            $cRow = [
+                'competitor_name'       => $cName,
+                'competitor_domain'     => $c['competitor_domain'] ?? $c['domain'] ?? null,
+                'mentioned'             => (!empty($c['mentioned']) || !empty($c['is_mentioned'])) ? 1 : 0,
+                'char_earliness'        => isset($c['char_earliness']) ? (int)$c['char_earliness'] : (isset($c['earliness_char']) ? (int)$c['earliness_char'] : null),
+                'word_earliness'        => isset($c['word_earliness']) ? (int)$c['word_earliness'] : (isset($c['earliness_word']) ? (int)$c['earliness_word'] : null),
+                'relative_position_pct' => isset($c['relative_position_pct']) ? (float)$c['relative_position_pct'] : (isset($c['relative_pos']) ? (float)$c['relative_pos'] : null),
+                'prominence_rank'       => isset($c['prominence_rank']) ? (int)$c['prominence_rank'] : null,
+                'recommended'           => !empty($c['recommended']) ? 1 : 0,
+                'sentiment'             => in_array($c['sentiment'] ?? '', ['positive', 'neutral', 'negative'], true) ? $c['sentiment'] : 'neutral',
+            ];
+            $normalizedCompetitors[] = $cRow;
             $insComp->execute([
                 ':run_id'      => $insertedRunId,
-                ':name'        => $cName,
-                ':domain'      => $c['competitor_domain'] ?? $c['domain'] ?? null,
-                ':mentioned'   => (!empty($c['mentioned']) || !empty($c['is_mentioned'])) ? 1 : 0,
-                ':char_early'  => isset($c['char_earliness']) ? (int)$c['char_earliness'] : (isset($c['earliness_char']) ? (int)$c['earliness_char'] : null),
-                ':word_early'  => isset($c['word_earliness']) ? (int)$c['word_earliness'] : (isset($c['earliness_word']) ? (int)$c['earliness_word'] : null),
-                ':rel_pos'     => isset($c['relative_position_pct']) ? (float)$c['relative_position_pct'] : (isset($c['relative_pos']) ? (float)$c['relative_pos'] : null),
-                ':prom_rank'   => isset($c['prominence_rank']) ? (int)$c['prominence_rank'] : null,
-                ':recommended' => !empty($c['recommended']) ? 1 : 0,
-                ':sentiment'   => in_array($c['sentiment'] ?? '', ['positive', 'neutral', 'negative'], true) ? $c['sentiment'] : 'neutral',
+                ':name'        => $cRow['competitor_name'],
+                ':domain'      => $cRow['competitor_domain'],
+                ':mentioned'   => $cRow['mentioned'],
+                ':char_early'  => $cRow['char_earliness'],
+                ':word_early'  => $cRow['word_earliness'],
+                ':rel_pos'     => $cRow['relative_position_pct'],
+                ':prom_rank'   => $cRow['prominence_rank'],
+                ':recommended' => $cRow['recommended'],
+                ':sentiment'   => $cRow['sentiment'],
             ]);
         }
     }
 
     // 5.3 Insert Citations
+    $normalizedCitations = [];
     if (!empty($citations)) {
         $insCit = $db->prepare("
             INSERT INTO run_citations (
@@ -284,40 +433,105 @@ try {
         ");
         $idx = 1;
         foreach ($citations as $cit) {
+            if (!is_array($cit)) continue;
             $cDomain = trim((string)($cit['citation_domain'] ?? $cit['domain'] ?? ''));
             if ($cDomain === '') continue;
+            $citRow = [
+                'citation_url'         => $cit['citation_url'] ?? $cit['url'] ?? null,
+                'citation_domain'      => $cDomain,
+                'citation_title'       => $cit['citation_title'] ?? $cit['title'] ?? null,
+                'is_brand_domain'      => !empty($cit['is_brand_domain']) ? 1 : 0,
+                'is_competitor_domain' => !empty($cit['is_competitor_domain']) ? 1 : 0,
+                'citation_index'       => (int)($cit['citation_index'] ?? $idx++),
+            ];
+            $normalizedCitations[] = $citRow;
             $insCit->execute([
                 ':run_id'   => $insertedRunId,
-                ':url'      => $cit['citation_url'] ?? $cit['url'] ?? null,
-                ':domain'   => $cDomain,
-                ':title'    => $cit['citation_title'] ?? $cit['title'] ?? null,
-                ':is_brand' => !empty($cit['is_brand_domain']) ? 1 : 0,
-                ':is_comp'  => !empty($cit['is_competitor_domain']) ? 1 : 0,
-                ':cit_idx'  => (int)($cit['citation_index'] ?? $idx++),
+                ':url'      => $citRow['citation_url'],
+                ':domain'   => $citRow['citation_domain'],
+                ':title'    => $citRow['citation_title'],
+                ':is_brand' => $citRow['is_brand_domain'],
+                ':is_comp'  => $citRow['is_competitor_domain'],
+                ':cit_idx'  => $citRow['citation_index'],
             ]);
         }
     }
 
-    // 5.4 Update tracking_configs last_run_at
+    // 5.4 Insert into user's physical table `user_results_<user_id>`
+    $userResultId = insertUserResultRow($db, $userId, [
+        'run_id'                => $insertedRunId,
+        'config_id'             => $configId,
+        'custom_id'             => $customId,
+        'batch_id'              => $batchId,
+        'execution_strategy'    => $executionStrategy,
+        'prompt_cache_key'      => $promptCacheKey,
+        'cached_tokens'         => $cachedTokens,
+        'trigger_source'        => $triggerSource,
+        'is_test_run'           => $isTestRun,
+        'prompt'                => $prompt,
+        'llm_answer'            => $rawResponseText,
+        'provider'              => $provider,
+        'model'                 => $model,
+        'brand_name'            => $brandName,
+        'status'                => $runStatus,
+        'brand_mentioned'       => $brandMentioned,
+        'char_earliness'        => $charEarliness,
+        'word_earliness'        => $wordEarliness,
+        'relative_position_pct' => $relativePos,
+        'total_chars'           => $totalChars,
+        'total_words'           => $totalWords,
+        'mece_category'         => $meceCategory,
+        'geo_quadrant'          => $geoQuadrant,
+        'brand_cited'           => $brandCited,
+        'competitor_cited'      => $competitorCited,
+        'competitors_json'      => $normalizedCompetitors,
+        'citations_json'        => $normalizedCitations,
+        'error_message'         => $errorMessage,
+        'scheduled_at'          => $scheduledAt,
+    ]);
+
+    // 5.5 Update batch_requests correlation row if custom_id was matched
+    if ($customId !== null) {
+        $updBr = $db->prepare("
+            UPDATE batch_requests
+            SET status = :status, run_id = :run_id, completed_at = NOW()
+            WHERE custom_id = :custom_id
+        ");
+        $updBr->execute([
+            ':status'    => $runStatus === 'failed' ? 'failed' : 'completed',
+            ':run_id'    => $insertedRunId,
+            ':custom_id' => $customId,
+        ]);
+    }
+
+    // 5.6 Update tracking_configs last_run_at
     $updCfg = $db->prepare("UPDATE tracking_configs SET last_run_at = NOW() WHERE id = :id");
     $updCfg->execute([':id' => $configId]);
 
     $db->commit();
 
     jsonResponse([
-        'run_id' => $insertedRunId,
-        'config_id' => $configId,
-        'user_id' => $userId,
-        'provider' => $provider,
-        'model' => $model,
-        'eu_hosted' => $euHosted,
-        'status' => $runStatus,
-        'error_message' => $errorMessage,
-        'mece_category' => $meceCategory,
-        'geo_quadrant' => $geoQuadrant,
-        'competitors_count' => count($competitors),
-        'citations_count' => count($citations),
-        'message' => $runStatus === 'failed'
+        'run_id'             => $insertedRunId,
+        'user_result_id'     => $userResultId,
+        'results_table'      => $userResultsTable,
+        'config_id'          => $configId,
+        'user_id'            => $userId,
+        'custom_id'          => $customId,
+        'batch_id'           => $batchId,
+        'execution_strategy' => $executionStrategy,
+        'prompt_cache_key'   => $promptCacheKey,
+        'cached_tokens'      => $cachedTokens,
+        'is_test_run'        => (bool)$isTestRun,
+        'provider'           => $provider,
+        'model'              => $model,
+        'eu_hosted'          => $euHosted,
+        'status'             => $runStatus,
+        'error_message'      => $errorMessage,
+        'mece_category'      => $meceCategory,
+        'geo_quadrant'       => $geoQuadrant,
+        'competitors_count'  => count($normalizedCompetitors),
+        'citations_count'    => count($normalizedCitations),
+        'message'            => $runStatus === 'failed'
             ? 'Failed LLM run recorded without affecting KPI metrics.'
             : 'Run ingested successfully.'
     ], 200);

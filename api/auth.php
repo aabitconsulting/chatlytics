@@ -16,7 +16,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/db.php';
 
 // Secure Session Initialization
-if (session_status() === PHP_SESSION_NONE) {
+if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
     $config = getConfig();
     $sessionLifetime = (int)($config['app']['session_lifetime'] ?? 604800);
     $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
@@ -64,7 +64,8 @@ switch ($action) {
 }
 
 /**
- * Handle new user signup with work-email filtering, Argon2id hashing, and 40 credits default.
+ * Handle new user signup with work-email filtering, Argon2id hashing, 40 credits default,
+ * and automatic provisioning of the physical per-user result table `user_results_<user_id>`.
  */
 function handleSignup(array $data): void {
     $email = strtolower(trim((string)($data['email'] ?? '')));
@@ -156,6 +157,7 @@ function handleSignup(array $data): void {
     ]);
 
     $newUserId = (int)$db->lastInsertId();
+    $resultsTable = ensureUserResultsTable($db, $newUserId);
     $_SESSION['user_id'] = $newUserId;
 
     $userPayload = [
@@ -169,6 +171,7 @@ function handleSignup(array $data): void {
         'api_key'           => $apiKey,
         'magic_audit_token' => $magicAuditToken,
         'status'            => $statusDefault,
+        'results_table'     => $resultsTable,
     ];
 
     jsonResponse([
@@ -235,10 +238,12 @@ function handleLogin(array $data): void {
         $tokStmt->execute([':api_key' => $apiKey, ':token' => $magicToken, ':id' => $user['id']]);
     }
 
-    $_SESSION['user_id'] = (int)$user['id'];
+    $userId = (int)$user['id'];
+    $resultsTable = ensureUserResultsTable($db, $userId);
+    $_SESSION['user_id'] = $userId;
 
     $userPayload = [
-        'id'                => (int)$user['id'],
+        'id'                => $userId,
         'email'             => $user['email'],
         'company_name'      => $user['company_name'] ?? null,
         'role'              => $user['role'],
@@ -248,6 +253,7 @@ function handleLogin(array $data): void {
         'api_key'           => $apiKey,
         'magic_audit_token' => $magicToken,
         'status'            => $user['status'],
+        'results_table'     => $resultsTable,
     ];
 
     jsonResponse([
@@ -295,8 +301,9 @@ function handleMe(): void {
         jsonError("Unauthorized.", 401);
     }
 
+    $userId = (int)$currentUser['id'];
     $userPayload = [
-        'id'                => (int)$currentUser['id'],
+        'id'                => $userId,
         'email'             => $currentUser['email'],
         'company_name'      => $currentUser['company_name'] ?? null,
         'role'              => $currentUser['role'],
@@ -307,6 +314,7 @@ function handleMe(): void {
         'magic_audit_token' => $currentUser['magic_audit_token'],
         'status'            => $currentUser['status'],
         'created_at'        => $currentUser['created_at'],
+        'results_table'     => getUserResultsTableName($userId),
     ];
 
     jsonResponse([

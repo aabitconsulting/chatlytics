@@ -2,16 +2,16 @@
 declare(strict_types=1);
 
 /**
- * Chatlytics.de — Period-over-Period (PoP) Analytics & 4-Quadrant GEO Diagnostic Endpoint
+ * Chatlytics.de — Period-over-Period (PoP) Analytics, Per-Model Daily Timeline & 4-Quadrant GEO Diagnostic Endpoint
  * File: api/reports.php
- * Feature 21 (Milestone 4)
+ * Feature 21 / Feature 33
  *
  * Memory-safe (<128MB) SQL aggregation endpoint for B2B dashboards & Magic Audits.
- * Supported query parameters:
- * - period: 7d, 14d, 30d, 90d, all (default: 30d)
- * - start_date, end_date: custom ISO date range
- * - config_id: optional filter by tracking configuration
- * - audit_token: Magic Audit read-only token
+ * Enforces:
+ * - Daily-only aggregation granularity ('day', YYYY-MM-DD)
+ * - First-day configuration suppression (no partial Day-1 data shown in dashboard)
+ * - Per-model daily timeline series (`model_timeline` & `model_breakdown`)
+ * - Optional prompt filter (`?prompt=...`) to inspect brand performance per model for a specific prompt
  */
 
 require_once __DIR__ . '/bootstrap.php';
@@ -24,6 +24,7 @@ $isAdmin = ($currentUser['role'] ?? '') === 'admin';
 $isAuditMode = !empty($currentUser['is_audit_mode']);
 
 $db = getDb();
+ensureCoreSchemaColumns($db);
 $requestData = getRequestData();
 
 // Early Handler: Live Run Ingestion Status Polling (GET ?action=run_status&run_id=...)
@@ -71,19 +72,22 @@ $configId = isset($_GET['config_id']) && is_numeric($_GET['config_id'])
     ? (int)$_GET['config_id']
     : (isset($requestData['config_id']) && is_numeric($requestData['config_id']) ? (int)$requestData['config_id'] : null);
 
+$promptFilter = trim((string)($_GET['prompt'] ?? $requestData['prompt'] ?? ''));
+
+$selectedConfigRow = null;
 if ($configId !== null) {
-    $cfgStmt = $db->prepare("SELECT id, user_id FROM tracking_configs WHERE id = :id LIMIT 1");
+    $cfgStmt = $db->prepare("SELECT id, user_id, name, keywords_prompts, target_llms, schedule_interval, datasets_per_day, initial_test_used, full_started_at, created_at FROM tracking_configs WHERE id = :id LIMIT 1");
     $cfgStmt->execute([':id' => $configId]);
-    $cfg = $cfgStmt->fetch();
-    if (!$cfg) {
+    $selectedConfigRow = $cfgStmt->fetch();
+    if (!$selectedConfigRow) {
         jsonError("Configuration not found.", 404);
     }
-    if ((int)$cfg['user_id'] !== $userId && !$isAdmin) {
+    if ((int)$selectedConfigRow['user_id'] !== $userId && !$isAdmin) {
         jsonError("Configuration not found.", 404);
     }
 }
 
-// 3. Resolve Primary & Comparison Period Date Ranges (complying with Boundary 3.7)
+// 3. Resolve Primary & Comparison Period Date Ranges (Strictly Daily Granularity)
 $periodParam = strtolower(trim((string)($_GET['period'] ?? $requestData['period'] ?? '30d')));
 $startDateParam = trim((string)($_GET['start_date'] ?? $requestData['start_date'] ?? ''));
 $endDateParam = trim((string)($_GET['end_date'] ?? $requestData['end_date'] ?? ''));
@@ -94,6 +98,7 @@ $compareEndParam = trim((string)($_GET['compare_end_date'] ?? $requestData['comp
 $isCustomRange = false;
 $days = 30;
 $nowTs = time();
+$todayDate = date('Y-m-d', $nowTs);
 
 if ($startDateParam !== '' && $endDateParam !== '') {
     $startTs = strtotime($startDateParam);
@@ -115,18 +120,19 @@ if (!$isCustomRange) {
     if ($periodParam === 'all') {
         $days = 3650;
         $periodLabel = 'all';
-        $curStart = date('Y-m-d H:i:s', strtotime('-3650 days', $nowTs));
-        $curEnd = date('Y-m-d H:i:s', $nowTs);
+        $curStart = date('Y-m-d 00:00:00', strtotime('-3650 days', $nowTs));
+        $curEnd = date('Y-m-d 23:59:59', $nowTs);
         $prevStartDefault = null;
         $prevEndDefault = null;
     } elseif ($periodParam === '24h' || $periodParam === '1d') {
-        $days = 1;
-        $periodLabel = '24h';
-        $curStartTs = $nowTs - 86400;
-        $curStart = date('Y-m-d H:i:s', $curStartTs);
-        $curEnd = date('Y-m-d H:i:s', $nowTs);
-        $prevStartDefault = date('Y-m-d H:i:s', $curStartTs - 86400);
-        $prevEndDefault = date('Y-m-d H:i:s', $curStartTs - 1);
+        // Legacy 24h requests normalized to 7d daily view (daily-only aggregation policy)
+        $days = 7;
+        $periodLabel = '7d';
+        $curStartTs = strtotime("-7 days", $nowTs);
+        $curStart = date('Y-m-d 00:00:00', $curStartTs);
+        $curEnd = date('Y-m-d 23:59:59', $nowTs);
+        $prevStartDefault = date('Y-m-d 00:00:00', strtotime("-14 days", $nowTs));
+        $prevEndDefault = date('Y-m-d 23:59:59', $curStartTs - 86400);
     } else {
         if (preg_match('/^(\d+)d$/', $periodParam, $m)) {
             $parsedDays = (int)$m[1];
@@ -140,10 +146,10 @@ if (!$isCustomRange) {
         }
 
         $curStartTs = strtotime("-{$days} days", $nowTs);
-        $curStart = date('Y-m-d H:i:s', $curStartTs);
-        $curEnd = date('Y-m-d H:i:s', $nowTs);
-        $prevStartDefault = date('Y-m-d H:i:s', strtotime("-" . ($days * 2) . " days", $nowTs));
-        $prevEndDefault = date('Y-m-d H:i:s', $curStartTs - 1);
+        $curStart = date('Y-m-d 00:00:00', $curStartTs);
+        $curEnd = date('Y-m-d 23:59:59', $nowTs);
+        $prevStartDefault = date('Y-m-d 00:00:00', strtotime("-" . ($days * 2) . " days", $nowTs));
+        $prevEndDefault = date('Y-m-d 23:59:59', $curStartTs - 86400);
     }
 }
 
@@ -177,8 +183,11 @@ if ($compareModeParam === 'none' || $compareModeParam === 'off') {
     $prevEnd = $prevEndDefault;
 }
 
-// 4. Build Scope WHERE clause
-$whereConditions = ["r.status = 'completed'"];
+// 4. Build Scope WHERE clause & Check Day-1 Configuration Suppression
+$whereConditions = [
+    "r.status = 'completed'",
+    "(r.is_test_run = 0 OR r.is_test_run IS NULL)",
+];
 $baseParams = [];
 
 if ($configId !== null) {
@@ -187,6 +196,72 @@ if ($configId !== null) {
 } elseif (!$isAdmin || $isAuditMode || empty($_GET['all_users'])) {
     $whereConditions[] = "r.user_id = :usr_id";
     $baseParams[':usr_id'] = $userId;
+}
+
+// Determine available prompts & models before applying prompt filter
+$scopeWhereForMeta = implode(' AND ', $whereConditions);
+$availablePrompts = [];
+if ($selectedConfigRow !== null) {
+    $decodedCfgPrompts = json_decode((string)($selectedConfigRow['keywords_prompts'] ?? '[]'), true);
+    if (is_array($decodedCfgPrompts)) {
+        foreach ($decodedCfgPrompts as $p) {
+            $pt = trim((string)$p);
+            if ($pt !== '' && !in_array($pt, $availablePrompts, true)) {
+                $availablePrompts[] = $pt;
+            }
+        }
+    }
+}
+
+$promptMetaStmt = $db->prepare("SELECT DISTINCT r.prompt FROM llm_runs r WHERE {$scopeWhereForMeta} ORDER BY r.prompt ASC LIMIT 100");
+$promptMetaStmt->execute($baseParams);
+while ($pRow = $promptMetaStmt->fetch()) {
+    $pt = trim((string)($pRow['prompt'] ?? ''));
+    if ($pt !== '' && !in_array($pt, $availablePrompts, true)) {
+        $availablePrompts[] = $pt;
+    }
+}
+
+// Check if configuration is on its First Day (Day-1 Suppression Rule)
+// A configuration is on Day 1 if its start date (full_started_at ?? created_at) is today (or not yet started)
+// AND it has zero completed runs from any calendar day prior to today.
+$isFirstDay = false;
+$priorDayStmt = $db->prepare("SELECT COUNT(*) FROM llm_runs r WHERE {$scopeWhereForMeta} AND DATE(r.created_at) < :today_date");
+$priorDayStmt->execute(array_merge($baseParams, [':today_date' => $todayDate]));
+$priorDaysRunCount = (int)$priorDayStmt->fetchColumn();
+
+if ($selectedConfigRow !== null) {
+    $anchorDateRaw = !empty($selectedConfigRow['full_started_at'])
+        ? (string)$selectedConfigRow['full_started_at']
+        : (string)($selectedConfigRow['created_at'] ?? '');
+    $anchorDay = $anchorDateRaw !== '' ? substr($anchorDateRaw, 0, 10) : $todayDate;
+    $notFullStartedYet = empty($selectedConfigRow['full_started_at']) && (int)($selectedConfigRow['initial_test_used'] ?? 0) >= 0;
+
+    if ($priorDaysRunCount === 0 && ($anchorDay === $todayDate || $notFullStartedYet)) {
+        // Check if there are only today's runs or if full_started_at is today / null
+        if ($anchorDay === $todayDate) {
+            $isFirstDay = true;
+        }
+    }
+} else {
+    // All-configs view: check if all user configs were started today and have 0 prior-day runs
+    $usrCfgStmt = $db->prepare("SELECT COUNT(*) AS total_cfgs, SUM(CASE WHEN substr(COALESCE(full_started_at, created_at), 1, 10) < :today_date THEN 1 ELSE 0 END) AS older_cfgs FROM tracking_configs WHERE user_id = :uid");
+    $usrCfgStmt->execute([':today_date' => $todayDate, ':uid' => $userId]);
+    $usrCfgMeta = $usrCfgStmt->fetch() ?: [];
+    if ((int)($usrCfgMeta['total_cfgs'] ?? 0) > 0 && (int)($usrCfgMeta['older_cfgs'] ?? 0) === 0 && $priorDaysRunCount === 0) {
+        $isFirstDay = true;
+    }
+}
+
+if ($isFirstDay) {
+    // Suppress Day-1 runs so no partial intraday data is shown in the dashboard on Day 1
+    $whereConditions[] = "DATE(r.created_at) < :suppress_today";
+    $baseParams[':suppress_today'] = $todayDate;
+}
+
+if ($promptFilter !== '') {
+    $whereConditions[] = "r.prompt = :prompt_filter";
+    $baseParams[':prompt_filter'] = $promptFilter;
 }
 
 $baseWhere = implode(' AND ', $whereConditions);
@@ -303,7 +378,6 @@ $quadrantCounts = [
     'NONE'                   => (int)($cur['geo_none_count'] ?? 0),
 ];
 
-// Determine active diagnostic quadrant
 $activeQuadrant = 'NONE';
 $anomalyCandidates = ['1_CITATION_HIJACK', '4_BURIED_WINNER', '3_BRAND_HALO_TRAP', '2_PARAMETRIC_BLINDSPOT'];
 $maxCount = 0;
@@ -406,17 +480,16 @@ if ($curTotal > 0) {
     $topUrls = $urlStmt->fetchAll() ?: [];
 }
 
-// 12. Query 5: Adaptive Primary & Comparison Timeline Data Points
-$curDurationSec = max(0, strtotime($curEnd) - strtotime($curStart));
-$granularity = ($curDurationSec <= 48 * 3600) ? 'hour' : 'day';
+// 12. Query 5: Strictly Daily Primary, Comparison & Per-Model Timeline Data Points
+$granularity = 'day';
 
 $timelineResult = ($curTotal > 0)
     ? fetchTimelineSeries($db, $baseWhere, $baseParams, $curStart, $curEnd, $granularity, $periodLabel === 'all')
-    : ['points' => [], 'total_slots' => computeTimelineSlots($curStart, $curEnd, $granularity)];
+    : ['points' => [], 'total_slots' => computeTimelineSlots($curStart, $curEnd, $granularity), 'anchor_start' => $curStart];
 
 $comparisonTimelineResult = ($compareActive && $prevTotal > 0 && $prevStart !== null && $prevEnd !== null)
     ? fetchTimelineSeries($db, $baseWhere, $baseParams, $prevStart, $prevEnd, $granularity, false)
-    : ['points' => [], 'total_slots' => ($compareActive && $prevStart && $prevEnd ? computeTimelineSlots($prevStart, $prevEnd, $granularity) : 0)];
+    : ['points' => [], 'total_slots' => ($compareActive && $prevStart && $prevEnd ? computeTimelineSlots($prevStart, $prevEnd, $granularity) : 0), 'anchor_start' => $prevStart ?? $curStart];
 
 $timeline = $timelineResult['points'];
 $comparisonTimeline = $comparisonTimelineResult['points'];
@@ -425,6 +498,24 @@ $totalSlots = max(
     (int)$timelineResult['total_slots'],
     (int)$comparisonTimelineResult['total_slots']
 );
+
+// Query 6: Per-Model Daily Series & Per-Model Aggregate Summary
+$modelTimeline = ($curTotal > 0)
+    ? fetchModelTimelineSeries($db, $baseWhere, $baseParams, $curStart, $curEnd, (string)($timelineResult['anchor_start'] ?? $curStart))
+    : [];
+
+$modelBreakdown = ($curTotal > 0)
+    ? fetchModelBreakdownSummary($db, $baseWhere, $baseParams, $curStart, $curEnd)
+    : [];
+
+$availableModels = [];
+foreach ($modelBreakdown as $mb) {
+    $availableModels[] = [
+        'model_key' => $mb['model_key'],
+        'provider'  => $mb['provider'],
+        'model'     => $mb['model'],
+    ];
+}
 
 // 13. Assemble Final Response
 jsonResponse([
@@ -451,7 +542,7 @@ jsonResponse([
         'prescription_en' => $prescriptions[$activeQuadrant]['en'],
         'quadrant_counts' => $quadrantCounts,
     ],
-    'competitors' => $compLeaderboard,
+    'competitors'             => $compLeaderboard,
     'competitors_leaderboard' => $compLeaderboard,
     'citations' => [
         'domains' => $topDomains,
@@ -463,6 +554,18 @@ jsonResponse([
     ],
     'timeline'            => $timeline,
     'comparison_timeline' => $comparisonTimeline,
+    'model_timeline'      => $modelTimeline,
+    'model_breakdown'     => $modelBreakdown,
+    'available_prompts'   => $availablePrompts,
+    'available_models'    => $availableModels,
+    'active_prompt'       => $promptFilter !== '' ? $promptFilter : null,
+    'is_first_day'        => $isFirstDay,
+    'first_day_message_de'=> $isFirstDay
+        ? 'Tag 1 der Konfiguration: Datensätze werden über den Kalendertag verteilt erhoben. Aggregierte Tageswerte stehen ab morgen bereit.'
+        : null,
+    'first_day_message_en'=> $isFirstDay
+        ? 'Day 1 of configuration: Datasets are being collected across the calendar day. Aggregated daily results will be available tomorrow.'
+        : null,
     'date_range' => [
         'period'         => $periodLabel,
         'compare_mode'   => $compareMode,
@@ -477,20 +580,14 @@ jsonResponse([
 ], 200);
 
 /**
- * Computes expected number of time buckets between start and end for a given granularity.
+ * Computes expected number of daily time buckets between start and end.
  */
-function computeTimelineSlots(string $start, string $end, string $granularity): int
+function computeTimelineSlots(string $start, string $end, string $granularity = 'day'): int
 {
     $startTs = strtotime($start);
     $endTs = strtotime($end);
     if ($startTs === false || $endTs === false || $endTs < $startTs) {
         return 1;
-    }
-
-    if ($granularity === 'hour') {
-        $aStart = strtotime(date('Y-m-d H:00:00', $startTs));
-        $aEnd = strtotime(date('Y-m-d H:00:00', $endTs));
-        return max(1, (int)round(($aEnd - $aStart) / 3600) + 1);
     }
 
     $aStart = strtotime(date('Y-m-d 00:00:00', $startTs));
@@ -499,10 +596,10 @@ function computeTimelineSlots(string $start, string $end, string $granularity): 
 }
 
 /**
- * Queries and normalizes hourly or daily aggregated metrics for a single period.
+ * Queries and normalizes daily aggregated metrics for a single period.
  * Uses floating-point literals (1.0 / 100.0) so SQLite and MySQL produce identical percentages.
  *
- * @return array{points: array<int, array<string, mixed>>, total_slots: int}
+ * @return array{points: array<int, array<string, mixed>>, total_slots: int, anchor_start: string}
  */
 function fetchTimelineSeries(
     PDO $db,
@@ -510,17 +607,10 @@ function fetchTimelineSeries(
     array $baseParams,
     string $start,
     string $end,
-    string $granularity,
+    string $granularity = 'day',
     bool $anchorToFirstBucket = false
 ): array {
-    $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
-    if ($granularity === 'hour') {
-        $bucketExpr = ($driver === 'sqlite')
-            ? "strftime('%Y-%m-%d %H:00:00', r.created_at)"
-            : "DATE_FORMAT(r.created_at, '%Y-%m-%d %H:00:00')";
-    } else {
-        $bucketExpr = "DATE(r.created_at)";
-    }
+    $bucketExpr = "DATE(r.created_at)";
 
     $sql = "
         SELECT 
@@ -548,24 +638,21 @@ function fetchTimelineSeries(
 
     if (empty($rows)) {
         return [
-            'points'      => [],
-            'total_slots' => computeTimelineSlots($start, $end, $granularity),
+            'points'       => [],
+            'total_slots'  => computeTimelineSlots($start, $end, 'day'),
+            'anchor_start' => $start,
         ];
     }
 
-    $stepSeconds = ($granularity === 'hour') ? 3600 : 86400;
+    $stepSeconds = 86400;
     $rawAnchorStart = ($anchorToFirstBucket && !empty($rows[0]['date_point']))
         ? (string)$rows[0]['date_point']
         : $start;
     $anchorTs = strtotime($rawAnchorStart);
-    $alignedAnchorTs = ($granularity === 'hour')
-        ? strtotime(date('Y-m-d H:00:00', $anchorTs))
-        : strtotime(date('Y-m-d 00:00:00', $anchorTs));
+    $alignedAnchorTs = strtotime(date('Y-m-d 00:00:00', $anchorTs));
 
     $effectiveEndTs = strtotime($end);
-    $alignedEndTs = ($granularity === 'hour')
-        ? strtotime(date('Y-m-d H:00:00', $effectiveEndTs))
-        : strtotime(date('Y-m-d 00:00:00', $effectiveEndTs));
+    $alignedEndTs = strtotime(date('Y-m-d 00:00:00', $effectiveEndTs));
 
     $totalSlots = max(1, (int)round(($alignedEndTs - $alignedAnchorTs) / $stepSeconds) + 1);
     $points = [];
@@ -573,9 +660,7 @@ function fetchTimelineSeries(
     foreach ($rows as $row) {
         $pointStr = (string)$row['date_point'];
         $pointTs = strtotime($pointStr);
-        $alignedPointTs = ($granularity === 'hour')
-            ? strtotime(date('Y-m-d H:00:00', $pointTs))
-            : strtotime(date('Y-m-d 00:00:00', $pointTs));
+        $alignedPointTs = strtotime(date('Y-m-d 00:00:00', $pointTs));
         $slotIndex = max(0, (int)round(($alignedPointTs - $alignedAnchorTs) / $stepSeconds));
 
         $points[] = [
@@ -592,7 +677,130 @@ function fetchTimelineSeries(
     }
 
     return [
-        'points'      => $points,
-        'total_slots' => $totalSlots,
+        'points'       => $points,
+        'total_slots'  => $totalSlots,
+        'anchor_start' => date('Y-m-d 00:00:00', $alignedAnchorTs),
     ];
+}
+
+/**
+ * Queries daily per-model metrics so the chart can plot each LLM model's daily performance line.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function fetchModelTimelineSeries(
+    PDO $db,
+    string $baseWhere,
+    array $baseParams,
+    string $start,
+    string $end,
+    string $anchorStart
+): array {
+    $sql = "
+        SELECT
+            DATE(r.created_at) AS date_point,
+            r.provider,
+            r.model,
+            COUNT(*) AS total_runs,
+            SUM(CASE WHEN r.brand_mentioned = 1 THEN 1 ELSE 0 END) AS mentions,
+            ROUND(SUM(CASE WHEN r.brand_mentioned = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS som_score,
+            ROUND(SUM(CASE WHEN r.brand_mentioned = 1 OR r.brand_cited = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS visibility_index,
+            ROUND(SUM(CASE WHEN r.brand_cited = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS citation_share,
+            ROUND(AVG(CASE WHEN r.brand_mentioned = 1 THEN r.relative_position_pct ELSE NULL END), 1) AS avg_earliness
+        FROM llm_runs r
+        WHERE {$baseWhere}
+          AND r.created_at >= :range_start AND r.created_at <= :range_end
+        GROUP BY DATE(r.created_at), r.provider, r.model
+        ORDER BY date_point ASC, r.provider ASC, r.model ASC
+    ";
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute(array_merge($baseParams, [
+        ':range_start' => $start,
+        ':range_end'   => $end,
+    ]));
+    $rows = $stmt->fetchAll() ?: [];
+
+    $alignedAnchorTs = strtotime(date('Y-m-d 00:00:00', strtotime($anchorStart)));
+    $result = [];
+
+    foreach ($rows as $row) {
+        $pointStr = (string)$row['date_point'];
+        $alignedPointTs = strtotime(date('Y-m-d 00:00:00', strtotime($pointStr)));
+        $slotIndex = max(0, (int)round(($alignedPointTs - $alignedAnchorTs) / 86400));
+        $provider = strtolower(trim((string)($row['provider'] ?? 'openai')));
+        $model = trim((string)($row['model'] ?? 'unknown'));
+
+        $result[] = [
+            'date_point'       => $pointStr,
+            'slot_index'       => $slotIndex,
+            'provider'         => $provider,
+            'model'            => $model,
+            'model_key'        => $provider . '/' . $model,
+            'total_runs'       => (int)($row['total_runs'] ?? 0),
+            'mentions'         => (int)($row['mentions'] ?? 0),
+            'som_score'        => (float)($row['som_score'] ?? 0),
+            'visibility_index' => (float)($row['visibility_index'] ?? 0),
+            'citation_share'   => (float)($row['citation_share'] ?? 0),
+            'avg_earliness'    => $row['avg_earliness'] !== null ? (float)$row['avg_earliness'] : null,
+        ];
+    }
+
+    return $result;
+}
+
+/**
+ * Queries aggregate per-model breakdown for the selected period and prompt filter.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function fetchModelBreakdownSummary(
+    PDO $db,
+    string $baseWhere,
+    array $baseParams,
+    string $start,
+    string $end
+): array {
+    $sql = "
+        SELECT
+            r.provider,
+            r.model,
+            COUNT(*) AS total_runs,
+            SUM(CASE WHEN r.brand_mentioned = 1 THEN 1 ELSE 0 END) AS mentions,
+            ROUND(SUM(CASE WHEN r.brand_mentioned = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS som_score,
+            ROUND(SUM(CASE WHEN r.brand_mentioned = 1 OR r.brand_cited = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS visibility_index,
+            ROUND(SUM(CASE WHEN r.brand_cited = 1 THEN 1.0 ELSE 0.0 END) / COUNT(*) * 100.0, 1) AS citation_share,
+            ROUND(AVG(CASE WHEN r.brand_mentioned = 1 THEN r.relative_position_pct ELSE NULL END), 1) AS avg_earliness
+        FROM llm_runs r
+        WHERE {$baseWhere}
+          AND r.created_at >= :range_start AND r.created_at <= :range_end
+        GROUP BY r.provider, r.model
+        ORDER BY total_runs DESC, som_score DESC
+    ";
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute(array_merge($baseParams, [
+        ':range_start' => $start,
+        ':range_end'   => $end,
+    ]));
+    $rows = $stmt->fetchAll() ?: [];
+
+    $summary = [];
+    foreach ($rows as $row) {
+        $provider = strtolower(trim((string)($row['provider'] ?? 'openai')));
+        $model = trim((string)($row['model'] ?? 'unknown'));
+        $summary[] = [
+            'provider'         => $provider,
+            'model'            => $model,
+            'model_key'        => $provider . '/' . $model,
+            'total_runs'       => (int)($row['total_runs'] ?? 0),
+            'mentions'         => (int)($row['mentions'] ?? 0),
+            'som_score'        => (float)($row['som_score'] ?? 0),
+            'visibility_index' => (float)($row['visibility_index'] ?? 0),
+            'citation_share'   => (float)($row['citation_share'] ?? 0),
+            'avg_earliness'    => $row['avg_earliness'] !== null ? (float)$row['avg_earliness'] : null,
+        ];
+    }
+
+    return $summary;
 }

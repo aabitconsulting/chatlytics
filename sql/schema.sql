@@ -48,7 +48,10 @@ CREATE TABLE IF NOT EXISTS `tracking_configs` (
   `competitors` JSON NOT NULL,
   `target_llms` JSON NOT NULL,
   `search_enabled` TINYINT(1) NOT NULL DEFAULT 1,
-  `schedule_interval` ENUM('manual', 'every_2h', 'every_4h', 'every_6h', 'every_12h', 'daily', 'weekly', 'biweekly', 'monthly') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'daily',
+  `schedule_interval` ENUM('every_120m', 'every_60m', 'every_30m', 'every_15m') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'every_120m',
+  `datasets_per_day` INT UNSIGNED NOT NULL DEFAULT 12,
+  `initial_test_used` TINYINT(1) NOT NULL DEFAULT 0,
+  `full_started_at` TIMESTAMP NULL DEFAULT NULL,
   `status` ENUM('active', 'paused', 'archived') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
   `last_run_at` TIMESTAMP NULL DEFAULT NULL,
   `next_run_at` TIMESTAMP NULL DEFAULT NULL,
@@ -57,7 +60,7 @@ CREATE TABLE IF NOT EXISTS `tracking_configs` (
   PRIMARY KEY (`id`),
   KEY `idx_tc_user_id` (`user_id`),
   KEY `idx_tc_user_status` (`user_id`, `status`),
-  KEY `idx_tc_queue_poll` (`status`, `schedule_interval`, `next_run_at`),
+  KEY `idx_tc_queue_poll` (`status`, `full_started_at`, `schedule_interval`, `next_run_at`),
   CONSTRAINT `fk_tc_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -69,11 +72,17 @@ CREATE TABLE IF NOT EXISTS `llm_runs` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `config_id` BIGINT UNSIGNED NOT NULL,
   `user_id` BIGINT UNSIGNED NOT NULL,
+  `custom_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `batch_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prompt_caching',
+  `prompt_cache_key` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `cached_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
+  `is_test_run` TINYINT(1) NOT NULL DEFAULT 0,
   `prompt` TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
   `provider` VARCHAR(64) COLLATE utf8mb4_unicode_ci NOT NULL,
   `model` VARCHAR(128) COLLATE utf8mb4_unicode_ci NOT NULL,
   `brand_name` VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
-  `status` ENUM('pending', 'running', 'completed', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'completed',
+  `status` ENUM('pending', 'queued_batch', 'running', 'completed', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'completed',
   `brand_mentioned` TINYINT(1) NOT NULL DEFAULT 0,
   `brand_prominence_rank` INT NULL DEFAULT NULL,
   `char_earliness` INT NULL DEFAULT NULL,
@@ -94,6 +103,7 @@ CREATE TABLE IF NOT EXISTS `llm_runs` (
   `cost_credits` INT NOT NULL DEFAULT 1,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_runs_custom_id` (`custom_id`),
   KEY `idx_runs_config_created` (`config_id`, `created_at`),
   KEY `idx_runs_user_created` (`user_id`, `created_at`),
   KEY `idx_runs_user_status` (`user_id`, `status`),
@@ -150,5 +160,85 @@ CREATE TABLE IF NOT EXISTS `run_citations` (
   KEY `idx_cit_comp_domain` (`is_competitor_domain`),
   CONSTRAINT `fk_cit_run` FOREIGN KEY (`run_id`) REFERENCES `llm_runs` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- Table 6: batch_requests
+-- Tracks all dispatched LLM requests across prompt_caching, batch_api, and
+-- regular execution strategies using a unique custom_id for deferred matching.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `batch_requests` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `custom_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `prompt_cache_key` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prompt_caching',
+  `provider_batch_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `run_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `config_id` BIGINT UNSIGNED NOT NULL,
+  `prompt` TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` VARCHAR(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model` VARCHAR(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `brand_name` VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `brand_domains` JSON NOT NULL,
+  `competitors` JSON NOT NULL,
+  `search_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `is_test_run` TINYINT(1) NOT NULL DEFAULT 0,
+  `status` ENUM('queued', 'submitted', 'completed', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
+  `scheduled_for` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `submitted_at` TIMESTAMP NULL DEFAULT NULL,
+  `completed_at` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_br_custom_id` (`custom_id`),
+  KEY `idx_br_provider_batch` (`provider`, `provider_batch_id`, `status`),
+  KEY `idx_br_user_config` (`user_id`, `config_id`, `status`),
+  CONSTRAINT `fk_br_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_br_config` FOREIGN KEY (`config_id`) REFERENCES `tracking_configs` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- Dynamic Per-User Physical Table Template: user_results_<user_id>
+-- Provisioned automatically per user via ensureUserResultsTable($db, $userId)
+-- in api/db.php on signup, demo seeding, and ingestion.
+--
+-- CREATE TABLE IF NOT EXISTS `user_results_<user_id>` (
+--   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+--   `run_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+--   `config_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+--   `custom_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+--   `batch_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+--   `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prompt_caching',
+--   `prompt_cache_key` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+--   `cached_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
+--   `trigger_source` VARCHAR(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'batch_queue',
+--   `is_test_run` TINYINT(1) NOT NULL DEFAULT 0,
+--   `prompt` TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
+--   `llm_answer` MEDIUMTEXT COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+--   `provider` VARCHAR(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+--   `model` VARCHAR(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+--   `brand_name` VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+--   `status` ENUM('completed', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'completed',
+--   `brand_mentioned` TINYINT(1) NOT NULL DEFAULT 0,
+--   `char_earliness` INT NULL DEFAULT NULL,
+--   `word_earliness` INT NULL DEFAULT NULL,
+--   `relative_position_pct` DECIMAL(5,2) NULL DEFAULT NULL,
+--   `total_chars` INT UNSIGNED NOT NULL DEFAULT 0,
+--   `total_words` INT UNSIGNED NOT NULL DEFAULT 0,
+--   `mece_category` ENUM('1_DIRECT_WIN', '2_BRAND_HALO', '3_COMPETITOR_TAKEOVER', '4_GENERIC') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '4_GENERIC',
+--   `geo_quadrant` ENUM('1_CITATION_HIJACK', '2_PARAMETRIC_BLINDSPOT', '3_BRAND_HALO_TRAP', '4_BURIED_WINNER', 'NONE') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'NONE',
+--   `brand_cited` TINYINT(1) NOT NULL DEFAULT 0,
+--   `competitor_cited` TINYINT(1) NOT NULL DEFAULT 0,
+--   `competitors_json` JSON NULL DEFAULT NULL,
+--   `citations_json` JSON NULL DEFAULT NULL,
+--   `error_message` TEXT COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+--   `scheduled_at` TIMESTAMP NULL DEFAULT NULL,
+--   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   PRIMARY KEY (`id`),
+--   UNIQUE KEY `idx_ur_custom_id` (`custom_id`),
+--   KEY `idx_ur_config_created` (`config_id`, `created_at`),
+--   KEY `idx_ur_model_created` (`provider`, `model`, `created_at`),
+--   KEY `idx_ur_mece` (`mece_category`)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- -----------------------------------------------------------------------------
 
 SET FOREIGN_KEY_CHECKS = 1;

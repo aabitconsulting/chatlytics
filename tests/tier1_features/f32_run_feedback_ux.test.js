@@ -407,9 +407,9 @@ http_response_code(404);
     const auditBlocked = await fetch(`${server.baseUrl}/api/reports.php?action=run_status&run_id=${encodeURIComponent(runData.run_id)}&audit_token=audit_tok_f32_1234567890`);
     assert.equal(auditBlocked.status, 403);
   } finally {
-    if (server?.proc) server.proc.kill();
+    if (server?.proc) { await new Promise((r) => { if (server.proc.exitCode !== null) return r(); server.proc.once("close", r); server.proc.kill(); setTimeout(r, 300); }); }
     await webhook.close();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -438,7 +438,20 @@ test('Feature 32.2: DashboardController enforces confirm modal, dual-button cool
         keywords_prompts: ['P1', 'P2'],
         target_llms: ['openai', 'gemini', 'mistral'],
         status: 'active',
-        schedule_interval: 'daily'
+        schedule_interval: 'every_120m',
+        initial_test_used: 0,
+        full_started_at: null
+      },
+      {
+        id: 11,
+        name: 'Acme Untested',
+        brand_name: 'Acme',
+        keywords_prompts: ['P1', 'P2'],
+        target_llms: ['openai', 'gemini', 'mistral'],
+        status: 'active',
+        schedule_interval: 'every_120m',
+        initial_test_used: 0,
+        full_started_at: null
       }
     ];
 
@@ -515,18 +528,22 @@ test('Feature 32.2: DashboardController enforces confirm modal, dual-button cool
     assert.equal(env.btnTrigger.disabled, true);
     assert.match(env.elements.get('run-status-detail').textContent, /2 \/ 6/);
 
-    // 6. Full ingestion unlocks both buttons immediately & clears sessionStorage
+    // 6. Full ingestion clears active cooldown/sessionStorage and keeps test-run buttons locked under Flow B
     ingestedMock = 6;
     await ctrl2.pollRunStatus();
     assert.ok(loadDashboardCalls >= 2, 'Dashboard should refresh upon partial progress and final completion');
-    assert.equal(env.btnTrigger.disabled, false);
-    assert.equal(env.btnEmpty.disabled, false);
+    assert.equal(ctrl2.getTestRunLockReason(configs.configs[0]), 'test_used');
+    assert.equal(env.btnTrigger.disabled, true);
+    assert.equal(env.btnEmpty.disabled, true);
     assert.equal(ctrl2.cooldownUntil, 0);
     assert.equal(env.storageMap.has('chatlytics_active_run'), false);
     assert.equal(env.elements.get('run-status-banner').classList.contains('is-complete'), true);
     ctrl2.clearRunTimers();
 
-    // 7. Insufficient credits disables Confirm CTA cleanly
+    // 7. Switching to untested config unlocks trigger CTA; insufficient credits disables Confirm CTA cleanly
+    ctrl2.selectedConfigId = 11;
+    ctrl2.syncRunButtonsState();
+    assert.equal(env.btnTrigger.disabled, false);
     ctrl2.updateCreditBadge(3);
     await ctrl2.requestTriggerRun(env.btnTrigger);
     assert.equal(env.elements.get('confirm-modal-submit').disabled, true);

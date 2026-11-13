@@ -263,6 +263,10 @@ if (strpos($path, '/api/admin_users.php') !== false) {
   require '${API_DIR.replace(/\\/g, '/')}/admin_users.php';
   exit;
 }
+if (strpos($path, '/api/user_results.php') !== false) {
+  require '${API_DIR.replace(/\\/g, '/')}/user_results.php';
+  exit;
+}
 http_response_code(404);
 `, 'utf8');
 
@@ -294,8 +298,11 @@ http_response_code(404);
         competitors TEXT NOT NULL,
         target_llms TEXT NOT NULL,
         search_enabled INTEGER DEFAULT 1,
-        schedule_interval TEXT DEFAULT 'daily',
+        schedule_interval TEXT DEFAULT 'every_120m',
+        datasets_per_day INTEGER DEFAULT 12,
         status TEXT DEFAULT 'active',
+        initial_test_used INTEGER DEFAULT 0,
+        full_started_at DATETIME NULL,
         last_run_at DATETIME NULL,
         next_run_at DATETIME NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -305,21 +312,58 @@ http_response_code(404);
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         config_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
+        custom_id TEXT NULL,
+        batch_id TEXT NULL,
+        execution_strategy TEXT NOT NULL DEFAULT 'prompt_caching',
+        prompt_cache_key TEXT NULL,
+        cached_tokens INTEGER NOT NULL DEFAULT 0,
+        is_test_run INTEGER NOT NULL DEFAULT 0,
         prompt TEXT NOT NULL,
         provider TEXT NOT NULL DEFAULT 'openai',
         model TEXT NOT NULL DEFAULT 'gpt-6-luna',
         brand_name TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'completed',
+        brand_mentioned INTEGER DEFAULT 0,
+        mece_category TEXT DEFAULT '4_GENERIC',
+        geo_quadrant TEXT DEFAULT 'NONE',
+        brand_cited INTEGER DEFAULT 0,
+        competitor_cited INTEGER DEFAULT 0,
+        raw_response_text TEXT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE batch_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        custom_id TEXT UNIQUE NOT NULL,
+        prompt_cache_key TEXT NULL DEFAULT NULL,
+        execution_strategy TEXT NOT NULL DEFAULT 'prompt_caching',
+        provider_batch_id TEXT NULL DEFAULT NULL,
+        run_id INTEGER NULL DEFAULT NULL,
+        user_id INTEGER NOT NULL,
+        config_id INTEGER NOT NULL,
+        prompt TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        brand_name TEXT NOT NULL,
+        brand_domains TEXT NOT NULL,
+        competitors TEXT NOT NULL,
+        search_enabled INTEGER NOT NULL DEFAULT 1,
+        is_test_run INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'queued',
+        scheduled_for DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        submitted_at DATETIME NULL DEFAULT NULL,
+        completed_at DATETIME NULL DEFAULT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
       INSERT INTO users (id, email, password_hash, company_name, role, tier, credits_remaining, status, api_key) VALUES
         (1, 'buyer@acme-tech.de', 'hash', 'Acme GmbH', 'user', 'starter', 10, 'active', 'starter_tok_123456'),
         (2, 'low@lowbalance.de', 'hash', 'Low Co', 'user', 'starter', 1, 'active', 'low_tok_123456'),
         (3, 'boss@chatlytics.de', 'hash', 'Chatlytics HQ', 'admin', 'enterprise_managed', 500, 'active', 'admin_tok_123456');
     ");
-    $insCfg = $pdo->prepare("INSERT INTO tracking_configs (id, user_id, name, brand_name, brand_domains, keywords_prompts, competitors, target_llms, search_enabled, schedule_interval, status, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'active', ?)");
-    $insCfg->execute([10, 1, 'Acme Profile', 'Acme', json_encode(['acme.de']), json_encode(['B2B Empfehlung?']), json_encode(['Rival']), json_encode(['openai', 'gemini']), 'every_2h', '2020-01-01 00:00:00']);
-    $insCfg->execute([11, 2, 'Low Profile', 'LowCo', json_encode(['low.de']), json_encode(['B2B Check?']), json_encode(['Rival']), json_encode(['openai', 'gemini']), 'daily', '2099-01-01 00:00:00']);
+    $insCfg = $pdo->prepare("INSERT INTO tracking_configs (id, user_id, name, brand_name, brand_domains, keywords_prompts, competitors, target_llms, search_enabled, schedule_interval, datasets_per_day, status, initial_test_used, full_started_at, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 12, 'active', ?, ?, ?)");
+    $insCfg->execute([10, 1, 'Acme Profile', 'Acme', json_encode(['acme.de']), json_encode(['B2B Empfehlung?']), json_encode(['Rival']), json_encode(['openai', 'gemini']), 'every_120m', 0, null, null]);
+    $insCfg->execute([12, 1, 'Acme Rollback Profile', 'Acme', json_encode(['acme.de']), json_encode(['B2B Rollback?']), json_encode(['Rival']), json_encode(['openai', 'gemini']), 'every_120m', 0, null, null]);
+    $insCfg->execute([11, 2, 'Low Profile', 'LowCo', json_encode(['low.de']), json_encode(['B2B Check?']), json_encode(['Rival']), json_encode(['openai', 'gemini']), 'every_120m', 0, null, null]);
+    $insCfg->execute([13, 1, 'Acme Scheduled', 'Acme', json_encode(['acme.de']), json_encode(['B2B Scheduled?']), json_encode(['Rival']), json_encode(['openai', 'gemini']), 'every_120m', 1, '2020-01-01 00:00:00', '2020-01-01 00:00:00']);
   `;
 
   const { spawnSync } = require('node:child_process');
@@ -359,7 +403,7 @@ http_response_code(404);
         'Content-Type': 'application/json',
         'Authorization': 'Bearer starter_tok_123456'
       },
-      body: JSON.stringify({ config_id: 10, response_mode: 'async' })
+      body: JSON.stringify({ config_id: 12, response_mode: 'async' })
     });
     const failBody = await failRes.json();
     assert.equal(failRes.status, 502);
@@ -380,14 +424,14 @@ http_response_code(404);
     assert.equal(lowBody.errors.required_credits, 2);
     assert.equal(lowBody.errors.credits_remaining, 1);
 
-    // 4. n8n_queue.php polls due config 10 cleanly and deducts 2 more credits (8 -> 6)
+    // 4. n8n_queue.php polls Full-Started due config 13 cleanly and deducts 2 more credits (8 -> 6)
     const queueRes = await fetch(`${server.baseUrl}/api/n8n_queue.php?action=poll&limit=5`, {
       headers: { 'X-N8N-Secret': 'test_f31_secret' }
     });
     const queueBody = await queueRes.json();
     assert.equal(queueRes.status, 200, `n8n_queue failed: ${JSON.stringify(queueBody)}`);
     assert.equal(queueBody.jobs_count, 1);
-    assert.equal(queueBody.jobs[0].config_id, 10);
+    assert.equal(queueBody.jobs[0].config_id, 13);
 
     // 5. admin_users.php search filters across email & company name without HY093
     const searchRes = await fetch(`${server.baseUrl}/api/admin_users.php?action=list&search=acme`, {
@@ -398,6 +442,14 @@ http_response_code(404);
     assert.equal(searchBody.users.length, 1);
     assert.equal(searchBody.users[0].email, 'buyer@acme-tech.de');
     assert.equal(searchBody.users[0].credits_remaining, 6, 'User 1 must have 10 - 2 (trigger) + 2 - 2 (refunded fail) - 2 (queue) = 6 credits');
+
+    // 6. user_results.php executes cleanly under strict NativeMySqlGuardPdo without HY093
+    const urRes = await fetch(`${server.baseUrl}/api/user_results.php?config_id=10`, {
+      headers: { 'Authorization': 'Bearer starter_tok_123456' }
+    });
+    const urBody = await urRes.json();
+    assert.equal(urRes.status, 200, `user_results failed: ${JSON.stringify(urBody)}`);
+    assert.equal(urBody.status, 'success');
   } finally {
     if (server && server.proc) {
       server.proc.kill();

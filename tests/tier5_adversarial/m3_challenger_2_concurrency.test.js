@@ -395,7 +395,7 @@ describe('M3 Adversarial Challenger #2: Concurrency, Schema Constraints & Data I
     it('CHALLENGE-2.4: Composite Indexes for Queue Polling and PoP Analytics', () => {
       // Assert critical indexes for sub-10ms query performance
       const requiredIndexes = [
-        { table: 'tracking_configs', index: 'KEY `idx_tc_queue_poll` (`status`, `schedule_interval`, `next_run_at`)' },
+        { table: 'tracking_configs', index: 'KEY `idx_tc_queue_poll` (`status`, `full_started_at`, `schedule_interval`, `next_run_at`)' },
         { table: 'llm_runs', index: 'KEY `idx_runs_config_created` (`config_id`, `created_at`)' },
         { table: 'llm_runs', index: 'KEY `idx_runs_user_created` (`user_id`, `created_at`)' },
         { table: 'users', index: 'UNIQUE KEY `idx_users_email` (`email`)' },
@@ -426,7 +426,7 @@ describe('M3 Adversarial Challenger #2: Concurrency, Schema Constraints & Data I
 
       // Tracking config schedule intervals
       assert.ok(
-        schemaSql.includes("ENUM('manual', 'every_2h', 'every_4h', 'every_6h', 'every_12h', 'daily', 'weekly', 'biweekly', 'monthly')"),
+        schemaSql.includes("ENUM('every_120m', 'every_60m', 'every_30m', 'every_15m')"),
         'tracking_configs.schedule_interval must define whitelist intervals'
       );
     });
@@ -518,8 +518,8 @@ describe('M3 Adversarial Challenger #2: Concurrency, Schema Constraints & Data I
 
     it('CHALLENGE-3.5: Multi-LLM Provider Model Representation in Seeder', () => {
       // Seeder must generate runs across OpenAI, Anthropic, and Google Gemini
-      const expectedProviders = ['openai', 'anthropic', 'google'];
-      const expectedModels = ['gpt-4o', 'claude-3-5-sonnet', 'gemini-1.5-flash'];
+      const expectedProviders = ['openai', 'gemini', 'mistral'];
+      const expectedModels = ['gpt-6-luna', 'models/gemini-3.5-flash', 'mistral-large-latest'];
 
       for (const prov of expectedProviders) {
         assert.ok(seederSql.includes(`'${prov}'`), `Seeder must include provider: ${prov}`);
