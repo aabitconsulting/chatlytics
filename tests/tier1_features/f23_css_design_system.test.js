@@ -68,3 +68,31 @@ test('Feature 23.5: Responsive container and mobile breakpoint query', () => {
     assert.ok(true);
   }
 });
+
+test('Feature 23.6: Semantic theme tokens, dark-mode overrides, palette hygiene and brand SVG assets', () => {
+  if (fs.existsSync(CSS_PATH)) {
+    const css = fs.readFileSync(CSS_PATH, 'utf8');
+    for (const token of [
+      '--bg-canvas',
+      '--bg-surface',
+      '--text-primary',
+      '--text-secondary',
+      '--border-default',
+      '--color-primary',
+      '--color-success',
+      '--color-warning',
+      '--color-error',
+      '[data-theme="dark"]',
+    ]) {
+      assert.ok(css.includes(token), 'Missing semantic token/selector: ' + token);
+    }
+    assert.ok(!css.includes('#2563EB') && !css.includes('#1D4ED8'), 'Legacy blue hexes must be removed');
+  }
+  const assetsDir = path.resolve(__dirname, '../../assets');
+  for (const svg of ['logo.svg', 'logo-mark.svg', 'favicon.svg']) {
+    const svgPath = path.join(assetsDir, svg);
+    assert.ok(fs.existsSync(svgPath), 'Missing brand SVG asset: ' + svg);
+    const content = fs.readFileSync(svgPath, 'utf8');
+    assert.ok(content.includes('<svg') && content.includes('#10B981'), svg + ' must use First Choice Emerald #10B981');
+  }
+});
