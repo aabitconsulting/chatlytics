@@ -74,6 +74,8 @@ try {
             'batch_id'              => $mRun['batch_id'] ?? null,
             'execution_strategy'    => $mRun['execution_strategy'] ?? 'prompt_caching',
             'prompt_cache_key'      => $mRun['prompt_cache_key'] ?? null,
+            'input_tokens'          => (int)($mRun['input_tokens'] ?? 0),
+            'output_tokens'         => (int)($mRun['output_tokens'] ?? 0),
             'cached_tokens'         => (int)($mRun['cached_tokens'] ?? 0),
             'trigger_source'        => !empty($mRun['is_test_run']) ? 'test_run' : 'scheduled_queue',
             'is_test_run'           => !empty($mRun['is_test_run']) ? 1 : 0,
@@ -118,28 +120,38 @@ $todayDate = date('Y-m-d');
 $isFirstDayConfig = false;
 
 if ($configId !== null && $configId > 0) {
-    $cfgChk = $db->prepare("SELECT id, user_id, full_started_at, created_at FROM tracking_configs WHERE id = :id LIMIT 1");
+    $cfgChk = $db->prepare("SELECT id, user_id, status, full_started_at, created_at FROM tracking_configs WHERE id = :id LIMIT 1");
     $cfgChk->execute([':id' => $configId]);
     $cfgRow = $cfgChk->fetch();
     if (!$cfgRow || ((int)$cfgRow['user_id'] !== $targetUserId && !$isAdmin)) {
         jsonError("Configuration not found or access denied.", 404);
     }
+    if (((string)($cfgRow['status'] ?? '')) === 'deleted' && !$isAdmin) {
+        jsonError("Configuration not found or access denied.", 404);
+    }
     $refDate = $cfgRow['full_started_at'] ?: ($cfgRow['created_at'] ?? null);
-    if ($refDate !== null && substr((string)$refDate, 0, 10) === $todayDate) {
+    if ($refDate !== null && substr((string)$refDate, 1, 10) !== '' && substr((string)$refDate, 0, 10) === $todayDate) {
         $isFirstDayConfig = true;
     }
 }
 
-// Build WHERE clause with Day-1 rule:
+// Build WHERE clause with Day-1 rule and 90-day soft-delete scoping:
 // - Pre-start test runs (`ur.is_test_run = 1`) are ALWAYS visible.
 // - Scheduled runs (`ur.is_test_run = 0`) are visible only when the config is NOT on Day 1
-//   (`SUBSTR(COALESCE(tc.full_started_at, tc.created_at), 1, 10) < :today_date` or `SUBSTR(ur.created_at, 1, 10) < :today_date_run`).
-$whereClauses = [
-    "(ur.is_test_run = 1 OR tc.id IS NULL OR SUBSTR(COALESCE(tc.full_started_at, tc.created_at), 1, 10) < :today_date)"
-];
-$params = [
-    ':today_date' => $todayDate,
-];
+//   (unless an Admin requests `include_deleted=1` for full run/token inspection).
+// - Non-admin users never see runs from configurations with `status = 'deleted'`.
+$includeDeletedForAdmin = ($isAdmin && !empty($_GET['include_deleted']));
+$whereClauses = [];
+$params = [];
+
+if (!$includeDeletedForAdmin) {
+    $whereClauses[] = "(ur.is_test_run = 1 OR tc.id IS NULL OR SUBSTR(COALESCE(tc.full_started_at, tc.created_at), 1, 10) < :today_date)";
+    $params[':today_date'] = $todayDate;
+}
+
+if (!$isAdmin) {
+    $whereClauses[] = "(tc.id IS NULL OR tc.status != 'deleted')";
+}
 
 if ($configId !== null && $configId > 0) {
     $whereClauses[] = "ur.config_id = :config_id";
@@ -173,7 +185,7 @@ if ($searchFilter !== '') {
     $params[':search_c'] = $likeVal;
 }
 
-$whereSql = 'WHERE ' . implode(' AND ', $whereClauses);
+$whereSql = !empty($whereClauses) ? ('WHERE ' . implode(' AND ', $whereClauses)) : 'WHERE 1=1';
 
 // Note: SQLite supports `||` while MySQL uses `CONCAT()`. Let's use driver-aware model condition:
 $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
@@ -185,21 +197,26 @@ if ($modelFilter !== '') {
     } else {
         $whereClauses[] = "(LOWER(ur.model) = LOWER(:model_exact) OR LOWER(CONCAT(ur.provider, '/', ur.model)) = LOWER(:model_canon) OR LOWER(ur.provider) = LOWER(:model_prov))";
     }
-    $whereSql = 'WHERE ' . implode(' AND ', $whereClauses);
+    $whereSql = !empty($whereClauses) ? ('WHERE ' . implode(' AND ', $whereClauses)) : 'WHERE 1=1';
 }
 
-$countSql = "
-    SELECT COUNT(*)
+$summarySql = "
+    SELECT
+        COUNT(*) AS total_runs,
+        COALESCE(SUM(ur.input_tokens), 0) AS total_input_tokens,
+        COALESCE(SUM(ur.output_tokens), 0) AS total_output_tokens,
+        COALESCE(SUM(ur.cached_tokens), 0) AS total_cached_tokens
     FROM `{$table}` ur
     LEFT JOIN tracking_configs tc ON tc.id = ur.config_id
     {$whereSql}
 ";
-$countStmt = $db->prepare($countSql);
-$countStmt->execute($params);
-$totalRows = (int)$countStmt->fetchColumn();
+$summaryStmt = $db->prepare($summarySql);
+$summaryStmt->execute($params);
+$summaryRow = $summaryStmt->fetch() ?: [];
+$totalRows = (int)($summaryRow['total_runs'] ?? 0);
 
 $querySql = "
-    SELECT ur.*
+    SELECT ur.*, tc.name AS config_name, tc.status AS config_status
     FROM `{$table}` ur
     LEFT JOIN tracking_configs tc ON tc.id = ur.config_id
     {$whereSql}
@@ -237,10 +254,14 @@ $formattedResults = array_map(function (array $r): array {
         'id'                    => (int)$r['id'],
         'run_id'                => isset($r['run_id']) && $r['run_id'] !== null ? (int)$r['run_id'] : null,
         'config_id'             => isset($r['config_id']) && $r['config_id'] !== null ? (int)$r['config_id'] : null,
+        'config_name'           => $r['config_name'] ?? null,
+        'config_status'         => $r['config_status'] ?? null,
         'custom_id'             => $r['custom_id'] ?? null,
         'batch_id'              => $r['batch_id'] ?? null,
         'execution_strategy'    => (string)($r['execution_strategy'] ?? $spec['execution_strategy']),
         'prompt_cache_key'      => $r['prompt_cache_key'] ?? null,
+        'input_tokens'          => (int)($r['input_tokens'] ?? 0),
+        'output_tokens'         => (int)($r['output_tokens'] ?? 0),
         'cached_tokens'         => (int)($r['cached_tokens'] ?? 0),
         'trigger_source'        => (string)($r['trigger_source'] ?? 'batch_queue'),
         'is_test_run'           => !empty($r['is_test_run']),
@@ -274,6 +295,12 @@ jsonResponse([
     'results_table' => $table,
     'user_id'       => $targetUserId,
     'is_first_day'  => $isFirstDayConfig,
+    'summary'       => [
+        'total_runs'          => $totalRows,
+        'total_input_tokens'  => (int)($summaryRow['total_input_tokens'] ?? 0),
+        'total_output_tokens' => (int)($summaryRow['total_output_tokens'] ?? 0),
+        'total_cached_tokens' => (int)($summaryRow['total_cached_tokens'] ?? 0),
+    ],
     'results'       => $formattedResults,
     'pagination'    => [
         'page'        => $page,

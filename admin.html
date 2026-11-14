@@ -256,6 +256,71 @@
     </div>
   </div>
 
+  <!-- Per-User Run & Token Telemetry Inspector Modal -->
+  <div id="run-token-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="run-token-modal-title">
+    <div class="modal-dialog" style="max-width: 980px; width: 95%;">
+      <div class="modal-header">
+        <h3 id="run-token-modal-title" class="modal-title" data-i18n="admin.modal_tokens_title">Runs &amp; Token-Telemetrie (Prompt / Brand-Keyword Paar pro LLM)</h3>
+        <button type="button" class="btn-close" id="btn-run-token-modal-close" aria-label="Schließen">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-info-row" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+          <div>
+            <span class="info-label" data-i18n="admin.modal_user_label">Benutzer:</span>
+            <strong id="run-token-user-email" class="info-value font-mono">—</strong>
+          </div>
+          <div>
+            <span class="info-label">Physische Tabelle:</span>
+            <code id="run-token-table-name" class="badge badge-secondary font-mono">user_results_0</code>
+          </div>
+        </div>
+
+        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="card kpi-card" style="padding: 0.75rem 1rem;">
+            <span class="kpi-title">Gesamt-Runs</span>
+            <div class="kpi-value font-mono" id="run-token-total-runs" style="font-size: 1.35rem;">0</div>
+          </div>
+          <div class="card kpi-card" style="padding: 0.75rem 1rem;">
+            <span class="kpi-title">Input Tokens (Gesamt)</span>
+            <div class="kpi-value font-mono" id="run-token-total-input" style="font-size: 1.35rem;">0</div>
+          </div>
+          <div class="card kpi-card" style="padding: 0.75rem 1rem;">
+            <span class="kpi-title">Output Tokens (Gesamt)</span>
+            <div class="kpi-value font-mono" id="run-token-total-output" style="font-size: 1.35rem;">0</div>
+          </div>
+          <div class="card kpi-card" style="padding: 0.75rem 1rem;">
+            <span class="kpi-title">Cached Input Tokens</span>
+            <div class="kpi-value font-mono" id="run-token-total-cached" style="font-size: 1.35rem;">0</div>
+          </div>
+        </div>
+
+        <div class="table-responsive" style="max-height: 440px; overflow-y: auto;">
+          <table class="data-table" id="run-token-table">
+            <thead>
+              <tr>
+                <th>Zeitpunkt</th>
+                <th>Konfiguration</th>
+                <th>Marke &amp; Prompt</th>
+                <th>LLM / Strategie</th>
+                <th class="text-right">Input Tokens</th>
+                <th class="text-right">Output Tokens</th>
+                <th class="text-right">Cached Tokens</th>
+              </tr>
+            </thead>
+            <tbody id="run-token-tbody">
+              <tr>
+                <td colspan="7" class="text-center text-muted">Keine Run-Daten geladen.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-run-token-close" class="btn btn-outline" data-i18n="common.close">Schließen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 

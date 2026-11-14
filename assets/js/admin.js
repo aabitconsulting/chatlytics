@@ -188,6 +188,7 @@ function bindAdminEvents() {
     if (e.key === 'Escape') {
       closeCreditModal();
       closeMagicAuditModal();
+      closeRunTokenModal();
     }
   });
 
@@ -205,6 +206,17 @@ function bindAdminEvents() {
       if (e.target === magicModal) closeMagicAuditModal();
     });
   }
+
+  const runTokenModal = document.getElementById('run-token-modal');
+  if (runTokenModal) {
+    runTokenModal.addEventListener('click', (e) => {
+      if (e.target === runTokenModal) closeRunTokenModal();
+    });
+  }
+  const runTokenCloseTop = document.getElementById('btn-run-token-modal-close');
+  if (runTokenCloseTop) runTokenCloseTop.addEventListener('click', closeRunTokenModal);
+  const runTokenCloseBottom = document.getElementById('btn-run-token-close');
+  if (runTokenCloseBottom) runTokenCloseBottom.addEventListener('click', closeRunTokenModal);
 }
 
 // -----------------------------------------------------------------------------
@@ -347,6 +359,11 @@ function renderUserTableRows(users) {
     tdActions.setAttribute('data-label', 'Aktionen');
     tdActions.className = 'text-right table-actions';
 
+    const btnTokens = document.createElement('button');
+    btnTokens.className = 'btn btn-xs btn-outline';
+    btnTokens.textContent = 'Runs & Tokens';
+    btnTokens.addEventListener('click', () => openRunTokenModal(u));
+
     const btnCredit = document.createElement('button');
     btnCredit.className = 'btn btn-xs btn-outline';
     btnCredit.textContent = 'Credits';
@@ -357,6 +374,8 @@ function renderUserTableRows(users) {
     btnMagic.textContent = 'Vorstands-Link';
     btnMagic.addEventListener('click', () => generateAndOpenMagicAudit(u.id));
 
+    tdActions.appendChild(btnTokens);
+    tdActions.appendChild(document.createTextNode(' '));
     tdActions.appendChild(btnCredit);
     tdActions.appendChild(document.createTextNode(' '));
     tdActions.appendChild(btnMagic);
@@ -535,6 +554,141 @@ function closeMagicAuditModal() {
   if (modal) modal.style.display = 'none';
 }
 
+// -----------------------------------------------------------------------------
+// 5b. Per-User Run & Token Telemetry Inspector Modal Handlers
+// -----------------------------------------------------------------------------
+
+async function openRunTokenModal(user) {
+  if (!user || !user.id) return;
+  const modal = document.getElementById('run-token-modal');
+  const emailEl = document.getElementById('run-token-user-email');
+  const tableEl = document.getElementById('run-token-table-name');
+  const tbody = document.getElementById('run-token-tbody');
+
+  if (emailEl) emailEl.textContent = user.email || `User #${user.id}`;
+  if (tableEl) tableEl.textContent = user.results_table || `user_results_${user.id}`;
+  if (tbody) {
+    tbody.textContent = '';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 7;
+    td.className = 'text-center text-muted';
+    td.textContent = 'Lade Run- & Token-Telemetrie…';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+  if (modal) modal.style.display = 'flex';
+
+  try {
+    const token = localStorage.getItem('chatlytics_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`api/user_results.php?user_id=${encodeURIComponent(user.id)}&include_deleted=1&limit=100`, {
+      headers
+    });
+    const json = await res.json();
+    if (!res.ok || json.status === 'error') {
+      showToast(json.message || 'Fehler beim Laden der Token-Telemetrie.', 'error');
+      return;
+    }
+
+    renderRunTokenInspector(json.data || {});
+  } catch (err) {
+    console.error('openRunTokenModal error:', err);
+    showToast('Netzwerkfehler beim Laden der Token-Telemetrie.', 'error');
+  }
+}
+
+function renderRunTokenInspector(data) {
+  const summary = data.summary || {};
+  const results = Array.isArray(data.results) ? data.results : [];
+
+  const totalRunsEl = document.getElementById('run-token-total-runs');
+  const totalInputEl = document.getElementById('run-token-total-input');
+  const totalOutputEl = document.getElementById('run-token-total-output');
+  const totalCachedEl = document.getElementById('run-token-total-cached');
+  const tableEl = document.getElementById('run-token-table-name');
+  const tbody = document.getElementById('run-token-tbody');
+
+  if (tableEl && data.results_table) tableEl.textContent = data.results_table;
+  if (totalRunsEl) totalRunsEl.textContent = Number(summary.total_runs ?? results.length).toLocaleString();
+  if (totalInputEl) totalInputEl.textContent = Number(summary.total_input_tokens ?? 0).toLocaleString();
+  if (totalOutputEl) totalOutputEl.textContent = Number(summary.total_output_tokens ?? 0).toLocaleString();
+  if (totalCachedEl) totalCachedEl.textContent = Number(summary.total_cached_tokens ?? 0).toLocaleString();
+
+  if (!tbody) return;
+  tbody.textContent = '';
+
+  if (results.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 7;
+    td.className = 'text-center text-muted';
+    td.textContent = 'Keine Runs für diesen Benutzer vorhanden.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  results.forEach((r) => {
+    const tr = document.createElement('tr');
+
+    const tdDate = document.createElement('td');
+    tdDate.className = 'font-mono text-muted';
+    tdDate.textContent = (r.created_at || '').substring(0, 16);
+    tr.appendChild(tdDate);
+
+    const tdCfg = document.createElement('td');
+    const cfgName = document.createElement('div');
+    cfgName.textContent = sanitizeLength(r.config_name || (r.config_id ? `Config #${r.config_id}` : '—'), 32);
+    tdCfg.appendChild(cfgName);
+    if (r.config_status) {
+      const cfgBadge = document.createElement('span');
+      cfgBadge.className = `badge badge-status badge-${escapeHtml(r.config_status)}`;
+      cfgBadge.textContent = r.config_status === 'deleted' ? 'deleted (90d)' : r.config_status;
+      tdCfg.appendChild(cfgBadge);
+    }
+    tr.appendChild(tdCfg);
+
+    const tdPrompt = document.createElement('td');
+    const brandStrong = document.createElement('strong');
+    brandStrong.textContent = r.brand_name ? `[${r.brand_name}] ` : '';
+    const promptSpan = document.createElement('span');
+    promptSpan.textContent = sanitizeLength(r.prompt || '', 70);
+    tdPrompt.appendChild(brandStrong);
+    tdPrompt.appendChild(promptSpan);
+    tr.appendChild(tdPrompt);
+
+    const tdModel = document.createElement('td');
+    tdModel.className = 'font-mono';
+    tdModel.textContent = `${r.provider || ''}/${r.model || ''} (${r.execution_strategy || 'prompt_caching'})`;
+    tr.appendChild(tdModel);
+
+    const tdInput = document.createElement('td');
+    tdInput.className = 'text-right font-mono text-bold';
+    tdInput.textContent = Number(r.input_tokens || 0).toLocaleString();
+    tr.appendChild(tdInput);
+
+    const tdOutput = document.createElement('td');
+    tdOutput.className = 'text-right font-mono text-bold';
+    tdOutput.textContent = Number(r.output_tokens || 0).toLocaleString();
+    tr.appendChild(tdOutput);
+
+    const tdCached = document.createElement('td');
+    tdCached.className = 'text-right font-mono';
+    tdCached.textContent = Number(r.cached_tokens || 0).toLocaleString();
+    tr.appendChild(tdCached);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function closeRunTokenModal() {
+  const modal = document.getElementById('run-token-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 function copyMagicAuditUrl() {
   const urlInput = document.getElementById('input-magic-url');
   const copyBtnText = document.getElementById('btn-copy-magic-text');
@@ -689,6 +843,9 @@ if (typeof window !== 'undefined') {
     handleCreditSubmit,
     generateAndOpenMagicAudit,
     copyMagicAuditUrl,
+    openRunTokenModal,
+    closeRunTokenModal,
+    renderRunTokenInspector,
     triggerDemoSeeder
   };
   window.buildCreditPayload = buildCreditPayload;
@@ -699,6 +856,9 @@ if (typeof module !== 'undefined' && module.exports) {
     buildCreditPayload,
     escapeHtml,
     sanitizeLength,
+    openRunTokenModal,
+    closeRunTokenModal,
+    renderRunTokenInspector,
     AdminState
   };
 }

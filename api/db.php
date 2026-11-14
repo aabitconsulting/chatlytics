@@ -156,6 +156,8 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 `batch_id` TEXT NULL DEFAULT NULL,
                 `execution_strategy` TEXT NOT NULL DEFAULT 'prompt_caching',
                 `prompt_cache_key` TEXT NULL DEFAULT NULL,
+                `input_tokens` INTEGER NOT NULL DEFAULT 0,
+                `output_tokens` INTEGER NOT NULL DEFAULT 0,
                 `cached_tokens` INTEGER NOT NULL DEFAULT 0,
                 `trigger_source` TEXT NOT NULL DEFAULT 'batch_queue',
                 `is_test_run` INTEGER NOT NULL DEFAULT 0,
@@ -185,6 +187,20 @@ function ensureUserResultsTable(PDO $db, int $userId): string
         $db->exec("CREATE UNIQUE INDEX IF NOT EXISTS `idx_{$table}_custom_id` ON `{$table}` (`custom_id`) WHERE `custom_id` IS NOT NULL");
         $db->exec("CREATE INDEX IF NOT EXISTS `idx_{$table}_config_created` ON `{$table}` (`config_id`, `created_at`)");
         $db->exec("CREATE INDEX IF NOT EXISTS `idx_{$table}_model_created` ON `{$table}` (`provider`, `model`, `created_at`)");
+        try {
+            $urColsStmt = $db->query("PRAGMA table_info(`{$table}`)");
+            $urCols = $urColsStmt ? array_column($urColsStmt->fetchAll(), 'name') : [];
+            if (!empty($urCols)) {
+                if (!in_array('input_tokens', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `input_tokens` INTEGER NOT NULL DEFAULT 0");
+                }
+                if (!in_array('output_tokens', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `output_tokens` INTEGER NOT NULL DEFAULT 0");
+                }
+            }
+        } catch (Throwable $e) {
+            // Ignore column upgrade failure on mock drivers
+        }
     } else {
         $db->exec("
             CREATE TABLE IF NOT EXISTS `{$table}` (
@@ -195,6 +211,8 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 `batch_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
                 `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prompt_caching',
                 `prompt_cache_key` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+                `input_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
+                `output_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
                 `cached_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
                 `trigger_source` VARCHAR(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'batch_queue',
                 `is_test_run` TINYINT(1) NOT NULL DEFAULT 0,
@@ -226,6 +244,20 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 KEY `idx_ur_mece` (`mece_category`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
+        try {
+            $urColsStmt = $db->query("SHOW COLUMNS FROM `{$table}`");
+            $urCols = $urColsStmt ? array_column($urColsStmt->fetchAll(), 'Field') : [];
+            if (!empty($urCols)) {
+                if (!in_array('input_tokens', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `input_tokens` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `prompt_cache_key`");
+                }
+                if (!in_array('output_tokens', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `output_tokens` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `input_tokens`");
+                }
+            }
+        } catch (Throwable $e) {
+            // Ignore column upgrade failure on mock drivers
+        }
     }
 
     return $table;
@@ -271,7 +303,7 @@ function insertUserResultRow(PDO $db, int $userId, array $row): int
     $sql = "
         INSERT INTO `{$table}` (
             `run_id`, `config_id`, `custom_id`, `batch_id`,
-            `execution_strategy`, `prompt_cache_key`, `cached_tokens`,
+            `execution_strategy`, `prompt_cache_key`, `input_tokens`, `output_tokens`, `cached_tokens`,
             `trigger_source`, `is_test_run`,
             `prompt`, `llm_answer`, `provider`, `model`, `brand_name`, `status`,
             `brand_mentioned`, `char_earliness`, `word_earliness`, `relative_position_pct`,
@@ -280,7 +312,7 @@ function insertUserResultRow(PDO $db, int $userId, array $row): int
             `error_message`, `scheduled_at`, `created_at`
         ) VALUES (
             :run_id, :config_id, :custom_id, :batch_id,
-            :execution_strategy, :prompt_cache_key, :cached_tokens,
+            :execution_strategy, :prompt_cache_key, :input_tokens, :output_tokens, :cached_tokens,
             :trigger_source, :is_test_run,
             :prompt, :llm_answer, :provider, :model, :brand_name, :status,
             :brand_mentioned, :char_earliness, :word_earliness, :relative_position_pct,
@@ -298,6 +330,8 @@ function insertUserResultRow(PDO $db, int $userId, array $row): int
         ':batch_id'              => isset($row['batch_id']) && $row['batch_id'] !== '' ? (string)$row['batch_id'] : null,
         ':execution_strategy'    => $strategy,
         ':prompt_cache_key'      => isset($row['prompt_cache_key']) && $row['prompt_cache_key'] !== '' ? (string)$row['prompt_cache_key'] : null,
+        ':input_tokens'          => max(0, (int)($row['input_tokens'] ?? 0)),
+        ':output_tokens'         => max(0, (int)($row['output_tokens'] ?? 0)),
         ':cached_tokens'         => max(0, (int)($row['cached_tokens'] ?? 0)),
         ':trigger_source'        => (string)($row['trigger_source'] ?? 'batch_queue'),
         ':is_test_run'           => !empty($row['is_test_run']) ? 1 : 0,
@@ -391,6 +425,15 @@ function ensureCoreSchemaColumns(PDO $db): void
             if (!in_array('full_started_at', $tcCols, true)) {
                 $db->exec("ALTER TABLE tracking_configs ADD COLUMN full_started_at DATETIME NULL DEFAULT NULL");
             }
+            if (!in_array('stopped_at', $tcCols, true)) {
+                $db->exec("ALTER TABLE tracking_configs ADD COLUMN stopped_at DATETIME NULL DEFAULT NULL");
+            }
+            if (!in_array('archived_at', $tcCols, true)) {
+                $db->exec("ALTER TABLE tracking_configs ADD COLUMN archived_at DATETIME NULL DEFAULT NULL");
+            }
+            if (!in_array('deleted_at', $tcCols, true)) {
+                $db->exec("ALTER TABLE tracking_configs ADD COLUMN deleted_at DATETIME NULL DEFAULT NULL");
+            }
         }
 
         // 3. Check llm_runs columns if table exists
@@ -409,6 +452,12 @@ function ensureCoreSchemaColumns(PDO $db): void
             if (!in_array('prompt_cache_key', $lrCols, true)) {
                 $db->exec("ALTER TABLE llm_runs ADD COLUMN prompt_cache_key TEXT NULL DEFAULT NULL");
             }
+            if (!in_array('input_tokens', $lrCols, true)) {
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0");
+            }
+            if (!in_array('output_tokens', $lrCols, true)) {
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0");
+            }
             if (!in_array('cached_tokens', $lrCols, true)) {
                 $db->exec("ALTER TABLE llm_runs ADD COLUMN cached_tokens INTEGER NOT NULL DEFAULT 0");
             }
@@ -419,4 +468,92 @@ function ensureCoreSchemaColumns(PDO $db): void
     } catch (Throwable $e) {
         // Ignore schema inspection errors on partial mock schemas
     }
+}
+
+/**
+ * Hard-purges configurations in 'deleted' state whose 90-day retention window has expired
+ * (`deleted_at <= NOW() - 90 days`), along with their associated `user_results_<user_id>`,
+ * `batch_requests`, and `llm_runs` rows.
+ *
+ * @param PDO $db
+ * @return int Number of expired deleted configurations permanently purged
+ */
+function purgeExpiredDeletedConfigs(PDO $db): int
+{
+    try {
+        if ($db->inTransaction()) {
+            return 0;
+        }
+        // Only run when driver is known (skip uninitialized unit test mocks)
+        $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
+        if ($driver === '') {
+            return 0;
+        }
+    } catch (Throwable $e) {
+        return 0;
+    }
+
+    $purged = 0;
+    try {
+        $cutoff = date('Y-m-d H:i:s', time() - (90 * 86400));
+        $stmt = $db->prepare("
+            SELECT id, user_id
+            FROM tracking_configs
+            WHERE status = 'deleted'
+              AND deleted_at IS NOT NULL
+              AND deleted_at <= :cutoff
+        ");
+        $stmt->execute([':cutoff' => $cutoff]);
+        $expired = $stmt->fetchAll();
+
+        if (empty($expired)) {
+            return 0;
+        }
+
+        foreach ($expired as $row) {
+            $cfgId = (int)($row['id'] ?? 0);
+            $uid = (int)($row['user_id'] ?? 0);
+            if ($cfgId <= 0) {
+                continue;
+            }
+
+            // 1. Delete matching rows from physical user_results_<user_id> table if it exists
+            if ($uid > 0) {
+                try {
+                    $urTable = getUserResultsTableName($uid);
+                    $delUr = $db->prepare("DELETE FROM `{$urTable}` WHERE config_id = :config_id");
+                    $delUr->execute([':config_id' => $cfgId]);
+                } catch (Throwable $urErr) {
+                    // Table may not exist yet; ignore
+                }
+            }
+
+            // 2. Delete pending/historical batch_requests for this config
+            try {
+                $delBr = $db->prepare("DELETE FROM batch_requests WHERE config_id = :config_id");
+                $delBr->execute([':config_id' => $cfgId]);
+            } catch (Throwable $brErr) {
+                // Ignore if batch_requests table is absent
+            }
+
+            // 3. Delete child llm_runs explicitly (in case SQLite foreign_keys PRAGMA is off)
+            try {
+                $delRuns = $db->prepare("DELETE FROM llm_runs WHERE config_id = :config_id");
+                $delRuns->execute([':config_id' => $cfgId]);
+            } catch (Throwable $runErr) {
+                // Ignore
+            }
+
+            // 4. Hard-delete the tracking_configs record
+            $delCfg = $db->prepare("DELETE FROM tracking_configs WHERE id = :id");
+            $delCfg->execute([':id' => $cfgId]);
+            if ($delCfg->rowCount() > 0) {
+                $purged++;
+            }
+        }
+    } catch (Throwable $e) {
+        // Ignore on partial mock schemas that do not have deleted_at column
+    }
+
+    return $purged;
 }

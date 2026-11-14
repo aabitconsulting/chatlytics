@@ -337,8 +337,53 @@ export class ConfigManager {
     return updated;
   }
 
+  async stopConfig(config) {
+    const id = typeof config === 'object' ? config?.id : config;
+    if (!id) return null;
+    const res = await apiClient.stopConfig(id);
+    const updated = res?.config || res;
+    const idx = this.configs.findIndex(c => String(c.id) === String(id));
+    if (idx >= 0 && updated && updated.id) {
+      this.configs[idx] = updated;
+    } else if (idx >= 0) {
+      this.configs[idx] = { ...this.configs[idx], status: 'stopped', is_stopped: true };
+    }
+    return updated;
+  }
+
+  async archiveConfig(config) {
+    const id = typeof config === 'object' ? config?.id : config;
+    if (!id) return null;
+    const res = await apiClient.archiveConfig(id);
+    const updated = res?.config || res;
+    const idx = this.configs.findIndex(c => String(c.id) === String(id));
+    if (idx >= 0 && updated && updated.id) {
+      this.configs[idx] = updated;
+    } else if (idx >= 0) {
+      this.configs[idx] = { ...this.configs[idx], status: 'archived', is_stopped: true };
+    }
+    return updated;
+  }
+
+  async unarchiveConfig(config) {
+    const id = typeof config === 'object' ? config?.id : config;
+    if (!id) return null;
+    const res = await apiClient.unarchiveConfig(id);
+    const updated = res?.config || res;
+    const idx = this.configs.findIndex(c => String(c.id) === String(id));
+    if (idx >= 0 && updated && updated.id) {
+      this.configs[idx] = updated;
+    } else if (idx >= 0) {
+      this.configs[idx] = { ...this.configs[idx], status: 'stopped', is_stopped: true };
+    }
+    return updated;
+  }
+
   async deleteConfig(configId) {
-    return await apiClient.deleteConfig(configId);
+    const id = typeof configId === 'object' ? configId?.id : configId;
+    const res = await apiClient.deleteConfig(id);
+    this.configs = this.configs.filter(c => String(c.id) !== String(id));
+    return res;
   }
 
   // --- Modal Controller for Config Creation / Edit ---

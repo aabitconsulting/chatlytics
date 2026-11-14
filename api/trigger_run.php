@@ -64,9 +64,12 @@ if ((int)$config['user_id'] !== $userId && !$isAdmin) {
     jsonError("Configuration not found.", 404);
 }
 
-// Ensure configuration is not archived
+// Ensure configuration is not archived, stopped, or deleted
 if (($config['status'] ?? '') === 'archived') {
     jsonError("Cannot trigger execution for an archived tracking configuration.", 400);
+}
+if (in_array((string)($config['status'] ?? ''), ['stopped', 'deleted'], true)) {
+    jsonError("Cannot trigger execution for a stopped or deleted tracking configuration.", 409);
 }
 
 // Enforce Flow B: One-Time Pre-Start Test Run Lifecycle

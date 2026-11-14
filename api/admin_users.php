@@ -598,9 +598,9 @@ function handleSeedDemoData(): void {
             ];
 
             $providers = [
-                ['provider' => 'openai',  'model' => 'gpt-6-luna',              'strategy' => 'prompt_caching', 'cached_tokens' => 1152],
-                ['provider' => 'mistral', 'model' => 'mistral-large-latest',    'strategy' => 'prompt_caching', 'cached_tokens' => 1024],
-                ['provider' => 'gemini',  'model' => 'models/gemini-3.5-flash', 'strategy' => 'prompt_caching', 'cached_tokens' => 2048],
+                ['provider' => 'openai',  'model' => 'gpt-6-luna',              'strategy' => 'prompt_caching', 'input_tokens' => 1420, 'output_tokens' => 310, 'cached_tokens' => 1152],
+                ['provider' => 'mistral', 'model' => 'mistral-large-latest',    'strategy' => 'prompt_caching', 'input_tokens' => 1280, 'output_tokens' => 295, 'cached_tokens' => 1024],
+                ['provider' => 'gemini',  'model' => 'models/gemini-3.5-flash', 'strategy' => 'prompt_caching', 'input_tokens' => 2320, 'output_tokens' => 340, 'cached_tokens' => 2048],
             ];
 
             $primaryCompetitor = $cfg['competitors'][0];
@@ -617,7 +617,7 @@ function handleSeedDemoData(): void {
 
                     $insRun = $db->prepare("
                         INSERT INTO llm_runs (
-                            config_id, user_id, custom_id, execution_strategy, prompt_cache_key, cached_tokens, is_test_run,
+                            config_id, user_id, custom_id, execution_strategy, prompt_cache_key, input_tokens, output_tokens, cached_tokens, is_test_run,
                             prompt, provider, model, brand_name, status,
                             brand_mentioned, brand_prominence_rank, char_earliness,
                             word_earliness, relative_position_pct, total_chars, total_words,
@@ -625,7 +625,7 @@ function handleSeedDemoData(): void {
                             competitor_cited, raw_response_text, run_duration_ms, cost_credits,
                             created_at
                         ) VALUES (
-                            :config_id, :user_id, :custom_id, :execution_strategy, :prompt_cache_key, :cached_tokens, 0,
+                            :config_id, :user_id, :custom_id, :execution_strategy, :prompt_cache_key, :input_tokens, :output_tokens, :cached_tokens, 0,
                             :prompt, :provider, :model, :brand_name, 'completed',
                             :brand_mentioned, :brand_prominence_rank, :char_earliness,
                             :word_earliness, :relative_position_pct, 1280, 185,
@@ -641,6 +641,8 @@ function handleSeedDemoData(): void {
                         ':custom_id'              => $customId,
                         ':execution_strategy'     => $prov['strategy'],
                         ':prompt_cache_key'       => $promptCacheKey,
+                        ':input_tokens'           => $prov['input_tokens'],
+                        ':output_tokens'          => $prov['output_tokens'],
                         ':cached_tokens'          => $prov['cached_tokens'],
                         ':prompt'                 => $promptText,
                         ':provider'               => $prov['provider'],
@@ -764,6 +766,8 @@ function handleSeedDemoData(): void {
                         'custom_id'             => $customId,
                         'execution_strategy'    => $prov['strategy'],
                         'prompt_cache_key'      => $promptCacheKey,
+                        'input_tokens'          => $prov['input_tokens'],
+                        'output_tokens'         => $prov['output_tokens'],
                         'cached_tokens'         => $prov['cached_tokens'],
                         'trigger_source'        => 'seed_demo',
                         'is_test_run'           => 0,

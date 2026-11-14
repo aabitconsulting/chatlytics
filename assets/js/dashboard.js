@@ -293,6 +293,9 @@ class DashboardController {
       '#btn-new-config',
       '#btn-edit-config',
       '#btn-toggle-config-status',
+      '#btn-stop-config',
+      '#btn-archive-config',
+      '#btn-delete-config',
       '.config-actions-inline',
       '#billing-nav',
       '#profile-settings',
@@ -316,11 +319,28 @@ class DashboardController {
       const userConfigs = await configs.loadConfigs();
       configSelect.innerHTML = '<option value="">Alle Konfigurationen</option>';
 
-      for (const cfg of userConfigs) {
+      const primaryConfigs = userConfigs.filter(c => c.status !== 'archived' && c.status !== 'deleted');
+      const archivedConfigs = userConfigs.filter(c => c.status === 'archived');
+
+      for (const cfg of primaryConfigs) {
         const opt = document.createElement('option');
         opt.value = cfg.id;
-        opt.textContent = cfg.name || `${cfg.brand_name} Tracking`;
+        const baseName = cfg.name || `${cfg.brand_name} Tracking`;
+        opt.textContent = cfg.status === 'stopped' ? `${baseName} [Gestoppt]` : baseName;
         configSelect.appendChild(opt);
+      }
+
+      if (archivedConfigs.length > 0) {
+        const optGroup = document.createElement('optgroup');
+        optGroup.label = i18n ? i18n.t('dashboard.archived_group', 'Archivierte Profile') : 'Archivierte Profile';
+        for (const cfg of archivedConfigs) {
+          const opt = document.createElement('option');
+          opt.value = cfg.id;
+          const baseName = cfg.name || `${cfg.brand_name} Tracking`;
+          opt.textContent = `${baseName} [Archiviert]`;
+          optGroup.appendChild(opt);
+        }
+        configSelect.appendChild(optGroup);
       }
 
       // Check saved selection or default
@@ -346,38 +366,76 @@ class DashboardController {
     const cfg = this.getSelectedConfigObject();
     const editBtn = document.getElementById('btn-edit-config');
     const toggleBtn = document.getElementById('btn-toggle-config-status');
+    const stopBtn = document.getElementById('btn-stop-config');
+    const archiveBtn = document.getElementById('btn-archive-config');
+    const deleteBtn = document.getElementById('btn-delete-config');
     const scheduleBadge = document.getElementById('config-schedule-badge');
 
+    const status = cfg?.status || 'active';
+    const isStopped = status === 'stopped';
+    const isArchived = status === 'archived';
+    const isPermanentlyStopped = isStopped || isArchived || status === 'deleted';
+
     if (editBtn) {
-      editBtn.disabled = !cfg || this.isAuditMode;
+      editBtn.disabled = !cfg || this.isAuditMode || isPermanentlyStopped;
+      if (isPermanentlyStopped) editBtn.classList?.add('hidden');
+      else editBtn.classList?.remove('hidden');
     }
     if (toggleBtn) {
-      toggleBtn.disabled = !cfg || this.isAuditMode;
-      const isPaused = cfg?.status === 'paused';
+      toggleBtn.disabled = !cfg || this.isAuditMode || isPermanentlyStopped;
+      if (isPermanentlyStopped) toggleBtn.classList?.add('hidden');
+      else toggleBtn.classList?.remove('hidden');
+      const isPaused = status === 'paused';
       toggleBtn.textContent = isPaused
         ? i18n.t('dashboard.resume_config', 'Fortsetzen')
         : i18n.t('dashboard.pause_config', 'Pausieren');
-      if (toggleBtn.dataset) toggleBtn.dataset.status = cfg?.status || 'active';
-      else if (toggleBtn.setAttribute) toggleBtn.setAttribute('data-status', cfg?.status || 'active');
+      if (toggleBtn.dataset) toggleBtn.dataset.status = status;
+      else if (toggleBtn.setAttribute) toggleBtn.setAttribute('data-status', status);
     }
     if (scheduleBadge) {
       if (!cfg) {
         scheduleBadge.classList.add('hidden');
         scheduleBadge.textContent = '';
       } else {
-        const isPaused = cfg.status === 'paused';
-        const statusText = isPaused
-          ? i18n.t('dashboard.status_paused', 'Pausiert')
-          : i18n.t('dashboard.status_active', 'Aktiv');
+        let statusText = i18n.t('dashboard.status_active', 'Aktiv');
+        let badgeCls = 'badge-success';
+        if (status === 'paused') {
+          statusText = i18n.t('dashboard.status_paused', 'Pausiert');
+          badgeCls = 'badge-warning';
+        } else if (isStopped) {
+          statusText = i18n.t('dashboard.status_stopped', 'Gestoppt');
+          badgeCls = 'badge-inactive';
+        } else if (isArchived) {
+          statusText = i18n.t('dashboard.status_archived', 'Archiviert');
+          badgeCls = 'badge-neutral';
+        }
         scheduleBadge.textContent = `${getScheduleLabel(cfg.schedule_interval)} · ${statusText}`;
-        scheduleBadge.className = `badge ${isPaused ? 'badge-warning' : 'badge-success'}`;
+        scheduleBadge.className = `badge ${badgeCls}`;
       }
     }
     const fullStartBtn = document.getElementById('btn-full-start-config');
     if (fullStartBtn) {
-      const showFullStart = Boolean(cfg) && !cfg.full_started_at && !this.isAuditMode;
+      const showFullStart = Boolean(cfg) && !cfg.full_started_at && !isPermanentlyStopped && !this.isAuditMode;
       if (showFullStart) fullStartBtn.classList?.remove('hidden'); else fullStartBtn.classList?.add('hidden');
       fullStartBtn.disabled = !showFullStart;
+    }
+    if (stopBtn) {
+      const canStop = Boolean(cfg) && Boolean(cfg.full_started_at) && (status === 'active' || status === 'paused') && !this.isAuditMode;
+      if (canStop) stopBtn.classList?.remove('hidden'); else stopBtn.classList?.add('hidden');
+      stopBtn.disabled = !canStop;
+    }
+    if (archiveBtn) {
+      const canArchiveOrUnarchive = Boolean(cfg) && (isStopped || isArchived) && !this.isAuditMode;
+      if (canArchiveOrUnarchive) archiveBtn.classList?.remove('hidden'); else archiveBtn.classList?.add('hidden');
+      archiveBtn.disabled = !canArchiveOrUnarchive;
+      archiveBtn.textContent = isArchived
+        ? i18n.t('dashboard.unarchive_config', 'Aus Archiv holen')
+        : i18n.t('dashboard.archive_config', 'Archivieren');
+    }
+    if (deleteBtn) {
+      const canDelete = Boolean(cfg) && (!cfg.full_started_at || isStopped || isArchived) && status !== 'deleted' && !this.isAuditMode;
+      if (canDelete) deleteBtn.classList?.remove('hidden'); else deleteBtn.classList?.add('hidden');
+      deleteBtn.disabled = !canDelete;
     }
     this.syncRunButtonsState();
   }
@@ -389,12 +447,16 @@ class DashboardController {
    */
   getTestRunLockReason(cfg = this.getSelectedConfigObject()) {
     if (!cfg) return '';
+    if (cfg.status === 'stopped' || cfg.status === 'archived' || cfg.status === 'deleted') return 'stopped';
     if (cfg.full_started_at) return 'full_started';
     if (Number(cfg.initial_test_used || 0) === 1) return 'test_used';
     return '';
   }
 
   getTestRunLockMessage(reason) {
+    if (reason === 'stopped') {
+      return this.tMsg('run.locked_stopped', 'Diese Konfiguration wurde dauerhaft gestoppt und kann nicht mehr ausgeführt werden.');
+    }
     if (reason === 'full_started') {
       return this.tMsg('run.locked_full_started', 'Full Start ist aktiv: Abfragen laufen automatisch nach Zeitplan. Manuelle Abfragen sind gesperrt.');
     }
@@ -673,6 +735,116 @@ class DashboardController {
             setButtonLoading(btnFullStart, false);
             this.updateConfigActionControls();
             await this.loadDashboard();
+          }
+        }
+      });
+    });
+
+    // 5b-2b. Irreversible Stop, Archive/Unarchive & 90-Day Soft-Delete Lifecycle Controls
+    const btnStopConfig = document.getElementById('btn-stop-config');
+    btnStopConfig?.addEventListener('click', (e) => {
+      e.preventDefault();
+      const cfg = this.getSelectedConfigObject();
+      if (!cfg || this.isAuditMode || !cfg.full_started_at) return;
+      if (cfg.status !== 'active' && cfg.status !== 'paused') return;
+
+      const cfgName = cfg.name || cfg.brand_name || `#${cfg.id}`;
+      this.openConfirmModal({
+        title: this.tMsg('run.stop_confirm_title', 'Konfiguration dauerhaft stoppen?'),
+        message: this.tMsg(
+          'run.stop_confirm_desc',
+          'ACHTUNG: Wenn Sie „{name}“ stoppen, wird die Datenerhebung endgültig beendet. Eine gestoppte Konfiguration kann NICHT wieder fortgesetzt oder bearbeitet werden. Nach dem Stoppen können Sie das Profil archivieren oder löschen.',
+          { name: cfgName }
+        ),
+        summaryRows: [
+          { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: cfgName },
+          { label: this.tMsg('run.confirm_label_status_after', 'Status nach Bestätigung'), value: this.tMsg('dashboard.status_stopped', 'Dauerhaft gestoppt (Nicht reaktivierbar)') }
+        ],
+        warningText: this.tMsg('run.stop_confirm_warning', 'Unwiderruflich: Gestoppte Konfigurationen können nicht wieder aufgenommen werden.'),
+        confirmLabel: this.tMsg('run.stop_confirm_cta', 'Unwiderruflich stoppen'),
+        confirmVariant: 'warning',
+        triggerEl: btnStopConfig,
+        onConfirm: async () => {
+          try {
+            setButtonLoading(btnStopConfig, true, this.tMsg('run.btn_stopping', 'Wird gestoppt…'));
+            await configs.stopConfig(cfg);
+            showToast(this.tMsg('toast.config_stopped', 'Konfiguration wurde dauerhaft gestoppt.'), 'info');
+            await this.initConfigs();
+            this.updateConfigActionControls();
+            await this.loadDashboard();
+          } catch (err) {
+            showToast(err?.message || this.tMsg('toast.config_stop_error', 'Konfiguration konnte nicht gestoppt werden.'), 'error');
+          } finally {
+            setButtonLoading(btnStopConfig, false);
+          }
+        }
+      });
+    });
+
+    const btnArchiveConfig = document.getElementById('btn-archive-config');
+    btnArchiveConfig?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const cfg = this.getSelectedConfigObject();
+      if (!cfg || this.isAuditMode) return;
+      const isArchived = cfg.status === 'archived';
+      if (!isArchived && cfg.status !== 'stopped') return;
+
+      try {
+        setButtonLoading(btnArchiveConfig, true, isArchived ? 'Wird wiederhergestellt…' : 'Wird archiviert…');
+        if (isArchived) {
+          await configs.unarchiveConfig(cfg);
+          showToast(this.tMsg('toast.config_unarchived', 'Konfiguration aus dem Archiv geholt (Status: Gestoppt).'), 'info');
+        } else {
+          await configs.archiveConfig(cfg);
+          showToast(this.tMsg('toast.config_archived', 'Konfiguration archiviert.'), 'info');
+        }
+        await this.initConfigs();
+        this.updateConfigActionControls();
+      } catch (err) {
+        showToast(err?.message || 'Archiv-Status konnte nicht geändert werden.', 'error');
+      } finally {
+        setButtonLoading(btnArchiveConfig, false);
+      }
+    });
+
+    const btnDeleteConfig = document.getElementById('btn-delete-config');
+    btnDeleteConfig?.addEventListener('click', (e) => {
+      e.preventDefault();
+      const cfg = this.getSelectedConfigObject();
+      if (!cfg || this.isAuditMode) return;
+      if (cfg.full_started_at && cfg.status !== 'stopped' && cfg.status !== 'archived') {
+        showToast(this.tMsg('toast.delete_requires_stop', 'Bitte stoppen Sie die Konfiguration zuerst, bevor Sie sie löschen.'), 'warning');
+        return;
+      }
+
+      const cfgName = cfg.name || cfg.brand_name || `#${cfg.id}`;
+      this.openConfirmModal({
+        title: this.tMsg('run.delete_confirm_title', 'Konfiguration aus Dashboard entfernen?'),
+        message: this.tMsg(
+          'run.delete_confirm_desc',
+          'Das Profil „{name}“ wird sofort aus Ihrem Dashboard entfernt. Die Daten werden vom System noch für 90 Tage aufbewahrt und danach automatisch gelöscht.',
+          { name: cfgName }
+        ),
+        summaryRows: [
+          { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: cfgName },
+          { label: this.tMsg('run.confirm_label_retention', 'System-Aufbewahrung'), value: '90 Tage (aus Dashboard ausgeblendet)' }
+        ],
+        confirmLabel: this.tMsg('run.delete_confirm_cta', 'Aus Dashboard löschen'),
+        confirmVariant: 'warning',
+        triggerEl: btnDeleteConfig,
+        onConfirm: async () => {
+          try {
+            setButtonLoading(btnDeleteConfig, true, this.tMsg('run.btn_deleting', 'Wird gelöscht…'));
+            await configs.deleteConfig(cfg.id);
+            showToast(this.tMsg('toast.config_deleted', 'Konfiguration aus Dashboard entfernt (90 Tage System-Aufbewahrung).'), 'success');
+            this.selectedConfigId = null;
+            await this.initConfigs();
+            this.updateConfigActionControls();
+            await this.loadDashboard();
+          } catch (err) {
+            showToast(err?.message || this.tMsg('toast.config_delete_error', 'Konfiguration konnte nicht gelöscht werden.'), 'error');
+          } finally {
+            setButtonLoading(btnDeleteConfig, false);
           }
         }
       });
@@ -2216,12 +2388,22 @@ class DashboardController {
       promptCell.append(' ', badge(this.tMsg('results.test_run_badge', 'Test-Abfrage'), 'badge-warning'));
     }
 
+    const isAdminViewer = Boolean(typeof auth !== 'undefined' && auth.getUser && auth.getUser()?.role === 'admin');
     const modelCell = td('', i18n.t('results.col_model', 'KI-Modell & Strategie'));
     const modelName = document.createElement('div');
     modelName.className = 'font-mono text-sm';
     modelName.textContent = r.model ? `${r.model} (${r.provider})` : String(r.provider || '—');
     const strategy = String(r.execution_strategy || 'regular');
     modelCell.append(modelName, badge(this.getStrategyLabel(strategy), `strategy-badge strategy-${strategy}`));
+    if (isAdminViewer) {
+      modelCell.append(
+        ' ',
+        badge(
+          `In: ${Number(r.input_tokens || 0)} · Out: ${Number(r.output_tokens || 0)}`,
+          'badge-secondary admin-token-badge font-mono'
+        )
+      );
+    }
 
     const tierCell = td('', i18n.t('results.col_tier', 'Empfehlungs-Stufe'));
     if (r.status === 'failed') {
@@ -2279,13 +2461,22 @@ class DashboardController {
     const telemetry = block(i18n.t('results.detail_telemetry', 'Provider-Korrelation & Token-Caching'));
     const dl = document.createElement('dl');
     dl.className = 'accordion-telemetry';
-    [
+    const telemetryPairs = [
       [this.tMsg('results.label_strategy', 'Ausführung'), this.getStrategyLabel(strategy)],
+    ];
+    if (isAdminViewer) {
+      telemetryPairs.push(
+        [this.tMsg('results.label_input_tokens', 'Input-Tokens'), String(Number(r.input_tokens || 0))],
+        [this.tMsg('results.label_output_tokens', 'Output-Tokens'), String(Number(r.output_tokens || 0))]
+      );
+    }
+    telemetryPairs.push(
       [this.tMsg('results.label_cached_tokens', 'Gecachte Input-Tokens'), String(Number(r.cached_tokens || 0))],
       ['custom_id', r.custom_id || '—'],
       ['prompt_cache_key', r.prompt_cache_key || '—'],
       ['batch_id', r.batch_id || '—']
-    ].forEach(([k, v]) => {
+    );
+    telemetryPairs.forEach(([k, v]) => {
       const dt = document.createElement('dt');
       dt.textContent = k;
       const dd = document.createElement('dd');

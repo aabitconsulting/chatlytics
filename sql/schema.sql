@@ -52,7 +52,10 @@ CREATE TABLE IF NOT EXISTS `tracking_configs` (
   `datasets_per_day` INT UNSIGNED NOT NULL DEFAULT 12,
   `initial_test_used` TINYINT(1) NOT NULL DEFAULT 0,
   `full_started_at` TIMESTAMP NULL DEFAULT NULL,
-  `status` ENUM('active', 'paused', 'archived') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `status` ENUM('active', 'paused', 'stopped', 'archived', 'deleted') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `stopped_at` TIMESTAMP NULL DEFAULT NULL,
+  `archived_at` TIMESTAMP NULL DEFAULT NULL,
+  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
   `last_run_at` TIMESTAMP NULL DEFAULT NULL,
   `next_run_at` TIMESTAMP NULL DEFAULT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -60,6 +63,7 @@ CREATE TABLE IF NOT EXISTS `tracking_configs` (
   PRIMARY KEY (`id`),
   KEY `idx_tc_user_id` (`user_id`),
   KEY `idx_tc_user_status` (`user_id`, `status`),
+  KEY `idx_tc_status_deleted` (`status`, `deleted_at`),
   KEY `idx_tc_queue_poll` (`status`, `full_started_at`, `schedule_interval`, `next_run_at`),
   CONSTRAINT `fk_tc_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -76,6 +80,8 @@ CREATE TABLE IF NOT EXISTS `llm_runs` (
   `batch_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prompt_caching',
   `prompt_cache_key` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `input_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
+  `output_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
   `cached_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
   `is_test_run` TINYINT(1) NOT NULL DEFAULT 0,
   `prompt` TEXT COLLATE utf8mb4_unicode_ci NOT NULL,

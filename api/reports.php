@@ -76,13 +76,16 @@ $promptFilter = trim((string)($_GET['prompt'] ?? $requestData['prompt'] ?? ''));
 
 $selectedConfigRow = null;
 if ($configId !== null) {
-    $cfgStmt = $db->prepare("SELECT id, user_id, name, keywords_prompts, target_llms, schedule_interval, datasets_per_day, initial_test_used, full_started_at, created_at FROM tracking_configs WHERE id = :id LIMIT 1");
+    $cfgStmt = $db->prepare("SELECT id, user_id, name, status, keywords_prompts, target_llms, schedule_interval, datasets_per_day, initial_test_used, full_started_at, created_at FROM tracking_configs WHERE id = :id LIMIT 1");
     $cfgStmt->execute([':id' => $configId]);
     $selectedConfigRow = $cfgStmt->fetch();
     if (!$selectedConfigRow) {
         jsonError("Configuration not found.", 404);
     }
     if ((int)$selectedConfigRow['user_id'] !== $userId && !$isAdmin) {
+        jsonError("Configuration not found.", 404);
+    }
+    if (((string)($selectedConfigRow['status'] ?? '')) === 'deleted' && !$isAdmin) {
         jsonError("Configuration not found.", 404);
     }
 }
@@ -196,6 +199,9 @@ if ($configId !== null) {
 } elseif (!$isAdmin || $isAuditMode || empty($_GET['all_users'])) {
     $whereConditions[] = "r.user_id = :usr_id";
     $baseParams[':usr_id'] = $userId;
+    if (!$isAdmin) {
+        $whereConditions[] = "NOT EXISTS (SELECT 1 FROM tracking_configs tc_del WHERE tc_del.id = r.config_id AND tc_del.status = 'deleted')";
+    }
 }
 
 // Determine available prompts & models before applying prompt filter

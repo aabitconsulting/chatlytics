@@ -169,7 +169,31 @@ $batchId = isset($payload['batch_id']) && trim((string)$payload['batch_id']) !==
     ? trim((string)$payload['batch_id'])
     : ($batchRecord['provider_batch_id'] ?? null);
 
-// Extract provider-reported cached input tokens from payload or raw usage metadata
+// Extract provider-reported input, output, and cached input tokens from payload or raw usage metadata
+$inputTokens = 0;
+if (isset($payload['input_tokens']) && is_numeric($payload['input_tokens'])) {
+    $inputTokens = max(0, (int)$payload['input_tokens']);
+} elseif (isset($payload['prompt_tokens']) && is_numeric($payload['prompt_tokens'])) {
+    $inputTokens = max(0, (int)$payload['prompt_tokens']);
+} elseif (isset($payload['usage']) && is_array($payload['usage'])) {
+    $u = $payload['usage'];
+    $inputTokens = max(0, (int)($u['prompt_tokens'] ?? $u['input_tokens'] ?? 0));
+} elseif (isset($payload['usageMetadata']) && is_array($payload['usageMetadata'])) {
+    $inputTokens = max(0, (int)($payload['usageMetadata']['promptTokenCount'] ?? 0));
+}
+
+$outputTokens = 0;
+if (isset($payload['output_tokens']) && is_numeric($payload['output_tokens'])) {
+    $outputTokens = max(0, (int)$payload['output_tokens']);
+} elseif (isset($payload['completion_tokens']) && is_numeric($payload['completion_tokens'])) {
+    $outputTokens = max(0, (int)$payload['completion_tokens']);
+} elseif (isset($payload['usage']) && is_array($payload['usage'])) {
+    $u = $payload['usage'];
+    $outputTokens = max(0, (int)($u['completion_tokens'] ?? $u['output_tokens'] ?? 0));
+} elseif (isset($payload['usageMetadata']) && is_array($payload['usageMetadata'])) {
+    $outputTokens = max(0, (int)($payload['usageMetadata']['candidatesTokenCount'] ?? 0));
+}
+
 $cachedTokens = 0;
 if (isset($payload['cached_tokens']) && is_numeric($payload['cached_tokens'])) {
     $cachedTokens = max(0, (int)$payload['cached_tokens']);
@@ -294,6 +318,8 @@ $promptPayload = json_encode(array_merge($payload, [
     'custom_id'          => $customId,
     'execution_strategy' => $executionStrategy,
     'prompt_cache_key'   => $promptCacheKey,
+    'input_tokens'       => $inputTokens,
+    'output_tokens'      => $outputTokens,
     'cached_tokens'      => $cachedTokens,
     'is_test_run'        => (bool)$isTestRun,
     'eu_hosted'          => $euHosted,
@@ -306,6 +332,8 @@ $responsePayload = json_encode([
     'status'             => $runStatus,
     'error_message'      => $errorMessage,
     'execution_strategy' => $executionStrategy,
+    'input_tokens'       => $inputTokens,
+    'output_tokens'      => $outputTokens,
     'cached_tokens'      => $cachedTokens,
     'eu_hosted'          => $euHosted,
 ], JSON_UNESCAPED_UNICODE);
@@ -324,7 +352,7 @@ try {
     $insRun = $db->prepare("
         INSERT INTO llm_runs (
             config_id, user_id, custom_id, batch_id, execution_strategy,
-            prompt_cache_key, cached_tokens, is_test_run,
+            prompt_cache_key, input_tokens, output_tokens, cached_tokens, is_test_run,
             prompt, provider, model, brand_name, status, error_message,
             brand_mentioned, brand_prominence_rank, char_earliness, word_earliness,
             relative_position_pct, total_chars, total_words, mece_category, geo_quadrant,
@@ -332,7 +360,7 @@ try {
             raw_response_text, raw_response_payload, run_duration_ms, cost_credits, created_at
         ) VALUES (
             :config_id, :user_id, :custom_id, :batch_id, :execution_strategy,
-            :prompt_cache_key, :cached_tokens, :is_test_run,
+            :prompt_cache_key, :input_tokens, :output_tokens, :cached_tokens, :is_test_run,
             :prompt, :provider, :model, :brand_name, :status, :error_message,
             :brand_mentioned, :brand_prominence_rank, :char_earliness, :word_earliness,
             :relative_position_pct, :total_chars, :total_words, :mece_category, :geo_quadrant,
@@ -347,6 +375,8 @@ try {
         ':batch_id'               => $batchId,
         ':execution_strategy'     => $executionStrategy,
         ':prompt_cache_key'       => $promptCacheKey,
+        ':input_tokens'           => $inputTokens,
+        ':output_tokens'          => $outputTokens,
         ':cached_tokens'          => $cachedTokens,
         ':is_test_run'            => $isTestRun,
         ':prompt'                 => $prompt,
@@ -465,6 +495,8 @@ try {
         'batch_id'              => $batchId,
         'execution_strategy'    => $executionStrategy,
         'prompt_cache_key'      => $promptCacheKey,
+        'input_tokens'          => $inputTokens,
+        'output_tokens'         => $outputTokens,
         'cached_tokens'         => $cachedTokens,
         'trigger_source'        => $triggerSource,
         'is_test_run'           => $isTestRun,
@@ -520,6 +552,8 @@ try {
         'batch_id'           => $batchId,
         'execution_strategy' => $executionStrategy,
         'prompt_cache_key'   => $promptCacheKey,
+        'input_tokens'       => $inputTokens,
+        'output_tokens'      => $outputTokens,
         'cached_tokens'      => $cachedTokens,
         'is_test_run'        => (bool)$isTestRun,
         'provider'           => $provider,

@@ -67,6 +67,7 @@ function handleGetConfig(?int $id): void {
     $currentUser = requireAuth(true); // allowMagicAudit = true
     $db = getDb();
     ensureCoreSchemaColumns($db);
+    purgeExpiredDeletedConfigs($db);
     $userId = (int)$currentUser['id'];
     $isAdmin = ($currentUser['role'] ?? '') === 'admin';
 
@@ -85,6 +86,11 @@ function handleGetConfig(?int $id): void {
             jsonError("Configuration not found.", 404);
         }
 
+        // Hide soft-deleted configs from non-admin users
+        if (((string)($config['status'] ?? '')) === 'deleted' && !$isAdmin) {
+            jsonError("Configuration not found.", 404);
+        }
+
         $formatted = formatConfigRecord($config);
 
         // Fetch run count
@@ -96,12 +102,12 @@ function handleGetConfig(?int $id): void {
             'config' => $formatted,
         ], 200);
     } else {
-        // List configurations for user
+        // List configurations for user (excluding 90-day soft-deleted configs)
         $sql = "
             SELECT tc.*, COUNT(r.id) AS run_count
             FROM tracking_configs tc
             LEFT JOIN llm_runs r ON r.config_id = tc.id
-            WHERE tc.user_id = :user_id AND tc.status != 'archived'
+            WHERE tc.user_id = :user_id AND tc.status != 'deleted'
             GROUP BY tc.id
             ORDER BY tc.created_at DESC
         ";
@@ -238,7 +244,141 @@ function handleUpdateConfig(?int $id, array $data): void {
     }
 
     $alreadyFullStarted = !empty($existing['full_started_at']);
+    $existingStatus = strtolower((string)($existing['status'] ?? 'active'));
     $action = strtolower(trim((string)($_GET['action'] ?? $data['action'] ?? '')));
+    if ($action === '' && isset($data['status'])) {
+        $reqStatus = strtolower(trim((string)$data['status']));
+        if ($reqStatus === 'stopped' && $existingStatus === 'archived') {
+            $action = 'unarchive';
+        } elseif ($reqStatus === 'stopped' && $existingStatus !== 'stopped') {
+            $action = 'stop';
+        } elseif ($reqStatus === 'archived' && $existingStatus !== 'archived') {
+            $action = 'archive';
+        }
+    }
+
+    if ($existingStatus === 'deleted') {
+        jsonError("Deleted configuration cannot be modified or resumed.", 409);
+    }
+
+    // Handle irreversible Stop transition (Active / Paused -> Stopped)
+    if ($action === 'stop') {
+        if (!$alreadyFullStarted) {
+            jsonError("Unstarted draft configurations do not need to be stopped and can be deleted directly.", 409);
+        }
+        if (!in_array($existingStatus, ['active', 'paused'], true)) {
+            jsonError("Only active or paused full-started configurations can be stopped.", 409);
+        }
+
+        $stoppedAt = date('Y-m-d H:i:s');
+        try {
+            $stopStmt = $db->prepare("
+                UPDATE tracking_configs
+                SET status = 'stopped', stopped_at = :stopped_at, next_run_at = NULL
+                WHERE id = :id
+            ");
+            $stopStmt->execute([':stopped_at' => $stoppedAt, ':id' => $id]);
+        } catch (Throwable $e) {
+            $stopStmt = $db->prepare("
+                UPDATE tracking_configs
+                SET status = 'stopped', next_run_at = NULL
+                WHERE id = :id
+            ");
+            $stopStmt->execute([':id' => $id]);
+        }
+
+        try {
+            $delBr = $db->prepare("DELETE FROM batch_requests WHERE config_id = :config_id AND status = 'queued'");
+            $delBr->execute([':config_id' => $id]);
+        } catch (Throwable $e) {
+            // Ignore if batch_requests table does not exist in mock
+        }
+
+        $fetchStmt = $db->prepare("SELECT * FROM tracking_configs WHERE id = :id");
+        $fetchStmt->execute([':id' => $id]);
+        $updated = $fetchStmt->fetch() ?: array_merge($existing, [
+            'status'      => 'stopped',
+            'stopped_at'  => $stoppedAt,
+            'next_run_at' => null,
+        ]);
+
+        jsonResponse([
+            'config'  => formatConfigRecord($updated),
+            'message' => 'Configuration permanently stopped.',
+        ], 200);
+    }
+
+    // Handle Archive transition (Stopped -> Archived)
+    if ($action === 'archive') {
+        if ($existingStatus !== 'stopped') {
+            jsonError("Only stopped configurations can be archived.", 409);
+        }
+
+        $archivedAt = date('Y-m-d H:i:s');
+        try {
+            $archStmt = $db->prepare("
+                UPDATE tracking_configs
+                SET status = 'archived', archived_at = :archived_at, next_run_at = NULL
+                WHERE id = :id
+            ");
+            $archStmt->execute([':archived_at' => $archivedAt, ':id' => $id]);
+        } catch (Throwable $e) {
+            $archStmt = $db->prepare("
+                UPDATE tracking_configs
+                SET status = 'archived', next_run_at = NULL
+                WHERE id = :id
+            ");
+            $archStmt->execute([':id' => $id]);
+        }
+
+        $fetchStmt = $db->prepare("SELECT * FROM tracking_configs WHERE id = :id");
+        $fetchStmt->execute([':id' => $id]);
+        $updated = $fetchStmt->fetch() ?: array_merge($existing, [
+            'status'      => 'archived',
+            'archived_at' => $archivedAt,
+            'next_run_at' => null,
+        ]);
+
+        jsonResponse([
+            'config'  => formatConfigRecord($updated),
+            'message' => 'Configuration archived successfully.',
+        ], 200);
+    }
+
+    // Handle Unarchive transition (Archived -> Stopped; still permanently non-resumable)
+    if ($action === 'unarchive') {
+        if ($existingStatus !== 'archived') {
+            jsonError("Only archived configurations can be unarchived.", 409);
+        }
+
+        $unarchStmt = $db->prepare("
+            UPDATE tracking_configs
+            SET status = 'stopped', next_run_at = NULL
+            WHERE id = :id
+        ");
+        $unarchStmt->execute([':id' => $id]);
+
+        $fetchStmt = $db->prepare("SELECT * FROM tracking_configs WHERE id = :id");
+        $fetchStmt->execute([':id' => $id]);
+        $updated = $fetchStmt->fetch() ?: array_merge($existing, [
+            'status'      => 'stopped',
+            'next_run_at' => null,
+        ]);
+
+        jsonResponse([
+            'config'  => formatConfigRecord($updated),
+            'message' => 'Configuration restored to stopped state.',
+        ], 200);
+    }
+
+    // Block any resume, status toggle, or modification on stopped or archived configs
+    if (in_array($existingStatus, ['stopped', 'archived'], true)) {
+        jsonError(
+            "Stopped or archived configurations are permanently locked and cannot be resumed or modified.",
+            409
+        );
+    }
+
     $isActivatingFullStart = ($action === 'full_start') || !empty($data['full_start']);
 
     // Enforce prompt immutability after Full Start to preserve provider Input Prompt Caching prefix
@@ -346,7 +486,10 @@ function handleUpdateConfig(?int $id, array $data): void {
 }
 
 /**
- * Handle DELETE request: delete configuration and cascade associated runs.
+ * Handle DELETE request: 90-day soft-delete configuration (removes from user's dashboard,
+ * retains data in database for 90 days before hard-purge).
+ * Full-started configurations must be stopped before they can be deleted;
+ * unstarted draft configurations can be deleted directly.
  * Guarded by requireAuth(allowMagicAudit: true) and assertNotAuditMode.
  */
 function handleDeleteConfig(?int $id): void {
@@ -359,10 +502,11 @@ function handleDeleteConfig(?int $id): void {
 
     $db = getDb();
     ensureCoreSchemaColumns($db);
+    purgeExpiredDeletedConfigs($db);
     $userId = (int)$currentUser['id'];
     $isAdmin = ($currentUser['role'] ?? '') === 'admin';
 
-    $checkStmt = $db->prepare("SELECT id, user_id FROM tracking_configs WHERE id = :id LIMIT 1");
+    $checkStmt = $db->prepare("SELECT * FROM tracking_configs WHERE id = :id LIMIT 1");
     $checkStmt->execute([':id' => $id]);
     $config = $checkStmt->fetch();
 
@@ -374,14 +518,54 @@ function handleDeleteConfig(?int $id): void {
         jsonError("Configuration not found.", 404);
     }
 
-    // Deletion cascades to llm_runs, run_competitors, and run_citations via foreign keys
-    $delStmt = $db->prepare("DELETE FROM tracking_configs WHERE id = :id");
-    $delStmt->execute([':id' => $id]);
+    $existingStatus = strtolower((string)($config['status'] ?? 'active'));
+    $alreadyFullStarted = !empty($config['full_started_at']);
+
+    if ($existingStatus === 'deleted') {
+        jsonError("Configuration not found.", 404);
+    }
+
+    if ($alreadyFullStarted && !in_array($existingStatus, ['stopped', 'archived'], true)) {
+        jsonError(
+            "Full-started configurations must be stopped before they can be deleted.",
+            409
+        );
+    }
+
+    $deletedAt = date('Y-m-d H:i:s');
+    $retainedUntil = date('Y-m-d H:i:s', time() + (90 * 86400));
+
+    try {
+        $delStmt = $db->prepare("
+            UPDATE tracking_configs
+            SET status = 'deleted', deleted_at = :deleted_at, next_run_at = NULL
+            WHERE id = :id
+        ");
+        $delStmt->execute([':deleted_at' => $deletedAt, ':id' => $id]);
+    } catch (Throwable $e) {
+        $delStmt = $db->prepare("
+            UPDATE tracking_configs
+            SET status = 'deleted', next_run_at = NULL
+            WHERE id = :id
+        ");
+        $delStmt->execute([':id' => $id]);
+    }
+
+    try {
+        $delBr = $db->prepare("DELETE FROM batch_requests WHERE config_id = :config_id AND status = 'queued'");
+        $delBr->execute([':config_id' => $id]);
+    } catch (Throwable $e) {
+        // Ignore if batch_requests table does not exist in mock
+    }
 
     jsonResponse([
-        'success' => true,
-        'id'      => $id,
-        'message' => 'Configuration deleted successfully.',
+        'success'        => true,
+        'id'             => $id,
+        'status'         => 'deleted',
+        'deleted_at'     => $deletedAt,
+        'retained_until' => $retainedUntil,
+        'retention_days' => 90,
+        'message'        => 'Configuration deleted successfully.',
     ], 200);
 }
 
@@ -551,7 +735,7 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
     }
 
     // 9. status
-    $VALID_STATUSES = ['active', 'paused', 'archived'];
+    $VALID_STATUSES = ['active', 'paused', 'stopped', 'archived', 'deleted'];
     if (isset($data['status']) && in_array($data['status'], $VALID_STATUSES, true)) {
         $status = (string)$data['status'];
     } elseif ($isUpdate && $existing) {
@@ -607,7 +791,7 @@ function formatConfigRecord(array $row): array {
     $initialTestUsed = !empty($row['initial_test_used']);
     $fullStartedAt = !empty($row['full_started_at']) ? (string)$row['full_started_at'] : null;
     $status = (string)($row['status'] ?? 'active');
-    $canTriggerTestRun = ($fullStartedAt === null && !$initialTestUsed && $status !== 'archived');
+    $canTriggerTestRun = ($fullStartedAt === null && !$initialTestUsed && !in_array($status, ['stopped', 'archived', 'deleted'], true));
 
     $referenceDate = $fullStartedAt ?? ($row['created_at'] ?? null);
     $isFirstDay = $referenceDate !== null && substr((string)$referenceDate, 0, 10) === date('Y-m-d');
@@ -640,6 +824,14 @@ function formatConfigRecord(array $row): array {
         'is_first_day'         => $isFirstDay,
         'execution_strategies' => $executionStrategies,
         'status'               => $status,
+        'is_stopped'           => in_array($status, ['stopped', 'archived', 'deleted'], true),
+        'can_stop'             => ($fullStartedAt !== null && in_array($status, ['active', 'paused'], true)),
+        'can_archive'          => ($status === 'stopped'),
+        'can_unarchive'        => ($status === 'archived'),
+        'can_delete'           => (($fullStartedAt === null || in_array($status, ['stopped', 'archived'], true)) && $status !== 'deleted'),
+        'stopped_at'           => $row['stopped_at'] ?? null,
+        'archived_at'          => $row['archived_at'] ?? null,
+        'deleted_at'           => $row['deleted_at'] ?? null,
         'last_run_at'          => $row['last_run_at'],
         'next_run_at'          => $row['next_run_at'],
         'created_at'           => $row['created_at'],

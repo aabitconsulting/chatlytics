@@ -237,6 +237,21 @@ export class ApiClient {
     return res.data || res;
   }
 
+  async stopConfig(id) {
+    const res = await this.put(`api/configs.php?id=${id}`, { action: 'stop' });
+    return res.data || res;
+  }
+
+  async archiveConfig(id) {
+    const res = await this.put(`api/configs.php?id=${id}`, { action: 'archive' });
+    return res.data || res;
+  }
+
+  async unarchiveConfig(id) {
+    const res = await this.put(`api/configs.php?id=${id}`, { action: 'unarchive' });
+    return res.data || res;
+  }
+
   async deleteConfig(id) {
     const res = await this.delete(`api/configs.php?id=${id}`);
     return res.data || res;
