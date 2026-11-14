@@ -671,6 +671,18 @@
         </div>
 
         <div class="form-group">
+          <span class="form-label" data-i18n="config.presets_label">Analyse-Set (Model Preset) wählen</span>
+          <span id="cfg-preset-mode-badge" class="badge badge-secondary" data-i18n="config.presets_badge_tier">Kuratiertes Analyse-Set</span>
+          <p id="cfg-presets-hint" class="form-hint" data-i18n="config.presets_hint">Kuratiertes KI-Modell- und Websuche-Profil für konsistente Wettbewerbs-Benchmarks.</p>
+          <input type="hidden" id="cfg-preset-id" name="preset_id" value="dach_core_baseline">
+          <div id="cfg-presets-grid" class="preset-selector-grid" role="radiogroup" aria-label="Analyse-Sets"></div>
+          <div id="cfg-custom-locked-banner" class="cfg-custom-locked-banner hidden" role="note" data-i18n="config.custom_models_locked_hint">
+            Freie Einzelmodell- &amp; Live-Websuche-Konfiguration ist ab dem Tarif Growth verfügbar. Ihr aktueller Tarif nutzt vordefinierte Analyse-Sets.
+          </div>
+        </div>
+
+        <div id="cfg-custom-models-section">
+        <div class="form-group">
           <span class="form-label" data-i18n="config.llms_label">Ziel-KI-Modelle (Multi-LLM)</span>
           <p class="form-hint" data-i18n="config.llms_hint">Wählen Sie mindestens ein Modell. Mistral- und GLM-5.3-Modelle laufen streng auf Mistrals EU-Endpunkt (api.eu.mistral.ai).</p>
           <div id="cfg-llms-list" class="llm-selector-grid">
@@ -749,6 +761,8 @@
             </span>
           </label>
         </div>
+
+        </div><!-- /#cfg-custom-models-section -->
 
         <div id="cfg-credit-preview" class="cfg-credit-preview" aria-live="polite"></div>
 

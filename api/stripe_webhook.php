@@ -132,6 +132,7 @@ if (!is_array($event) || empty($event['type'])) {
 $eventType = (string)$event['type'];
 $dataObject = $event['data']['object'] ?? [];
 $db = getDb();
+ensureCoreSchemaColumns($db);
 
 // 9. Event Routing
 switch ($eventType) {
@@ -204,6 +205,10 @@ function handleCheckoutSessionCompleted(PDO $db, array $session, array $config):
 
     // Determine tier & credit allocation
     $tier = $metadata['tier'] ?? $metadata['tier_selected'] ?? null;
+    $matchedPlan = resolvePlanFromStripePayload($db, $session);
+    if ($matchedPlan !== null && empty($metadata['tier']) && empty($metadata['tier_selected'])) {
+        $tier = $matchedPlan['tier'];
+    }
     $creditsToAdd = 0;
 
     if (isset($metadata['credits']) && is_numeric($metadata['credits'])) {
@@ -216,6 +221,10 @@ function handleCheckoutSessionCompleted(PDO $db, array $session, array $config):
         $creditsToAdd = 2000;
     } elseif ($tier === 'enterprise_managed') {
         $creditsToAdd = 10000;
+    }
+
+    if ($matchedPlan !== null && !isset($metadata['credits']) && !isset($metadata['credit_topup'])) {
+        $creditsToAdd = (int)$matchedPlan['included_credits'];
     }
 
     // Atomic update
@@ -262,6 +271,10 @@ function handleCustomerSubscriptionUpdated(PDO $db, array $subscription, array $
     }
 
     $tier = $metadata['tier'] ?? $metadata['tier_selected'] ?? null;
+    $matchedPlan = resolvePlanFromStripePayload($db, $subscription);
+    if ($tier === null && $matchedPlan !== null) {
+        $tier = $matchedPlan['tier'];
+    }
     $userStatus = ($status === 'active' || $status === 'trialing') ? 'active' : ($status === 'canceled' ? 'active' : 'suspended');
 
     if ($status === 'canceled') {
@@ -320,4 +333,63 @@ function handleCustomerSubscriptionDeleted(PDO $db, array $subscription): void
         'downgraded' => true,
         'tier'       => 'free',
     ], 200);
+}
+
+
+/**
+ * Resolves a configured `subscription_plans` record from a Stripe Checkout Session or Subscription object
+ * by checking mapped `stripe_price_id`, `stripe_product_id`, or explicit metadata `tier`.
+ */
+function resolvePlanFromStripePayload(PDO $db, array $object): ?array
+{
+    $metadata = is_array($object['metadata'] ?? null) ? $object['metadata'] : [];
+
+    $priceCandidates = array_values(array_filter(array_unique([
+        trim((string)($metadata['stripe_price_id'] ?? '')),
+        trim((string)($metadata['price_id'] ?? '')),
+        trim((string)($object['line_items']['data'][0]['price']['id'] ?? '')),
+        trim((string)($object['items']['data'][0]['price']['id'] ?? '')),
+        trim((string)($object['plan']['id'] ?? '')),
+        trim((string)($object['display_items'][0]['plan']['id'] ?? '')),
+    ])));
+
+    $productCandidates = array_values(array_filter(array_unique([
+        trim((string)($metadata['stripe_product_id'] ?? '')),
+        trim((string)($metadata['product_id'] ?? '')),
+        trim((string)($object['line_items']['data'][0]['price']['product'] ?? '')),
+        trim((string)($object['items']['data'][0]['price']['product'] ?? '')),
+        trim((string)($object['plan']['product'] ?? '')),
+    ])));
+
+    $tierHint = strtolower(trim((string)($metadata['tier'] ?? $metadata['tier_selected'] ?? '')));
+
+    $plans = getSubscriptionPlansCatalog($db);
+
+    if (!empty($priceCandidates)) {
+        foreach ($plans as $plan) {
+            $mappedPrice = trim((string)($plan['stripe_price_id'] ?? ''));
+            if ($mappedPrice !== '' && in_array($mappedPrice, $priceCandidates, true)) {
+                return $plan;
+            }
+        }
+    }
+
+    if (!empty($productCandidates)) {
+        foreach ($plans as $plan) {
+            $mappedProduct = trim((string)($plan['stripe_product_id'] ?? ''));
+            if ($mappedProduct !== '' && in_array($mappedProduct, $productCandidates, true)) {
+                return $plan;
+            }
+        }
+    }
+
+    if ($tierHint !== '') {
+        foreach ($plans as $plan) {
+            if (($plan['tier'] ?? '') === $tierHint) {
+                return $plan;
+            }
+        }
+    }
+
+    return null;
 }

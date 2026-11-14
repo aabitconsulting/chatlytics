@@ -891,14 +891,18 @@ function isHighFrequencySchedule(string $interval): bool
 
 /**
  * Checks whether the authenticated user's tier/role permits the requested Data Mining Accuracy tier.
- * Free accounts can use the Starter tier (every_120m / 12 datasets/day); paid tiers & admins can schedule up to 96x/day.
+ * When a subscription plan record is provided, validates against its configurable `allowed_intervals`.
  */
-function canUserUseScheduleInterval(array $user, string $interval): bool
+function canUserUseScheduleInterval(array $user, string $interval, ?array $plan = null): bool
 {
     if (strtolower((string)($user['role'] ?? 'user')) === 'admin') {
         return true;
     }
-    if (!isHighFrequencySchedule($interval)) {
+    $canonical = normalizeScheduleInterval($interval);
+    if ($plan !== null && !empty($plan['allowed_intervals']) && is_array($plan['allowed_intervals'])) {
+        return in_array($canonical, $plan['allowed_intervals'], true);
+    }
+    if (!isHighFrequencySchedule($canonical)) {
         return true;
     }
     $tier = strtolower((string)($user['tier'] ?? 'free'));

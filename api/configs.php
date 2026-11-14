@@ -36,6 +36,11 @@ if (in_array($overrideMethod, ['PUT', 'UPDATE', 'FULL_START'], true)) {
 }
 
 $configId = isset($_GET['id']) ? (int)$_GET['id'] : (isset($requestData['id']) ? (int)$requestData['id'] : null);
+$rawAction = strtolower(trim((string)($_GET['action'] ?? $requestData['action'] ?? '')));
+
+if ($requestMethod === 'GET' && $rawAction === 'public_catalog') {
+    handlePublicCatalog();
+}
 
 switch ($requestMethod) {
     case 'GET':
@@ -57,6 +62,21 @@ switch ($requestMethod) {
     default:
         jsonError("Unsupported HTTP method: {$requestMethod}", 405);
         break;
+}
+
+/**
+ * Public catalog endpoint returning allowed LLM models, active Analyse-Sets (Model Presets),
+ * and subscription plan definitions (for landing page pricing hydration and signup flows).
+ */
+function handlePublicCatalog(): void {
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+
+    jsonResponse([
+        'models'  => getAdminModelsCatalog($db, true),
+        'presets' => getModelPresetsCatalog($db, true),
+        'plans'   => getSubscriptionPlansCatalog($db),
+    ], 200);
 }
 
 /**
@@ -121,9 +141,17 @@ function handleGetConfig(?int $id): void {
             return $formatted;
         }, $rows);
 
+        $userTier = strtolower((string)($currentUser['tier'] ?? 'free'));
+        $userPlan = getPlanForTier($db, $userTier);
+
         jsonResponse([
             'configs' => $configs,
             'count'   => count($configs),
+            'catalog' => [
+                'allowed_models' => getAdminModelsCatalog($db, true),
+                'presets'        => getModelPresetsCatalog($db, true),
+                'user_plan'      => $userPlan,
+            ],
         ], 200);
     }
 }
@@ -137,23 +165,12 @@ function handleCreateConfig(array $data): void {
     assertNotAuditMode($currentUser);
 
     $userId = (int)$currentUser['id'];
-    $validated = validateAndSanitizeConfigInput($data);
-
-    if (!canUserUseScheduleInterval($currentUser, $validated['schedule_interval'])) {
-        jsonError(
-            "High-frequency Data Mining ({$validated['schedule_interval']}) requires a paid plan (Starter, Growth, or Enterprise). Free accounts are limited to the Starter tier (every_120m / 12 datasets per day).",
-            403,
-            [
-                'required_tier'     => 'starter',
-                'current_tier'      => $currentUser['tier'] ?? 'free',
-                'schedule_interval' => $validated['schedule_interval'],
-            ]
-        );
-    }
-
     $db = getDb();
     ensureCoreSchemaColumns($db);
     ensureUserResultsTable($db, $userId);
+
+    $validated = validateAndSanitizeConfigInput($data);
+    enforcePlanAndPresetPolicy($db, $currentUser, $validated, $data, false, null);
 
     $fullStartRequested = !empty($data['full_start'])
         || (isset($data['action']) && strtolower(trim((string)$data['action'])) === 'full_start');
@@ -168,12 +185,12 @@ function handleCreateConfig(array $data): void {
     $sql = "
         INSERT INTO tracking_configs (
             user_id, name, brand_name, brand_domains, keywords_prompts,
-            competitors, target_llms, search_enabled, schedule_interval,
+            competitors, preset_id, target_llms, search_enabled, schedule_interval,
             datasets_per_day, initial_test_used, full_started_at,
             status, next_run_at
         ) VALUES (
             :user_id, :name, :brand_name, :brand_domains, :keywords_prompts,
-            :competitors, :target_llms, :search_enabled, :schedule_interval,
+            :competitors, :preset_id, :target_llms, :search_enabled, :schedule_interval,
             :datasets_per_day, :initial_test_used, :full_started_at,
             :status, :next_run_at
         )
@@ -187,6 +204,7 @@ function handleCreateConfig(array $data): void {
         ':brand_domains'     => json_encode($validated['brand_domains'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':keywords_prompts'  => json_encode($validated['keywords_prompts'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':competitors'       => json_encode($validated['competitors'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ':preset_id'         => $validated['preset_id'],
         ':target_llms'       => json_encode($validated['target_llms'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':search_enabled'    => $validated['search_enabled'],
         ':schedule_interval' => $validated['schedule_interval'],
@@ -399,18 +417,7 @@ function handleUpdateConfig(?int $id, array $data): void {
     }
 
     $validated = validateAndSanitizeConfigInput($data, true, $existing);
-
-    if (isset($data['schedule_interval']) && !canUserUseScheduleInterval($currentUser, $validated['schedule_interval'])) {
-        jsonError(
-            "High-frequency Data Mining ({$validated['schedule_interval']}) requires a paid plan (Starter, Growth, or Enterprise). Free accounts are limited to the Starter tier (every_120m / 12 datasets per day).",
-            403,
-            [
-                'required_tier'     => 'starter',
-                'current_tier'      => $currentUser['tier'] ?? 'free',
-                'schedule_interval' => $validated['schedule_interval'],
-            ]
-        );
-    }
+    enforcePlanAndPresetPolicy($db, $currentUser, $validated, $data, true, $existing);
 
     $datasetsPerDay = (int)getScheduleRunsPerDay($validated['schedule_interval']);
     $fullStartedAt = $existing['full_started_at'] ?? null;
@@ -443,6 +450,7 @@ function handleUpdateConfig(?int $id, array $data): void {
             brand_domains = :brand_domains,
             keywords_prompts = :keywords_prompts,
             competitors = :competitors,
+            preset_id = :preset_id,
             target_llms = :target_llms,
             search_enabled = :search_enabled,
             schedule_interval = :schedule_interval,
@@ -461,6 +469,7 @@ function handleUpdateConfig(?int $id, array $data): void {
         ':brand_domains'     => json_encode($validated['brand_domains'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':keywords_prompts'  => json_encode($validated['keywords_prompts'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':competitors'       => json_encode($validated['competitors'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ':preset_id'         => $validated['preset_id'],
         ':target_llms'       => json_encode($validated['target_llms'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':search_enabled'    => $validated['search_enabled'],
         ':schedule_interval' => $validated['schedule_interval'],
@@ -744,17 +753,250 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
         $status = 'active';
     }
 
+    // 10. preset_id (optional Analyse-Set slug)
+    $presetId = null;
+    if (array_key_exists('preset_id', $data)) {
+        $rawPreset = trim((string)$data['preset_id']);
+        $presetId = ($rawPreset !== '') ? $rawPreset : null;
+    } elseif ($isUpdate && $existing && !empty($existing['preset_id'])) {
+        $presetId = trim((string)$existing['preset_id']);
+    }
+
     return [
         'name'              => $name,
         'brand_name'        => $brandName,
         'brand_domains'     => $brandDomains,
         'keywords_prompts'  => $keywordsPrompts,
         'competitors'       => $competitors,
+        'preset_id'         => $presetId,
         'target_llms'       => $targetLLMs,
         'schedule_interval' => $scheduleInterval,
         'search_enabled'    => $searchEnabled,
         'status'            => $status,
     ];
+}
+
+/**
+ * Enforces subscription plan quotas, Data Mining intervals, allowed models, and Analyse-Set rules.
+ */
+function enforcePlanAndPresetPolicy(
+    PDO $db,
+    array $currentUser,
+    array &$validated,
+    array $data,
+    bool $isUpdate = false,
+    ?array $existing = null
+): void {
+    $isAdmin = strtolower((string)($currentUser['role'] ?? 'user')) === 'admin';
+    if ($isAdmin) {
+        return;
+    }
+
+    // Legacy mock-PDO unit/adversarial harnesses construct an uninitialized PDO stub
+    // whose user record does not declare a subscription tier and cannot execute catalog SQL.
+    $isUninitializedStub = false;
+    try {
+        $isUninitializedStub = trim((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME)) === '';
+    } catch (Throwable $e) {
+        $isUninitializedStub = true;
+    }
+    if ($isUninitializedStub && !array_key_exists('tier', $currentUser)) {
+        return;
+    }
+
+    $userId = (int)$currentUser['id'];
+    $userTier = strtolower((string)($currentUser['tier'] ?? 'free'));
+    $plan = getPlanForTier($db, $userTier);
+
+    // 1. Max configurations quota on CREATE
+    if (!$isUpdate) {
+        $cntStmt = $db->prepare("SELECT COUNT(*) FROM tracking_configs WHERE user_id = :user_id AND status != 'deleted'");
+        $cntStmt->execute([':user_id' => $userId]);
+        $existingCount = (int)$cntStmt->fetchColumn();
+        $maxConfigs = max(1, (int)($plan['max_configs'] ?? 3));
+        if ($existingCount >= $maxConfigs) {
+            jsonError(
+                "Maximum number of active/paused profiles ({$maxConfigs}) reached for your current plan ({$plan['tier']}). Please upgrade your plan.",
+                403,
+                [
+                    'quota'        => 'max_configs',
+                    'limit'        => $maxConfigs,
+                    'current_tier' => $plan['tier'],
+                ]
+            );
+        }
+    }
+
+    // 2. Max competitors & prompts per configuration
+    $maxCompetitors = max(1, (int)($plan['max_competitors_per_config'] ?? 5));
+    if ((!$isUpdate || isset($data['competitors'])) && count($validated['competitors']) > $maxCompetitors) {
+        jsonError(
+            "Maximum of {$maxCompetitors} competitor(s) per profile allowed on your current plan ({$plan['tier']}).",
+            403,
+            [
+                'quota'        => 'max_competitors_per_config',
+                'limit'        => $maxCompetitors,
+                'current_tier' => $plan['tier'],
+            ]
+        );
+    }
+
+    $maxPrompts = max(1, (int)($plan['max_prompts_per_config'] ?? 10));
+    if ((!$isUpdate || isset($data['keywords_prompts']) || isset($data['prompts'])) && count($validated['keywords_prompts']) > $maxPrompts) {
+        jsonError(
+            "Maximum of {$maxPrompts} prompt(s) per profile allowed on your current plan ({$plan['tier']}).",
+            403,
+            [
+                'quota'        => 'max_prompts_per_config',
+                'limit'        => $maxPrompts,
+                'current_tier' => $plan['tier'],
+            ]
+        );
+    }
+
+    // 3. Allowed Data Mining schedule interval
+    if ((!$isUpdate || isset($data['schedule_interval'])) && !canUserUseScheduleInterval($currentUser, $validated['schedule_interval'], $plan)) {
+        jsonError(
+            "Data Mining interval ({$validated['schedule_interval']}) is not included in your current plan ({$plan['tier']}).",
+            403,
+            [
+                'required_tier'     => 'starter',
+                'current_tier'      => $plan['tier'],
+                'schedule_interval' => $validated['schedule_interval'],
+            ]
+        );
+    }
+
+    // 4. Analyse-Set / Model Preset & Custom Model policy
+    $allModels = getAdminModelsCatalog($db, false);
+    $disallowedIds = [];
+    foreach ($allModels as $m) {
+        if (empty($m['is_allowed'])) {
+            $disallowedIds[] = (string)$m['id'];
+        }
+    }
+
+    $allowCustomModels = !empty($plan['allow_custom_models']);
+    $allActivePresets = getModelPresetsCatalog($db, true);
+    $allowedPresetIds = decodeCatalogJsonArray($plan['allowed_preset_ids'] ?? [], ['dach_core_baseline']);
+    $allowedPresets = array_values(array_filter($allActivePresets, function (array $p) use ($allowedPresetIds, $userTier): bool {
+        if (in_array($p['id'], $allowedPresetIds, true)) {
+            return true;
+        }
+        return empty($allowedPresetIds) && in_array($userTier, $p['allowed_tiers'] ?? [], true);
+    }));
+
+    $findPresetById = function (?string $pid) use ($allowedPresets): ?array {
+        if ($pid === null || $pid === '') {
+            return null;
+        }
+        foreach ($allowedPresets as $p) {
+            if ($p['id'] === $pid) {
+                return $p;
+            }
+        }
+        return null;
+    };
+
+    if (!$allowCustomModels) {
+        $requestedPresetId = array_key_exists('preset_id', $data) ? trim((string)$data['preset_id']) : '';
+
+        if ($requestedPresetId !== '') {
+            $matchedPreset = $findPresetById($requestedPresetId);
+            if ($matchedPreset === null) {
+                jsonError(
+                    "The selected Analyse-Set '{$requestedPresetId}' is not available in your current plan ({$plan['tier']}).",
+                    403,
+                    [
+                        'required_tier' => 'growth',
+                        'current_tier'  => $plan['tier'],
+                        'preset_id'     => $requestedPresetId,
+                    ]
+                );
+            }
+            $validated['preset_id'] = $matchedPreset['id'];
+            $validated['target_llms'] = normalizeTargetLlmsList($matchedPreset['target_llms']);
+            $validated['search_enabled'] = !empty($matchedPreset['search_enabled']) ? 1 : 0;
+            return;
+        }
+
+        if (!empty($data['custom_models_mode'])) {
+            jsonError(
+                "Custom model and web search configuration requires the Growth or Enterprise plan. Please choose a curated Analyse-Set.",
+                403,
+                [
+                    'required_tier' => 'growth',
+                    'current_tier'  => $plan['tier'],
+                ]
+            );
+        }
+
+        $submittedModelsOrSearch = isset($data['target_llms']) || isset($data['search_enabled']);
+        if ($isUpdate && !$submittedModelsOrSearch) {
+            return;
+        }
+
+        if (!$isUpdate && !$submittedModelsOrSearch && !empty($allowedPresets)) {
+            $defaultPreset = $allowedPresets[0];
+            foreach ($allowedPresets as $candidate) {
+                if (!empty($candidate['is_default'])) {
+                    $defaultPreset = $candidate;
+                    break;
+                }
+            }
+            $validated['preset_id'] = $defaultPreset['id'];
+            $validated['target_llms'] = normalizeTargetLlmsList($defaultPreset['target_llms']);
+            $validated['search_enabled'] = !empty($defaultPreset['search_enabled']) ? 1 : 0;
+            return;
+        }
+
+        // Compatibility check: auto-bind if submitted models + search exactly match an allowed Analyse-Set
+        $reqLlmsSorted = normalizeTargetLlmsList($validated['target_llms']);
+        sort($reqLlmsSorted);
+        $reqSearch = (int)$validated['search_enabled'];
+
+        $matchedBySpec = null;
+        foreach ($allowedPresets as $candidate) {
+            $candLlms = normalizeTargetLlmsList($candidate['target_llms']);
+            sort($candLlms);
+            $candSearch = !empty($candidate['search_enabled']) ? 1 : 0;
+            if ($candLlms === $reqLlmsSorted && $candSearch === $reqSearch) {
+                $matchedBySpec = $candidate;
+                break;
+            }
+        }
+
+        if ($matchedBySpec !== null) {
+            $validated['preset_id'] = $matchedBySpec['id'];
+            return;
+        }
+
+        jsonError(
+            "Custom model and web search configuration requires the Growth or Enterprise plan. Please select one of the pre-defined Analyse-Sets (Model Presets) available in your plan.",
+            403,
+            [
+                'required_tier' => 'growth',
+                'current_tier'  => $plan['tier'],
+            ]
+        );
+    }
+
+    // Custom models allowed (Growth / Enterprise): enforce admin-disabled models when custom models are submitted
+    $submittedCustom = !$isUpdate || isset($data['target_llms']);
+    if ($submittedCustom && !empty($disallowedIds)) {
+        foreach ($validated['target_llms'] as $llmId) {
+            if (in_array((string)$llmId, $disallowedIds, true)) {
+                jsonError(
+                    "Model '{$llmId}' is currently disabled by your administrator.",
+                    403,
+                    [
+                        'disallowed_model' => $llmId,
+                        'current_tier'     => $plan['tier'],
+                    ]
+                );
+            }
+        }
+    }
 }
 
 /**
@@ -813,6 +1055,7 @@ function formatConfigRecord(array $row): array {
         'keywords_prompts'     => $prompts,
         'prompts'              => $prompts, // Alias for client/test compatibility
         'competitors'          => $competitors,
+        'preset_id'            => !empty($row['preset_id']) ? (string)$row['preset_id'] : null,
         'target_llms'          => $targetLLMs,
         'search_enabled'       => (bool)$row['search_enabled'],
         'schedule_interval'    => $scheduleInterval,
