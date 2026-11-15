@@ -25,10 +25,10 @@ const RUN_COOLDOWN_MS = 30000;
 const RUN_POLL_INTERVAL_MS = 3000;
 
 const TIMELINE_METRICS = {
-  som_score: { key: 'som_score', i18nKey: 'timeline.metric_som', fallback: 'Share-of-Model (%)', unit: '%' },
-  visibility_index: { key: 'visibility_index', i18nKey: 'timeline.metric_visibility', fallback: 'Visibility Index (%)', unit: '%' },
-  citation_share: { key: 'citation_share', i18nKey: 'timeline.metric_citations', fallback: 'Quellen-Anteil (%)', unit: '%' },
-  avg_earliness: { key: 'avg_earliness', i18nKey: 'timeline.metric_earliness', fallback: 'Ø Earliness (%)', unit: '%' }
+  som_score: { key: 'som_score', i18nKey: 'timeline.metric_som', fallback: 'KI-Empfehlungsanteil (%)', unit: '%' },
+  visibility_index: { key: 'visibility_index', i18nKey: 'timeline.metric_visibility', fallback: 'Sichtbarkeits-Index (%)', unit: '%' },
+  citation_share: { key: 'citation_share', i18nKey: 'timeline.metric_citations', fallback: 'Domain-Zitate (%)', unit: '%' },
+  avg_earliness: { key: 'avg_earliness', i18nKey: 'timeline.metric_earliness', fallback: 'Ø Position im Text (%)', unit: '%' }
 };
 
 function getTimelineMetricMeta(metricKey) {
@@ -275,8 +275,8 @@ class DashboardController {
       const bannerText = banner.querySelector('.banner-text');
       if (bannerText) {
         bannerText.textContent = lang === 'de'
-          ? 'Sie betrachten einen geteilten Chatlytics-Vorstandsreport (Schreibgeschützt).'
-          : 'You are viewing a shared Chatlytics Board Report (Read-Only).';
+          ? 'Sie betrachten einen geteilten Chatlytics GEO-Report (schreibgeschützt).'
+          : 'You are viewing a shared Chatlytics GEO Report (Read-Only).';
       }
     }
 
@@ -317,7 +317,7 @@ class DashboardController {
 
     try {
       const userConfigs = await configs.loadConfigs();
-      configSelect.innerHTML = '<option value="">Alle Konfigurationen</option>';
+      configSelect.innerHTML = `<option value="">${escapeHtml(this.tMsg('dashboard.all_configs', 'Alle Tracking-Profile'))}</option>`;
 
       const primaryConfigs = userConfigs.filter(c => c.status !== 'archived' && c.status !== 'deleted');
       const archivedConfigs = userConfigs.filter(c => c.status === 'archived');
@@ -325,18 +325,18 @@ class DashboardController {
       for (const cfg of primaryConfigs) {
         const opt = document.createElement('option');
         opt.value = cfg.id;
-        const baseName = cfg.name || `${cfg.brand_name} Tracking`;
+        const baseName = cfg.name || `${cfg.brand_name} Profil`;
         opt.textContent = cfg.status === 'stopped' ? `${baseName} [Gestoppt]` : baseName;
         configSelect.appendChild(opt);
       }
 
       if (archivedConfigs.length > 0) {
         const optGroup = document.createElement('optgroup');
-        optGroup.label = i18n ? i18n.t('dashboard.archived_group', 'Archivierte Profile') : 'Archivierte Profile';
+        optGroup.label = i18n ? i18n.t('dashboard.archived_group', 'Archivierte Tracking-Profile') : 'Archivierte Tracking-Profile';
         for (const cfg of archivedConfigs) {
           const opt = document.createElement('option');
           opt.value = cfg.id;
-          const baseName = cfg.name || `${cfg.brand_name} Tracking`;
+          const baseName = cfg.name || `${cfg.brand_name} Profil`;
           opt.textContent = `${baseName} [Archiviert]`;
           optGroup.appendChild(opt);
         }
@@ -455,13 +455,13 @@ class DashboardController {
 
   getTestRunLockMessage(reason) {
     if (reason === 'stopped') {
-      return this.tMsg('run.locked_stopped', 'Diese Konfiguration wurde dauerhaft gestoppt und kann nicht mehr ausgeführt werden.');
+      return this.tMsg('run.locked_stopped', 'Dieses Tracking-Profil wurde dauerhaft gestoppt und kann nicht mehr ausgeführt werden.');
     }
     if (reason === 'full_started') {
-      return this.tMsg('run.locked_full_started', 'Full Start ist aktiv: Abfragen laufen automatisch nach Zeitplan. Manuelle Abfragen sind gesperrt.');
+      return this.tMsg('run.locked_full_started', 'Monitoring ist aktiv: Analyse-Läufe laufen automatisch nach Zeitplan. Manuelle Test-Läufe sind gesperrt.');
     }
     if (reason === 'test_used') {
-      return this.tMsg('run.locked_test_used', 'Die einmalige Test-Abfrage wurde bereits genutzt. Aktivieren Sie Full Start für die laufende Datenerhebung.');
+      return this.tMsg('run.locked_test_used', 'Der einmalige Test-Lauf wurde bereits genutzt. Aktivieren Sie das Monitoring für laufende Analyse-Läufe.');
     }
     return '';
   }
@@ -712,25 +712,25 @@ class DashboardController {
       if (!cfg || this.isAuditMode || cfg.full_started_at) return;
       const cfgName = cfg.name || cfg.brand_name || `#${cfg.id}`;
       this.openConfirmModal({
-        title: this.tMsg('run.full_start_confirm_title', 'Full Start für dieses Profil aktivieren?'),
+        title: this.tMsg('run.full_start_confirm_title', 'Monitoring für dieses Tracking-Profil aktivieren?'),
         message: this.tMsg(
           'run.full_start_confirm_desc',
-          'Ab jetzt werden Ihre Prompts kontinuierlich über den Kalendertag verteilt abgefragt. Nach dem Start sind die Prompts gesperrt und die manuelle Test-Abfrage wird deaktiviert.'
+          'Ab jetzt werden Ihre Prompts kontinuierlich als Analyse-Läufe über den Kalendertag ausgeführt. Nach dem Start sind Prompts sowie Suchregion & Sprache gesperrt und der manuelle Test-Lauf wird deaktiviert.'
         ),
         summaryRows: [
           { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: cfgName },
-          { label: this.tMsg('run.confirm_label_accuracy', 'Data-Mining-Genauigkeit'), value: getScheduleLabel(cfg.schedule_interval) }
+          { label: this.tMsg('run.confirm_label_accuracy', 'Mess-Frequenz'), value: getScheduleLabel(cfg.schedule_interval) }
         ],
-        confirmLabel: this.tMsg('run.full_start_confirm_cta', 'Full Start verbindlich aktivieren'),
+        confirmLabel: this.tMsg('run.full_start_confirm_cta', 'Monitoring verbindlich aktivieren'),
         confirmVariant: 'primary',
         triggerEl: btnFullStart,
         onConfirm: async () => {
           try {
             setButtonLoading(btnFullStart, true, this.tMsg('run.btn_full_starting', 'Wird aktiviert…'));
             await configs.fullStartConfig(cfg);
-            showToast(this.tMsg('toast.config_full_started', 'Full Start aktiviert. Abfragen laufen ab jetzt automatisch.'), 'success');
+            showToast(this.tMsg('toast.config_full_started', 'Monitoring aktiviert. Kontinuierliche Analyse-Läufe über den Kalendertag laufen.'), 'success');
           } catch (err) {
-            showToast(err?.message || this.tMsg('toast.config_full_start_error', 'Full Start konnte nicht aktiviert werden.'), 'error');
+            showToast(err?.message || this.tMsg('toast.config_full_start_error', 'Monitoring konnte nicht aktiviert werden.'), 'error');
           } finally {
             setButtonLoading(btnFullStart, false);
             this.updateConfigActionControls();
@@ -750,17 +750,17 @@ class DashboardController {
 
       const cfgName = cfg.name || cfg.brand_name || `#${cfg.id}`;
       this.openConfirmModal({
-        title: this.tMsg('run.stop_confirm_title', 'Konfiguration dauerhaft stoppen?'),
+        title: this.tMsg('run.stop_confirm_title', 'Tracking-Profil dauerhaft stoppen?'),
         message: this.tMsg(
           'run.stop_confirm_desc',
-          'ACHTUNG: Wenn Sie „{name}“ stoppen, wird die Datenerhebung endgültig beendet. Eine gestoppte Konfiguration kann NICHT wieder fortgesetzt oder bearbeitet werden. Nach dem Stoppen können Sie das Profil archivieren oder löschen.',
+          'ACHTUNG: Wenn Sie „{name}“ stoppen, wird das Monitoring endgültig beendet. Ein gestopptes Tracking-Profil kann NICHT wieder fortgesetzt oder bearbeitet werden. Nach dem Stoppen können Sie das Profil archivieren oder löschen.',
           { name: cfgName }
         ),
         summaryRows: [
           { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: cfgName },
-          { label: this.tMsg('run.confirm_label_status_after', 'Status nach Bestätigung'), value: this.tMsg('dashboard.status_stopped', 'Dauerhaft gestoppt (Nicht reaktivierbar)') }
+          { label: this.tMsg('run.confirm_label_status_after', 'Status nach Bestätigung'), value: this.tMsg('dashboard.status_stopped', 'Gestoppt') }
         ],
-        warningText: this.tMsg('run.stop_confirm_warning', 'Unwiderruflich: Gestoppte Konfigurationen können nicht wieder aufgenommen werden.'),
+        warningText: this.tMsg('run.stop_confirm_warning', 'Unwiderruflich: Gestoppte Tracking-Profile können nicht wieder aufgenommen werden.'),
         confirmLabel: this.tMsg('run.stop_confirm_cta', 'Unwiderruflich stoppen'),
         confirmVariant: 'warning',
         triggerEl: btnStopConfig,
@@ -768,12 +768,12 @@ class DashboardController {
           try {
             setButtonLoading(btnStopConfig, true, this.tMsg('run.btn_stopping', 'Wird gestoppt…'));
             await configs.stopConfig(cfg);
-            showToast(this.tMsg('toast.config_stopped', 'Konfiguration wurde dauerhaft gestoppt.'), 'info');
+            showToast(this.tMsg('toast.config_stopped', 'Tracking-Profil wurde dauerhaft gestoppt.'), 'info');
             await this.initConfigs();
             this.updateConfigActionControls();
             await this.loadDashboard();
           } catch (err) {
-            showToast(err?.message || this.tMsg('toast.config_stop_error', 'Konfiguration konnte nicht gestoppt werden.'), 'error');
+            showToast(err?.message || this.tMsg('toast.config_stop_error', 'Tracking-Profil konnte nicht gestoppt werden.'), 'error');
           } finally {
             setButtonLoading(btnStopConfig, false);
           }
@@ -793,10 +793,10 @@ class DashboardController {
         setButtonLoading(btnArchiveConfig, true, isArchived ? 'Wird wiederhergestellt…' : 'Wird archiviert…');
         if (isArchived) {
           await configs.unarchiveConfig(cfg);
-          showToast(this.tMsg('toast.config_unarchived', 'Konfiguration aus dem Archiv geholt (Status: Gestoppt).'), 'info');
+          showToast(this.tMsg('toast.config_unarchived', 'Tracking-Profil aus dem Archiv geholt (Status: Gestoppt).'), 'info');
         } else {
           await configs.archiveConfig(cfg);
-          showToast(this.tMsg('toast.config_archived', 'Konfiguration archiviert.'), 'info');
+          showToast(this.tMsg('toast.config_archived', 'Tracking-Profil archiviert.'), 'info');
         }
         await this.initConfigs();
         this.updateConfigActionControls();
@@ -813,36 +813,36 @@ class DashboardController {
       const cfg = this.getSelectedConfigObject();
       if (!cfg || this.isAuditMode) return;
       if (cfg.full_started_at && cfg.status !== 'stopped' && cfg.status !== 'archived') {
-        showToast(this.tMsg('toast.delete_requires_stop', 'Bitte stoppen Sie die Konfiguration zuerst, bevor Sie sie löschen.'), 'warning');
+        showToast(this.tMsg('toast.delete_requires_stop', 'Bitte stoppen Sie das Tracking-Profil zuerst, bevor Sie es löschen.'), 'warning');
         return;
       }
 
       const cfgName = cfg.name || cfg.brand_name || `#${cfg.id}`;
       this.openConfirmModal({
-        title: this.tMsg('run.delete_confirm_title', 'Konfiguration aus Dashboard entfernen?'),
+        title: this.tMsg('run.delete_confirm_title', 'Tracking-Profil aus Cockpit entfernen?'),
         message: this.tMsg(
           'run.delete_confirm_desc',
-          'Das Profil „{name}“ wird sofort aus Ihrem Dashboard entfernt. Die Daten werden vom System noch für 90 Tage aufbewahrt und danach automatisch gelöscht.',
+          'Das Tracking-Profil „{name}“ wird sofort aus Ihrem Cockpit entfernt. Die Daten werden vom System noch für 90 Tage aufbewahrt und danach automatisch gelöscht.',
           { name: cfgName }
         ),
         summaryRows: [
           { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: cfgName },
-          { label: this.tMsg('run.confirm_label_retention', 'System-Aufbewahrung'), value: '90 Tage (aus Dashboard ausgeblendet)' }
+          { label: this.tMsg('run.confirm_label_retention', 'System-Aufbewahrung'), value: '90 Tage (aus Cockpit ausgeblendet)' }
         ],
-        confirmLabel: this.tMsg('run.delete_confirm_cta', 'Aus Dashboard löschen'),
+        confirmLabel: this.tMsg('run.delete_confirm_cta', 'Aus Cockpit löschen'),
         confirmVariant: 'warning',
         triggerEl: btnDeleteConfig,
         onConfirm: async () => {
           try {
             setButtonLoading(btnDeleteConfig, true, this.tMsg('run.btn_deleting', 'Wird gelöscht…'));
             await configs.deleteConfig(cfg.id);
-            showToast(this.tMsg('toast.config_deleted', 'Konfiguration aus Dashboard entfernt (90 Tage System-Aufbewahrung).'), 'success');
+            showToast(this.tMsg('toast.config_deleted', 'Tracking-Profil aus Cockpit entfernt (90 Tage System-Aufbewahrung).'), 'success');
             this.selectedConfigId = null;
             await this.initConfigs();
             this.updateConfigActionControls();
             await this.loadDashboard();
           } catch (err) {
-            showToast(err?.message || this.tMsg('toast.config_delete_error', 'Konfiguration konnte nicht gelöscht werden.'), 'error');
+            showToast(err?.message || this.tMsg('toast.config_delete_error', 'Tracking-Profil konnte nicht gelöscht werden.'), 'error');
           } finally {
             setButtonLoading(btnDeleteConfig, false);
           }
@@ -1001,7 +1001,7 @@ class DashboardController {
       label = this.tMsg('run.btn_dispatching', 'Wird gestartet…');
     } else if (remainingMs > 0) {
       const remainingSec = Math.max(1, Math.ceil(remainingMs / 1000));
-      label = this.tMsg('run.btn_locked_countdown', 'Analyse läuft ({seconds}s)…', { seconds: remainingSec });
+      label = this.tMsg('run.btn_locked_countdown', 'Test-Lauf läuft ({seconds}s)…', { seconds: remainingSec });
     }
 
     const lockReason = this.getTestRunLockReason();
@@ -1285,7 +1285,7 @@ class DashboardController {
 
     if (ingested > 0) {
       this.renderRunBanner('running', {
-        title: this.tMsg('run.banner_progress_title', 'Analyse läuft im Hintergrund'),
+        title: this.tMsg('run.banner_progress_title', 'Test-Lauf im Hintergrund aktiv'),
         detail: this.tMsg('run.banner_progress_detail', '{count} / {expected} Modell-Antworten empfangen…', {
           count: ingested,
           expected
@@ -1294,7 +1294,7 @@ class DashboardController {
       });
     } else {
       this.renderRunBanner('running', {
-        title: this.tMsg('run.banner_queued_title', 'Audit-Run gestartet ({credits} Credits abgebucht)', {
+        title: this.tMsg('run.banner_queued_title', 'Test-Lauf gestartet ({credits} Credits abgebucht)', {
           credits
         }),
         detail: this.tMsg(
@@ -1328,7 +1328,7 @@ class DashboardController {
 
     if (!state?.isRestore) {
       showToast(
-        this.tMsg('run.toast_started', 'Abfrage gestartet ({credits} Credits abgebucht). Antworten treffen ein…', {
+        this.tMsg('run.toast_started', 'Test-Lauf gestartet ({credits} Credits abgebucht). Antworten treffen ein…', {
           credits: creditsDeducted
         }),
         'info',
@@ -1414,17 +1414,17 @@ class DashboardController {
     this.syncRunButtonsState();
 
     this.renderRunBanner('complete', {
-      title: this.tMsg('run.banner_completed_title', 'Analyse abgeschlossen'),
+      title: this.tMsg('run.banner_completed_title', 'Test-Lauf abgeschlossen'),
       detail: this.tMsg(
         'run.banner_completed_detail',
-        'Alle {count} / {expected} Modell-Antworten empfangen. Dashboard-Daten wurden aktualisiert.',
+        'Alle {count} / {expected} Modell-Antworten empfangen. Cockpit-Daten wurden aktualisiert.',
         { count: ingested, expected }
       ),
       badgeText: `${ingested} / ${expected} ✓`
     });
 
     showToast(
-      this.tMsg('run.toast_completed', 'Analyse abgeschlossen: {count} / {expected} Ergebnisse im Dashboard geladen.', {
+      this.tMsg('run.toast_completed', 'Test-Lauf abgeschlossen: {count} / {expected} Ergebnisse im Cockpit geladen.', {
         count: ingested,
         expected
       }),
@@ -1455,16 +1455,16 @@ class DashboardController {
 
     if (ingested >= expected) {
       this.renderRunBanner('complete', {
-        title: this.tMsg('run.banner_completed_title', 'Analyse abgeschlossen'),
+        title: this.tMsg('run.banner_completed_title', 'Test-Lauf abgeschlossen'),
         detail: this.tMsg(
           'run.banner_completed_detail',
-          'Alle {count} / {expected} Modell-Antworten empfangen. Dashboard-Daten wurden aktualisiert.',
+          'Alle {count} / {expected} Modell-Antworten empfangen. Cockpit-Daten wurden aktualisiert.',
           { count: ingested, expected }
         ),
         badgeText: `${ingested} / ${expected} ✓`
       });
       showToast(
-        this.tMsg('run.toast_completed', 'Analyse abgeschlossen: {count} / {expected} Ergebnisse im Dashboard geladen.', {
+        this.tMsg('run.toast_completed', 'Test-Lauf abgeschlossen: {count} / {expected} Ergebnisse im Cockpit geladen.', {
           count: ingested,
           expected
         }),
@@ -1484,7 +1484,7 @@ class DashboardController {
       showToast(
         this.tMsg(
           'run.toast_timeout',
-          'Audit-Run läuft weiterhin im Hintergrund. Sie können bei Bedarf erneut aktualisieren.'
+          'Test-Lauf läuft weiterhin im Hintergrund. Sie können bei Bedarf erneut aktualisieren.'
         ),
         'info',
         5000
@@ -1501,7 +1501,7 @@ class DashboardController {
       showToast(
         this.tMsg(
           'run.already_running_toast',
-          'Eine Analyse läuft bereits – Fortschritt wird im Status-Banner angezeigt.'
+          'Ein Test-Lauf läuft bereits – Fortschritt wird im Status-Banner angezeigt.'
         ),
         'info'
       );
@@ -1520,7 +1520,7 @@ class DashboardController {
 
     if (!this.selectedConfigId) {
       showToast(
-        this.tMsg('run.need_config_toast', 'Bitte erstellen Sie zuerst eine Tracking-Konfiguration.'),
+        this.tMsg('run.need_config_toast', 'Bitte legen Sie zuerst ein Tracking-Profil an.'),
         'warning'
       );
       configs.showModal?.();
@@ -1540,15 +1540,15 @@ class DashboardController {
     const profileName = cfg?.name || cfg?.brand_name || `#${this.selectedConfigId}`;
 
     this.openConfirmModal({
-      title: this.tMsg('run.confirm_title', 'Audit-Abfrage jetzt starten?'),
+      title: this.tMsg('run.confirm_title', 'Test-Lauf jetzt starten?'),
       message: this.tMsg(
         'run.confirm_desc',
-        'Die ausgewählten Prompts werden jetzt live an alle konfigurierten KI-Modelle gesendet. Jeder Prompt-Modell-Durchlauf verbraucht 1 Credit.'
+        'Die ausgewählten Prompts werden jetzt als einmaliger Test-Lauf an alle ausgewählten KI-Modelle gesendet. Jeder Analyse-Lauf (1 Prompt × 1 KI-Modell) verbraucht 1 Credit.'
       ),
       summaryRows: [
         { label: this.tMsg('run.confirm_label_profile', 'Tracking-Profil'), value: profileName },
         {
-          label: this.tMsg('run.confirm_label_matrix', 'Abfrage-Matrix'),
+          label: this.tMsg('run.confirm_label_matrix', 'Ausführungs-Umfang'),
           value: this.tMsg('run.confirm_matrix_val', '{prompts} Prompt(s) × {llms} Modell(e)', {
             prompts: breakdown.promptCount,
             llms: breakdown.llmCount
@@ -1593,7 +1593,7 @@ class DashboardController {
 
     if (!this.selectedConfigId) {
       showToast(
-        this.tMsg('run.need_config_toast', 'Bitte erstellen Sie zuerst eine Tracking-Konfiguration.'),
+        this.tMsg('run.need_config_toast', 'Bitte legen Sie zuerst ein Tracking-Profil an.'),
         'warning'
       );
       configs.showModal?.();
@@ -1629,16 +1629,16 @@ class DashboardController {
       } else if (res?.response_mode === 'sync' || res?.status === 'completed') {
         const expected = Math.max(1, Number(res?.expected_runs || breakdown.expectedRuns || 1));
         this.renderRunBanner('complete', {
-          title: this.tMsg('run.banner_completed_title', 'Analyse abgeschlossen'),
+          title: this.tMsg('run.banner_completed_title', 'Test-Lauf abgeschlossen'),
           detail: this.tMsg(
             'run.banner_completed_detail',
-            'Alle {count} / {expected} Modell-Antworten empfangen. Dashboard-Daten wurden aktualisiert.',
+            'Alle {count} / {expected} Modell-Antworten empfangen. Cockpit-Daten wurden aktualisiert.',
             { count: expected, expected }
           ),
           badgeText: `${expected} / ${expected} ✓`
         });
         showToast(
-          this.tMsg('run.toast_completed', 'Analyse abgeschlossen: {count} / {expected} Ergebnisse im Dashboard geladen.', {
+          this.tMsg('run.toast_completed', 'Test-Lauf abgeschlossen: {count} / {expected} Ergebnisse im Cockpit geladen.', {
             count: expected,
             expected
           }),
@@ -1668,7 +1668,7 @@ class DashboardController {
         document.getElementById('run-status-banner')?.classList?.add('hidden');
       }
       showToast(
-        err?.message || this.tMsg('run.error_start_toast', 'Audit-Run konnte nicht gestartet werden.'),
+        err?.message || this.tMsg('run.error_start_toast', 'Test-Lauf konnte nicht gestartet werden.'),
         'error',
         6000
       );
@@ -2128,7 +2128,7 @@ class DashboardController {
       const pLabel = formatTimelineAxisLabel(pTs, granularity, lang) || `#${slotIdx + 1}`;
       const cLabel = formatTimelineAxisLabel(cTs, granularity, lang);
       const emptyTxt = i18n.t('timeline.empty_slot', 'Kein Messwert');
-      const runsWord = i18n.t('timeline.runs_label', 'Abfragen');
+      const runsWord = i18n.t('timeline.runs_label', 'Analyse-Läufe');
 
       tooltip.replaceChildren();
       const head = document.createElement('div');
@@ -2271,7 +2271,7 @@ class DashboardController {
       this.renderUserResultsSection(data);
     } catch (err) {
       console.warn('Failed to load result archive:', err);
-      this.renderUserResultsMessage(tbody, this.tMsg('results.load_error', 'Einzelabfragen konnten nicht geladen werden.'));
+      this.renderUserResultsMessage(tbody, this.tMsg('results.load_error', 'Einzel-Läufe konnten nicht geladen werden.'));
     }
   }
 
@@ -2317,7 +2317,7 @@ class DashboardController {
     }
 
     if (results.length === 0) {
-      this.renderUserResultsMessage(tbody, i18n.t('results.empty', 'Keine Einzelabfragen für diese Filterauswahl gefunden.'));
+      this.renderUserResultsMessage(tbody, i18n.t('results.empty', 'Keine Einzel-Läufe für diese Filterauswahl gefunden.'));
     } else {
       tbody.replaceChildren();
       results.forEach(r => {
@@ -2337,7 +2337,7 @@ class DashboardController {
   getStrategyLabel(strategy) {
     if (strategy === 'batch_api') return this.tMsg('results.strategy_batch_api', 'Batch-API');
     if (strategy === 'prompt_caching') return this.tMsg('results.strategy_prompt_caching_legacy', 'Prompt-Caching (Legacy)');
-    return this.tMsg('results.strategy_regular', 'Standard-Abfrage');
+    return this.tMsg('results.strategy_regular', 'Standard-Lauf');
   }
 
   buildResultRows(r) {
@@ -2379,13 +2379,13 @@ class DashboardController {
     const dateCell = td('font-mono text-sm', i18n.t('results.col_date', 'Datum'));
     dateCell.textContent = `${formatFullDate(r.created_at, lang)} ${timeStr}`.trim();
 
-    const promptCell = td('accordion-prompt-cell', i18n.t('results.col_prompt', 'Prompt / Suchanfrage'));
+    const promptCell = td('accordion-prompt-cell', i18n.t('results.col_prompt', 'Prompt'));
     const promptText = document.createElement('span');
     promptText.textContent = truncateText(r.prompt, 110);
     promptText.title = String(r.prompt || '');
     promptCell.appendChild(promptText);
     if (r.is_test_run) {
-      promptCell.append(' ', badge(this.tMsg('results.test_run_badge', 'Test-Abfrage'), 'badge-warning'));
+      promptCell.append(' ', badge(this.tMsg('results.test_run_badge', 'Test-Lauf'), 'badge-warning'));
     }
 
     const isAdminViewer = Boolean(typeof auth !== 'undefined' && auth.getUser && auth.getUser()?.role === 'admin');
@@ -2509,7 +2509,7 @@ class DashboardController {
       compBlock.appendChild(ul);
     }
 
-    const citBlock = block(i18n.t('results.detail_citations', 'Grounding-Quellen & URLs'));
+    const citBlock = block(i18n.t('results.detail_citations', 'Zitierte Quell-Domains (Search Grounding)'));
     const cits = Array.isArray(r.citations) ? r.citations : [];
     if (cits.length === 0) {
       citBlock.appendChild(document.createTextNode('—'));
@@ -2700,7 +2700,7 @@ class DashboardController {
 
     if (prescriptionEl) {
       const lang = i18n ? i18n.getLanguage() : 'de';
-      const fallbackRx = i18n ? i18n.t(`geo.${activeQuad}.prescription`, 'Keine kritischen Sichtbarkeitslücken festgestellt.') : 'Keine kritischen Sichtbarkeitslücken festgestellt.';
+      const fallbackRx = i18n ? i18n.t(`geo.${activeQuad}.prescription`, 'Kein kritischer Befund festgestellt. Ihre Marke führt den Empfehlungstext an.') : 'Kein kritischer Befund festgestellt. Ihre Marke führt den Empfehlungstext an.';
       const prescription = lang === 'en'
         ? (geo.prescription_en || geo.prescription_de || fallbackRx)
         : (geo.prescription_de || geo.prescription_en || fallbackRx);
@@ -2763,7 +2763,7 @@ class DashboardController {
         <td data-label="#" class="text-muted font-mono">${idx + 1}</td>
         <td data-label="Wettbewerber"><strong>${escapeHtml(name)}</strong></td>
         <td data-label="Domain" class="font-mono text-muted text-sm">${escapeHtml(domain)}</td>
-        <td data-label="Sichtbarkeit" class="text-right font-mono">${visPct}%</td>
+        <td data-label="Sichtbarkeit (%)" class="text-right font-mono">${visPct}%</td>
         <td data-label="Nennungen" class="text-right font-mono">${mentions}</td>
         <td data-label="Empfehlungen" class="text-right font-mono">${recs}</td>
         <td data-label="Ø Position" class="text-right font-mono">${avgPos}</td>

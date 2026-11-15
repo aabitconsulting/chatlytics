@@ -201,8 +201,8 @@ test('Suite 1: Zero-Run Empty State & Data Binding Resilience', async (t) => {
 
   await t.test('1.7: 4-Quadrant GEO panel with empty diagnostic defaults to NONE and safe prescription', () => {
     dashboard.renderGEOPanel({});
-    assert.equal(elements['geo-active-badge'].textContent, 'Optimal · Spitzenreiter');
-    assert.ok(elements['geo-prescription'].textContent.includes('Keine kritischen Abweichungen'));
+    assert.equal(elements['geo-active-badge'].textContent, 'Kein kritischer Befund');
+    assert.ok(elements['geo-prescription'].textContent.includes('Kein kritischer Befund'));
     assert.equal(elements['geo-count-hijack'].textContent, '0');
     assert.equal(elements['geo-count-blindspot'].textContent, '0');
     assert.equal(elements['geo-count-trap'].textContent, '0');
@@ -591,11 +591,11 @@ test('Suite 5: Translation Fallback & Dictionary Integrity', async (t) => {
 
     assert.equal(
       deMission,
-      'Chatlytics.de — AI Visibility & Share-of-Model (SoM) Analytics für europäische B2B-Marken.'
+      'Chatlytics.de — AI Visibility & KI-Empfehlungsanteil für europäische B2B-Marken.'
     );
     assert.equal(
       enMission,
-      'Chatlytics.de — AI Visibility & Share-of-Model (SoM) Analytics for European B2B Brands.'
+      'Chatlytics.de — AI Visibility & AI Recommendation Share for European B2B Brands.'
     );
   });
 

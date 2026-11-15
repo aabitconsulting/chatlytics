@@ -56,26 +56,26 @@ $configStmt->execute([':id' => $configId]);
 $config = $configStmt->fetch();
 
 if (!$config) {
-    jsonError("Configuration not found.", 404);
+    jsonError("Tracking profile not found.", 404);
 }
 
 // Enforce strict tenant isolation
 if ((int)$config['user_id'] !== $userId && !$isAdmin) {
-    jsonError("Configuration not found.", 404);
+    jsonError("Tracking profile not found.", 404);
 }
 
 // Ensure configuration is not archived, stopped, or deleted
 if (($config['status'] ?? '') === 'archived') {
-    jsonError("Cannot trigger execution for an archived tracking configuration.", 400);
+    jsonError("Cannot trigger execution for an archived tracking profile.", 400);
 }
 if (in_array((string)($config['status'] ?? ''), ['stopped', 'deleted'], true)) {
-    jsonError("Cannot trigger execution for a stopped or deleted tracking configuration.", 409);
+    jsonError("Cannot trigger execution for a stopped or deleted tracking profile.", 409);
 }
 
 // Enforce Flow B: One-Time Pre-Start Test Run Lifecycle
 if (!empty($config['full_started_at'])) {
     jsonError(
-        "Full Data Mining has already started for this configuration. Manual test runs are locked; configuration can only be paused or resumed.",
+        "Continuous monitoring has already been activated for this tracking profile. Manual test runs are locked; tracking profile can only be paused or resumed.",
         409,
         [
             'config_id'         => $configId,
@@ -87,7 +87,7 @@ if (!empty($config['full_started_at'])) {
 
 if (!empty($config['initial_test_used'])) {
     jsonError(
-        "The single pre-start test run has already been used for this configuration. Please activate Full Start to begin continuous daily Data Mining.",
+        "The single test run has already been used for this tracking profile. Please activate monitoring to begin scheduled analysis runs.",
         409,
         [
             'config_id'         => $configId,
@@ -401,7 +401,7 @@ if ($mode === 'sync') {
         'llm_count'         => $llmCount,
         'prompt_count'      => $promptCount,
         'results'           => $parsedResults,
-        'message'           => 'Pre-start test run completed successfully.',
+        'message'           => 'Test run completed successfully.',
     ], 200);
 } else {
     jsonResponse([
@@ -418,6 +418,6 @@ if ($mode === 'sync') {
         'expected_runs'     => $requiredCredits,
         'llm_count'         => $llmCount,
         'prompt_count'      => $promptCount,
-        'message'           => 'Pre-start test run dispatched successfully to worker queue.',
+        'message'           => 'Test run dispatched successfully to worker queue.',
     ], 200);
 }

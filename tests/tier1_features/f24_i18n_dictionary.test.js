@@ -27,7 +27,7 @@ test('Feature 24.1: Dictionary defines both German (de) and English (en) sets', 
 });
 
 test('Feature 24.2: Verbatim German mission statement presence', () => {
-  const deMission = 'Chatlytics.de — AI Visibility & Share-of-Model (SoM) Analytics für europäische B2B-Marken.';
+  const deMission = 'Chatlytics.de — AI Visibility & KI-Empfehlungsanteil für europäische B2B-Marken.';
   if (fs.existsSync(I18N_PATH)) {
     const code = fs.readFileSync(I18N_PATH, 'utf8');
     assert.ok(code.includes('AI Visibility') && code.includes('europäische B2B'));
@@ -37,7 +37,7 @@ test('Feature 24.2: Verbatim German mission statement presence', () => {
 });
 
 test('Feature 24.3: Verbatim English mission statement presence', () => {
-  const enMission = 'Chatlytics.de — AI Visibility & Share-of-Model (SoM) Analytics for European B2B Brands.';
+  const enMission = 'Chatlytics.de — AI Visibility & AI Recommendation Share for European B2B Brands.';
   if (fs.existsSync(I18N_PATH)) {
     const code = fs.readFileSync(I18N_PATH, 'utf8');
     assert.ok(code.includes('European B2B Brands'));

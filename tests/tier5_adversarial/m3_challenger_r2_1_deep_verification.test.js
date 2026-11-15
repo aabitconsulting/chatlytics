@@ -373,7 +373,7 @@ test('CHALLENGE-R2-4.2: PUT /api/configs.php with valid Bearer token updates con
   assert.equal(res.parsed.status, 'success');
   assert.equal(res.parsed.code, 200);
   assert.ok(res.parsed.data && res.parsed.data.config);
-  assert.equal(res.parsed.data.message, 'Configuration updated successfully.');
+  assert.equal(res.parsed.data.message, 'Tracking profile updated successfully.');
 });
 
 test('CHALLENGE-R2-4.3: DELETE /api/configs.php with valid Bearer token deletes configuration (HTTP 200)', () => {
@@ -390,7 +390,7 @@ test('CHALLENGE-R2-4.3: DELETE /api/configs.php with valid Bearer token deletes 
   assert.equal(res.parsed.status, 'success');
   assert.equal(res.parsed.code, 200);
   assert.equal(res.parsed.data.id, 101);
-  assert.equal(res.parsed.data.message, 'Configuration deleted successfully.');
+  assert.equal(res.parsed.data.message, 'Tracking profile deleted successfully.');
 });
 
 test('CHALLENGE-R2-4.4: Bearer token takes precedence when BOTH Bearer and Magic Audit token are passed', () => {

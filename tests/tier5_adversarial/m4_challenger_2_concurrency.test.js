@@ -680,28 +680,28 @@ describe('M4 Adversarial Challenger #2: Concurrency, Data Integrity & Mathematic
     });
 
     it('CHALLENGE-3.4: GEO Diagnostic Action Panel Bilingual Prescription Exact String Matching', () => {
-      // Requirements:
-      // 1_CITATION_HIJACK: DE contains "kapert", EN contains "hijacking"
-      // 2_PARAMETRIC_BLINDSPOT: DE contains "Synthesetext", EN contains "synthesis text"
-      // 3_BRAND_HALO_TRAP: DE contains "Windschatten", EN contains "competitor shadow"
-      // 4_BURIED_WINNER: DE contains "spät", EN contains "cited late"
-      // NONE: DE contains "Keine kritischen", EN contains "No critical"
+      // Requirements (Canonical Product Glossary):
+      // 1_CITATION_HIJACK: DE contains "Quelle zitiert, Konkurrent empfohlen", EN contains "Source cited, rival recommended"
+      // 2_PARAMETRIC_BLINDSPOT: DE contains "Quelle zitiert, Marke fehlt", EN contains "Source cited, brand missing"
+      // 3_BRAND_HALO_TRAP: DE contains "Marke bekannt, aber nur Zweitnennung", EN contains "Brand known, only runner-up"
+      // 4_BURIED_WINNER: DE contains "Marke empfohlen, aber erst spät im Text (> 50 %)", EN contains "Brand recommended, late in text (> 50%)"
+      // NONE: DE contains "Kein kritischer Befund", EN contains "No critical findings"
       
       const reportsSrc = fs.readFileSync(REPORTS_PATH, 'utf8');
 
       // Verify German prescriptions
-      assert.ok(reportsSrc.includes('kapert'), 'DE 1_CITATION_HIJACK must contain "kapert"');
-      assert.ok(reportsSrc.includes('Synthesetext'), 'DE 2_PARAMETRIC_BLINDSPOT must contain "Synthesetext"');
-      assert.ok(reportsSrc.includes('Windschatten'), 'DE 3_BRAND_HALO_TRAP must contain "Windschatten"');
-      assert.ok(reportsSrc.includes('spät'), 'DE 4_BURIED_WINNER must contain "spät"');
-      assert.ok(reportsSrc.includes('Keine kritischen'), 'DE NONE must contain "Keine kritischen"');
+      assert.ok(reportsSrc.includes('Quelle zitiert, Konkurrent empfohlen'), 'DE 1_CITATION_HIJACK must contain canonical text');
+      assert.ok(reportsSrc.includes('Quelle zitiert, Marke fehlt'), 'DE 2_PARAMETRIC_BLINDSPOT must contain canonical text');
+      assert.ok(reportsSrc.includes('Marke bekannt, aber nur Zweitnennung'), 'DE 3_BRAND_HALO_TRAP must contain canonical text');
+      assert.ok(reportsSrc.includes('Marke empfohlen, aber erst spät im Text (> 50 %)'), 'DE 4_BURIED_WINNER must contain canonical text');
+      assert.ok(reportsSrc.includes('Kein kritischer Befund'), 'DE NONE must contain "Kein kritischer Befund"');
 
       // Verify English prescriptions
-      assert.ok(reportsSrc.includes('hijacking'), 'EN 1_CITATION_HIJACK must contain "hijacking"');
-      assert.ok(reportsSrc.includes('synthesis text'), 'EN 2_PARAMETRIC_BLINDSPOT must contain "synthesis text"');
-      assert.ok(reportsSrc.includes('competitor shadow'), 'EN 3_BRAND_HALO_TRAP must contain "competitor shadow"');
-      assert.ok(reportsSrc.includes('cited late'), 'EN 4_BURIED_WINNER must contain "cited late"');
-      assert.ok(reportsSrc.includes('No critical'), 'EN NONE must contain "No critical"');
+      assert.ok(reportsSrc.includes('Source cited, rival recommended'), 'EN 1_CITATION_HIJACK must contain canonical text');
+      assert.ok(reportsSrc.includes('Source cited, brand missing'), 'EN 2_PARAMETRIC_BLINDSPOT must contain canonical text');
+      assert.ok(reportsSrc.includes('Brand known, only runner-up'), 'EN 3_BRAND_HALO_TRAP must contain canonical text');
+      assert.ok(reportsSrc.includes('Brand recommended, late in text (> 50%)'), 'EN 4_BURIED_WINNER must contain canonical text');
+      assert.ok(reportsSrc.includes('No critical findings'), 'EN NONE must contain "No critical findings"');
     });
 
     it('CHALLENGE-3.5: Period Filter Parameter Bounds Clamping', () => {

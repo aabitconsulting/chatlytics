@@ -266,7 +266,7 @@ async function loadAdminUsers(page = 1, search = '') {
     const json = await res.json();
 
     if (!res.ok || json.status === 'error') {
-      showToast(json.message || 'Fehler beim Laden der Benutzer.', 'error');
+      showToast(json.message || 'Fehler beim Laden der Mandanten.', 'error');
       return;
     }
 
@@ -294,7 +294,7 @@ async function loadAdminUsers(page = 1, search = '') {
 
   } catch (err) {
     console.error('loadAdminUsers error:', err);
-    showToast('Netzwerkfehler beim Laden der Benutzerliste.', 'error');
+    showToast('Netzwerkfehler beim Laden der Mandantenliste.', 'error');
   }
 }
 
@@ -330,7 +330,7 @@ function renderUserTableRows(users) {
     emailEl.textContent = u.email || '';
     const compEl = document.createElement('span');
     compEl.className = 'cell-company text-muted';
-    compEl.textContent = sanitizeLength(u.company_name || '?', 40);
+    compEl.textContent = sanitizeLength(u.company_name || '—', 40);
     userStack.append(emailEl, compEl);
     tdUser.appendChild(userStack);
     tr.appendChild(tdUser);
@@ -339,7 +339,7 @@ function renderUserTableRows(users) {
     const tdCreated = document.createElement('td');
     tdCreated.setAttribute('data-label', 'Mitglied seit');
     tdCreated.className = 'cell-date text-muted font-mono';
-    tdCreated.textContent = (u.created_at || '').substring(0, 10) || '?';
+    tdCreated.textContent = (u.created_at || '').substring(0, 10) || '—';
     tr.appendChild(tdCreated);
 
     // 4. Profiles (Active / Total)
@@ -363,7 +363,7 @@ function renderUserTableRows(users) {
 
     // 6. Credits / Runs
     const tdCreditsRuns = document.createElement('td');
-    tdCreditsRuns.setAttribute('data-label', 'Credits / Runs');
+    tdCreditsRuns.setAttribute('data-label', 'Credits / Analyse-Läufe');
     tdCreditsRuns.className = 'font-mono';
     const credLine = document.createElement('div');
     credLine.className = 'text-bold';
@@ -371,7 +371,7 @@ function renderUserTableRows(users) {
     const runLine = document.createElement('div');
     runLine.className = 'text-muted';
     runLine.style.fontSize = '0.75rem';
-    runLine.textContent = `${Number(u.run_count || 0).toLocaleString()} Runs`;
+    runLine.textContent = `${Number(u.run_count || 0).toLocaleString()} Analyse-Läufe`;
     tdCreditsRuns.append(credLine, runLine);
     tr.appendChild(tdCreditsRuns);
 
@@ -384,14 +384,14 @@ function renderUserTableRows(users) {
 
     // 8. Avg Tokens / Run
     const tdTokPerRun = document.createElement('td');
-    tdTokPerRun.setAttribute('data-label', '? Tokens / Run');
+    tdTokPerRun.setAttribute('data-label', 'Ø Tokens / Analyse-Lauf');
     tdTokPerRun.className = 'font-mono text-muted';
     tdTokPerRun.textContent = Number(u.avg_tokens_per_run || 0).toLocaleString();
     tr.appendChild(tdTokPerRun);
 
     // 9. Avg Tokens / Profile
     const tdTokPerCfg = document.createElement('td');
-    tdTokPerCfg.setAttribute('data-label', '? Tokens / Profil');
+    tdTokPerCfg.setAttribute('data-label', 'Ø Tokens / Profil');
     tdTokPerCfg.className = 'font-mono text-muted';
     tdTokPerCfg.textContent = Number(u.avg_tokens_per_config || 0).toLocaleString();
     tr.appendChild(tdTokPerCfg);
@@ -435,7 +435,7 @@ function renderUserTableRows(users) {
     const btnTokens = document.createElement('button');
     btnTokens.type = 'button';
     btnTokens.className = 'btn btn-xs btn-outline';
-    btnTokens.textContent = 'Runs & Tokens';
+    btnTokens.textContent = 'Analyse-Läufe & Tokens';
     btnTokens.addEventListener('click', () => openRunTokenModal(u));
 
     const btnCredit = document.createElement('button');
@@ -447,7 +447,7 @@ function renderUserTableRows(users) {
     const btnMagic = document.createElement('button');
     btnMagic.type = 'button';
     btnMagic.className = 'btn btn-xs btn-secondary';
-    btnMagic.textContent = 'Vorstands-Link';
+    btnMagic.textContent = 'Report-Link';
     btnMagic.addEventListener('click', () => generateAndOpenMagicAudit(u.id));
 
     tdActions.append(btnPauseAll, btnSuspend, btnTier, btnCredit, btnTokens, btnMagic);
@@ -500,7 +500,7 @@ function updatePaginationUI() {
   const prevBtn = document.getElementById('btn-page-prev');
   const nextBtn = document.getElementById('btn-page-next');
 
-  if (countBadge) countBadge.textContent = `${total} Benutzer`;
+  if (countBadge) countBadge.textContent = `${total} Mandanten`;
   if (pageIndicator) pageIndicator.textContent = `Seite ${page} von ${Math.max(1, total_pages)}`;
 
   if (prevBtn) prevBtn.disabled = page <= 1;
@@ -609,7 +609,7 @@ async function generateAndOpenMagicAudit(userId) {
     const json = await res.json();
 
     if (!res.ok || json.status === 'error') {
-      showToast(json.message || 'Fehler beim Generieren des Vorstandsreport-Links.', 'error');
+      showToast(json.message || 'Fehler beim Generieren des Report-Links.', 'error');
       return;
     }
 
@@ -627,7 +627,7 @@ async function generateAndOpenMagicAudit(userId) {
 
   } catch (err) {
     console.error('generateAndOpenMagicAudit error:', err);
-    showToast('Netzwerkfehler beim Erzeugen des Vorstandsreport-Links.', 'error');
+    showToast('Netzwerkfehler beim Erzeugen des Report-Links.', 'error');
   }
 }
 
@@ -707,7 +707,7 @@ function renderRunTokenInspector(data) {
     const td = document.createElement('td');
     td.colSpan = 7;
     td.className = 'text-center text-muted';
-    td.textContent = 'Keine Runs für diesen Benutzer vorhanden.';
+    td.textContent = 'Keine Analyse-Läufe für diesen Mandanten vorhanden.';
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
@@ -723,7 +723,7 @@ function renderRunTokenInspector(data) {
 
     const tdCfg = document.createElement('td');
     const cfgName = document.createElement('div');
-    cfgName.textContent = sanitizeLength(r.config_name || (r.config_id ? `Config #${r.config_id}` : '—'), 32);
+    cfgName.textContent = sanitizeLength(r.config_name || (r.config_id ? `Profil #${r.config_id}` : '—'), 32);
     tdCfg.appendChild(cfgName);
     if (r.config_status) {
       const cfgBadge = document.createElement('span');
@@ -778,7 +778,7 @@ function copyMagicAuditUrl() {
 
   navigator.clipboard.writeText(urlInput.value).then(() => {
     if (copyBtnText) copyBtnText.textContent = 'Kopiert!';
-    showToast('Vorstandsreport-Link in die Zwischenablage kopiert!', 'success');
+    showToast('Report-Link in die Zwischenablage kopiert!', 'success');
     setTimeout(() => {
       if (copyBtnText) copyBtnText.textContent = 'Kopieren';
     }, 2000);
@@ -824,7 +824,7 @@ async function triggerDemoSeeder() {
 
     const { seeded_accounts, configs_created, runs_created } = json.data;
     showToast(
-      `Demodaten erfolgreich generiert: ${seeded_accounts.join(', ')} (${runs_created} Runs, ${configs_created} Konfigurationen).`,
+      `Demodaten erfolgreich generiert: ${seeded_accounts.join(', ')} (${runs_created} Analyse-Läufe, ${configs_created} Tracking-Profile).`,
       'success'
     );
 
@@ -1049,11 +1049,11 @@ async function handlePauseAllUserConfigs(user, triggerBtn = null) {
     });
     const json = await res.json();
     if (!res.ok || json.status === 'error') {
-      showToast(json.message || 'Fehler beim Pausieren der Profile.', 'error');
+      showToast(json.message || 'Fehler beim Pausieren der Tracking-Profile.', 'error');
       return;
     }
     const pausedCount = Number(json.data?.paused_count ?? 0);
-    showToast(`${pausedCount} aktive(s) Profil(e) für ${user.email} pausiert.`, 'success');
+    showToast(`${pausedCount} aktive(s) Tracking-Profil(e) für ${user.email} pausiert.`, 'success');
     await loadAdminUsers(AdminState.pagination.page, AdminState.searchQuery);
   } catch (err) {
     console.error('handlePauseAllUserConfigs error:', err);
@@ -1080,8 +1080,8 @@ async function handleToggleUserStatus(user, triggerBtn = null) {
     }
     showToast(
       nextStatus === 'suspended'
-        ? `Benutzer ${user.email} wurde gesperrt und aktive Profile pausiert.`
-        : `Benutzer ${user.email} wurde wieder entsperrt.`,
+        ? `Mandant ${user.email} wurde gesperrt und aktive Tracking-Profile pausiert.`
+        : `Mandant ${user.email} wurde wieder entsperrt.`,
       'success'
     );
     await loadAdminUsers(AdminState.pagination.page, AdminState.searchQuery);
@@ -1303,7 +1303,7 @@ function renderModelsTable(models) {
       usageBadge.className = `badge ${activeCnt > 0 ? 'badge-warning' : 'badge-secondary'}`;
       usageBadge.style.fontSize = '0.72rem';
       const parts = [];
-      if (activeCnt > 0) parts.push(`${activeCnt} aktive Konfig(s)`);
+      if (activeCnt > 0) parts.push(`${activeCnt} aktive Tracking-Profile`);
       if (pausedCnt > 0) parts.push(`${pausedCnt} pausiert`);
       if (presetCnt > 0) parts.push(`${presetCnt} Analyse-Set(s)`);
       usageBadge.textContent = parts.join(' · ');
@@ -1455,7 +1455,7 @@ async function handleToggleModelField(modelId, field, nextVal, sourceInputEl = n
     );
     if (hasUsage) {
       openProviderImpactConfirmModal(
-        `Das Modell "${modelId}" wird noch in aktiven/pausierten Kundenkonfigurationen oder Analyse-Sets verwendet. Bei Deaktivierung können Kunden dieses Modell nicht mehr neu auswählen; prüfen Sie betroffene Konfigurationen unten:`,
+        `Das Modell "${modelId}" wird noch in aktiven/pausierten Tracking-Profilen oder Analyse-Sets verwendet. Bei Deaktivierung können Mandanten dieses Modell nicht mehr neu auswählen; prüfen Sie betroffene Tracking-Profile unten:`,
         [targetModel],
         () => executeToggleModelField(modelId, field, false),
         () => {
@@ -1639,7 +1639,7 @@ function renderPresetsGrid(presets) {
     const badgeText = lang === 'en' ? (preset.badge_en || preset.badge_de) : (preset.badge_de || preset.badge_en);
     const badgeEl = document.createElement('span');
     badgeEl.className = 'badge badge-secondary';
-    badgeEl.textContent = badgeText || (preset.is_default ? 'Standard' : 'Preset');
+    badgeEl.textContent = badgeText || (preset.is_default ? 'Standard' : 'Analyse-Set');
     top.append(titleWrap, badgeEl);
 
     const desc = document.createElement('p');
@@ -1660,7 +1660,7 @@ function renderPresetsGrid(presets) {
     metaWrap.className = 'admin-pill-row';
     const searchPill = document.createElement('span');
     searchPill.className = `badge ${preset.search_enabled ? 'badge-active' : 'badge-muted'}`;
-    searchPill.textContent = preset.search_enabled ? 'Live-Websuche: AN' : 'Ohne Websuche';
+    searchPill.textContent = preset.search_enabled ? 'Live-Websuche: AN' : 'Batch-API (ohne Live-Websuche)';
     metaWrap.appendChild(searchPill);
     (preset.allowed_tiers || []).forEach((tierKey) => {
       const tPill = document.createElement('span');
@@ -1722,8 +1722,8 @@ function openPresetModal(preset = null) {
     { id: 'gemini/models/gemini-3.5-flash', display_name: 'Google · Gemini 3.5 Flash' },
     { id: 'mistral/mistral-medium-latest', display_name: 'Mistral Medium Latest' },
     { id: 'mistral/mistral-large-latest', display_name: 'Mistral Large Latest' },
-    { id: 'mistral/zai-glm-5-3', display_name: 'Z.ai GLM 5.3 (Mistral EU)' },
-    { id: 'mistral/zai-glm-5-3-flash', display_name: 'Z.ai GLM 5.3 Flash (Mistral EU)' }
+    { id: 'mistral/zai-glm-5-3', display_name: 'Z.ai · GLM 5.3' },
+    { id: 'mistral/zai-glm-5-3-flash', display_name: 'Z.ai · GLM 5.3 Flash' }
   ];
   if (modelsWrap) {
     modelsWrap.replaceChildren();
@@ -1913,7 +1913,7 @@ function renderPlansEditor(plans) {
     const quotaGrid = document.createElement('div');
     quotaGrid.className = 'admin-form-grid-2';
     appendLabeledInput(quotaGrid, 'Inklusiv-Credits / Monat', 'included_credits', plan.included_credits ?? 0, 'number');
-    appendLabeledInput(quotaGrid, 'Max. Profile / Konfigs', 'max_configs', plan.max_configs ?? 1, 'number');
+    appendLabeledInput(quotaGrid, 'Max. Tracking-Profile', 'max_configs', plan.max_configs ?? 1, 'number');
     appendLabeledInput(quotaGrid, 'Max. Wettbewerber / Profil', 'max_competitors_per_config', plan.max_competitors_per_config ?? 2, 'number');
     appendLabeledInput(quotaGrid, 'Max. Prompts / Profil', 'max_prompts_per_config', plan.max_prompts_per_config ?? 5, 'number');
     card.appendChild(quotaGrid);
@@ -1923,7 +1923,7 @@ function renderPlansEditor(plans) {
     ivGroup.className = 'form-group';
     const ivLabel = document.createElement('span');
     ivLabel.className = 'form-label';
-    ivLabel.textContent = 'Erlaubte Data-Mining-Frequenzen';
+    ivLabel.textContent = 'Erlaubte Mess-Frequenzen';
     const ivCheckRow = document.createElement('div');
     ivCheckRow.className = 'admin-checkbox-grid';
     const curIntervals = new Set(plan.allowed_intervals || ['every_120m']);
@@ -1954,7 +1954,7 @@ function renderPlansEditor(plans) {
     customCb.dataset.field = 'allow_custom_models';
     customCb.checked = Boolean(plan.allow_custom_models);
     const customTxt = document.createElement('span');
-    customTxt.textContent = 'Freie Einzelmodell- & Websuche-Konfiguration erlauben (sonst nur Analyse-Sets)';
+    customTxt.textContent = 'Freie Einzelmodell- & Live-Websuche-Auswahl erlauben (sonst nur Analyse-Sets)';
     customLbl.append(customCb, customTxt);
     customGrp.appendChild(customLbl);
     card.appendChild(customGrp);
@@ -1965,7 +1965,7 @@ function renderPlansEditor(plans) {
       prGroup.className = 'form-group';
       const prLabel = document.createElement('span');
       prLabel.className = 'form-label';
-      prLabel.textContent = 'Freigeschaltete Analyse-Sets (Model Presets)';
+      prLabel.textContent = 'Freigeschaltete Analyse-Sets';
       const prCheckRow = document.createElement('div');
       prCheckRow.className = 'admin-checkbox-grid';
       const curPresets = new Set(plan.allowed_preset_ids || []);
@@ -2149,7 +2149,7 @@ function renderModelImpactCards(container, affectedModels) {
     if (actCount > 0) {
       const bAct = document.createElement('span');
       bAct.className = 'badge badge-warning';
-      bAct.textContent = `${actCount} aktive Konfig(s)`;
+      bAct.textContent = `${actCount} aktive Tracking-Profile`;
       badgesWrap.appendChild(bAct);
     }
     if (pausedCount > 0) {
@@ -2173,7 +2173,7 @@ function renderModelImpactCards(container, affectedModels) {
       const cfgMeta = document.createElement('div');
       cfgMeta.className = 'admin-impact-item-meta';
       const names = samples.map((s) => `${s.name || ('#' + s.id)} (${s.status === 'active' ? 'aktiv' : 'pausiert'})`).join(', ');
-      cfgMeta.textContent = `Konfigurationen: ${names}${samples.length >= 10 ? ' …' : ''}`;
+      cfgMeta.textContent = `Tracking-Profile: ${names}${samples.length >= 10 ? ' …' : ''}`;
       item.appendChild(cfgMeta);
     }
 
@@ -2221,7 +2221,7 @@ function renderProviderImpactWarning() {
       warningBody.textContent = '';
       const intro = document.createElement('p');
       intro.style.margin = '0 0 8px 0';
-      intro.textContent = 'Folgende Modelle abgewählter Provider werden noch in aktiven/pausierten Kundenkonfigurationen oder Analyse-Sets genutzt. Unbenutzte Modelle werden beim Speichern entfernt; bereits freigeschaltete/verwendete Modelle bleiben für bestehende Konfigs geschützt, werden aber aus dem neuen Standard-Katalog gefiltert:';
+      intro.textContent = 'Folgende Modelle abgewählter Provider werden noch in aktiven/pausierten Tracking-Profilen oder Analyse-Sets genutzt. Unbenutzte Modelle werden beim Speichern entfernt; bereits freigeschaltete/verwendete Modelle bleiben für bestehende Tracking-Profile geschützt, werden aber aus dem neuen Standard-Katalog gefiltert:';
       const listContainer = document.createElement('div');
       listContainer.className = 'admin-impact-list';
       renderModelImpactCards(listContainer, affectedModels);
@@ -2244,7 +2244,7 @@ function openProviderImpactConfirmModal(summaryText, affectedModelsList, onConfi
   AdminState.pendingImpactCancel = typeof onCancel === 'function' ? onCancel : null;
 
   if (summaryEl) {
-    summaryEl.textContent = summaryText || 'Betroffene Modelle mit aktiven Kundenkonfigurationen oder Analyse-Sets:';
+    summaryEl.textContent = summaryText || 'Betroffene Modelle mit aktiven Tracking-Profilen oder Analyse-Sets:';
   }
   renderModelImpactCards(listEl, affectedModelsList);
   modal.style.display = 'flex';
@@ -2414,7 +2414,7 @@ function renderOpenRouterProvidersTable(providers = []) {
       const noneTxt = document.createElement('span');
       noneTxt.className = 'text-muted';
       noneTxt.style.fontSize = '0.78rem';
-      noneTxt.textContent = 'Keine aktiven Konfigs';
+      noneTxt.textContent = 'Keine aktiven Tracking-Profile';
       tdUsage.appendChild(noneTxt);
     } else {
       const badgeRow = document.createElement('div');
@@ -2422,7 +2422,7 @@ function renderOpenRouterProvidersTable(providers = []) {
       if (actCount > 0) {
         const bA = document.createElement('span');
         bA.className = 'badge badge-warning';
-        bA.textContent = `${actCount} aktive Konfig(s)`;
+        bA.textContent = `${actCount} aktive Tracking-Profile`;
         badgeRow.appendChild(bA);
       }
       if (pausedCount > 0) {
@@ -2571,7 +2571,7 @@ async function handleSaveOpenRouterProviders(syncModelsAfter = false) {
 
   if (affectedModels.length > 0 && document.getElementById('provider-impact-modal')) {
     openProviderImpactConfirmModal(
-      'Mindestens ein abgewählter Provider enthält noch Modelle mit aktiven/pausierten Kundenkonfigurationen oder Analyse-Sets. Laufende Konfigurationen bleiben durch DB-Schutz erhalten, die Provider werden jedoch aus künftigen Syncs und dem aktiven Katalog ausgeschlossen:',
+      'Mindestens ein abgewählter Provider enthält noch Modelle mit aktiven/pausierten Tracking-Profilen oder Analyse-Sets. Laufende Tracking-Profile bleiben durch DB-Schutz erhalten, die Provider werden jedoch aus künftigen Syncs und dem aktiven Katalog ausgeschlossen:',
       affectedModels,
       () => executeSaveOpenRouterProviders(selected, syncModelsAfter)
     );
@@ -2623,7 +2623,7 @@ async function handleResetOpenRouterProviders() {
 
   if (affectedModels.length > 0 && document.getElementById('provider-impact-modal')) {
     openProviderImpactConfirmModal(
-      'Beim Zurücksetzen auf die Standard-Provider werden benutzerdefinierte Provider abgewählt, deren Modelle noch aktive/pausierte Kundenkonfigurationen oder Analyse-Sets haben:',
+      'Beim Zurücksetzen auf die Standard-Provider werden benutzerdefinierte Provider abgewählt, deren Modelle noch aktive/pausierte Tracking-Profile oder Analyse-Sets haben:',
       affectedModels,
       () => executeResetOpenRouterProviders()
     );

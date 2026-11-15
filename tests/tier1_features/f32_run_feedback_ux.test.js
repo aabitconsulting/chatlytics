@@ -184,9 +184,9 @@ function buildDashboardMockEnv() {
   };
 
   const btnTrigger = register('btn-trigger-run', 'button', ['btn', 'btn-primary']);
-  btnTrigger.innerHTML = '<svg></svg>Abfrage starten';
+  btnTrigger.innerHTML = '<svg></svg>Test-Lauf starten';
   const btnEmpty = register('btn-empty-trigger', 'button', ['btn', 'btn-primary']);
-  btnEmpty.innerHTML = 'Ersten Audit-Run starten';
+  btnEmpty.innerHTML = 'Ersten Test-Lauf starten';
   const btnToggle = register('btn-toggle-config-status', 'button', ['btn', 'btn-secondary']);
   btnToggle.textContent = 'Pausieren';
 

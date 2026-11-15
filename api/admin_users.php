@@ -1160,8 +1160,8 @@ function handleSetUserStatus(array $data, array $adminUser): void
         'status'               => $status,
         'paused_configs_count' => $pausedCount,
         'message'              => $status === 'suspended'
-            ? "User {$user['email']} suspended and {$pausedCount} active profile(s) paused."
-            : "User {$user['email']} reactivated.",
+            ? "Client {$user['email']} suspended and {$pausedCount} active tracking profile(s) paused."
+            : "Client {$user['email']} reactivated.",
     ]);
 }
 
@@ -1947,7 +1947,7 @@ function handleSavePreset(array $data): void
         }
     }
     if (empty($normalizedLlms)) {
-        jsonError("An Analyse-Set must include at least one valid LLM model.", 422);
+        jsonError("A Model Preset must include at least one valid LLM model.", 422);
     }
 
     $allowedTiers = array_values(array_intersect(
@@ -1993,7 +1993,7 @@ function handleSavePreset(array $data): void
         'success' => true,
         'preset'  => $saved,
         'presets' => getModelPresetsCatalog($db, false),
-        'message' => "Analyse-Set '{$saved['name_de']}' saved.",
+        'message' => "Model Preset '{$saved['name_de']}' saved.",
     ]);
 }
 
@@ -2014,11 +2014,11 @@ function handleDeletePreset(array $data): void
     $stmt->execute([':id' => $id]);
     $preset = $stmt->fetch();
     if (!$preset) {
-        jsonError("Analyse-Set '{$id}' not found.", 404);
+        jsonError("Model Preset '{$id}' not found.", 404);
     }
 
     if (!empty($preset['is_default']) || $id === 'dach_core_baseline') {
-        jsonError("The default Analyse-Set cannot be deleted.", 422);
+        jsonError("The default Model Preset cannot be deleted.", 422);
     }
 
     $del = $db->prepare("DELETE FROM model_presets WHERE id = :id");
@@ -2037,7 +2037,7 @@ function handleDeletePreset(array $data): void
         'success' => true,
         'id'      => $id,
         'presets' => getModelPresetsCatalog($db, false),
-        'message' => "Analyse-Set '{$id}' deleted.",
+        'message' => "Model Preset '{$id}' deleted.",
     ]);
 }
 

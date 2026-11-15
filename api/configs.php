@@ -98,17 +98,17 @@ function handleGetConfig(?int $id): void {
         $config = $stmt->fetch();
 
         if (!$config) {
-            jsonError("Configuration not found.", 404);
+            jsonError("Tracking profile not found.", 404);
         }
 
         // Enforce multi-tenant scoping unless admin
         if ((int)$config['user_id'] !== $userId && !$isAdmin) {
-            jsonError("Configuration not found.", 404);
+            jsonError("Tracking profile not found.", 404);
         }
 
         // Hide soft-deleted configs from non-admin users
         if (((string)($config['status'] ?? '')) === 'deleted' && !$isAdmin) {
-            jsonError("Configuration not found.", 404);
+            jsonError("Tracking profile not found.", 404);
         }
 
         $modelCaps = getLlmModelCapabilitiesMap($db);
@@ -230,7 +230,7 @@ function handleCreateConfig(array $data): void {
 
     jsonResponse([
         'config'  => $formatted,
-        'message' => 'Tracking configuration created successfully.',
+        'message' => 'Tracking profile created successfully.',
     ], 201);
 }
 
@@ -257,11 +257,11 @@ function handleUpdateConfig(?int $id, array $data): void {
     $existing = $checkStmt->fetch();
 
     if (!$existing) {
-        jsonError("Configuration not found.", 404);
+        jsonError("Tracking profile not found.", 404);
     }
 
     if ((int)$existing['user_id'] !== $userId && !$isAdmin) {
-        jsonError("Configuration not found.", 404);
+        jsonError("Tracking profile not found.", 404);
     }
 
     $alreadyFullStarted = !empty($existing['full_started_at']);
@@ -279,16 +279,16 @@ function handleUpdateConfig(?int $id, array $data): void {
     }
 
     if ($existingStatus === 'deleted') {
-        jsonError("Deleted configuration cannot be modified or resumed.", 409);
+        jsonError("Deleted tracking profiles cannot be modified or resumed.", 409);
     }
 
     // Handle irreversible Stop transition (Active / Paused -> Stopped)
     if ($action === 'stop') {
         if (!$alreadyFullStarted) {
-            jsonError("Unstarted draft configurations do not need to be stopped and can be deleted directly.", 409);
+            jsonError("Unstarted tracking profiles do not need to be stopped and can be deleted directly.", 409);
         }
         if (!in_array($existingStatus, ['active', 'paused'], true)) {
-            jsonError("Only active or paused full-started configurations can be stopped.", 409);
+            jsonError("Only active or paused monitored tracking profiles can be stopped.", 409);
         }
 
         $stoppedAt = date('Y-m-d H:i:s');
@@ -325,14 +325,14 @@ function handleUpdateConfig(?int $id, array $data): void {
 
         jsonResponse([
             'config'  => formatConfigRecord($updated),
-            'message' => 'Configuration permanently stopped.',
+            'message' => 'Tracking profile permanently stopped.',
         ], 200);
     }
 
     // Handle Archive transition (Stopped -> Archived)
     if ($action === 'archive') {
         if ($existingStatus !== 'stopped') {
-            jsonError("Only stopped configurations can be archived.", 409);
+            jsonError("Only stopped tracking profiles can be archived.", 409);
         }
 
         $archivedAt = date('Y-m-d H:i:s');
@@ -362,14 +362,14 @@ function handleUpdateConfig(?int $id, array $data): void {
 
         jsonResponse([
             'config'  => formatConfigRecord($updated),
-            'message' => 'Configuration archived successfully.',
+            'message' => 'Tracking profile archived successfully.',
         ], 200);
     }
 
     // Handle Unarchive transition (Archived -> Stopped; still permanently non-resumable)
     if ($action === 'unarchive') {
         if ($existingStatus !== 'archived') {
-            jsonError("Only archived configurations can be unarchived.", 409);
+            jsonError("Only archived tracking profiles can be unarchived.", 409);
         }
 
         $unarchStmt = $db->prepare("
@@ -388,14 +388,14 @@ function handleUpdateConfig(?int $id, array $data): void {
 
         jsonResponse([
             'config'  => formatConfigRecord($updated),
-            'message' => 'Configuration restored to stopped state.',
+            'message' => 'Tracking profile restored to stopped state.',
         ], 200);
     }
 
     // Block any resume, status toggle, or modification on stopped or archived configs
     if (in_array($existingStatus, ['stopped', 'archived'], true)) {
         jsonError(
-            "Stopped or archived configurations are permanently locked and cannot be resumed or modified.",
+            "Stopped or archived tracking profiles are permanently locked and cannot be resumed or modified.",
             409
         );
     }
@@ -413,7 +413,7 @@ function handleUpdateConfig(?int $id, array $data): void {
         }
         if ($incomingRaw !== $existingPrompts) {
             jsonError(
-                "Prompts and target market/region are locked after Full Start to preserve daily time-series consistency. Configuration can only be paused or resumed.",
+                "Prompts and search region & language are locked after activating monitoring to preserve daily time-series consistency. Tracking profile can only be paused or resumed.",
                 409
             );
         }
@@ -424,7 +424,7 @@ function handleUpdateConfig(?int $id, array $data): void {
         $incomingRegion = sanitizeMarketRegion($data['market_region']);
         if ($incomingRegion !== $existingRegion) {
             jsonError(
-                "Target market/region is locked after Full Start to preserve daily time-series consistency. Configuration can only be paused or resumed.",
+                "Search region & language is locked after activating monitoring to preserve daily time-series consistency. Tracking profile can only be paused or resumed.",
                 409
             );
         }
@@ -505,8 +505,8 @@ function handleUpdateConfig(?int $id, array $data): void {
     jsonResponse([
         'config'  => formatConfigRecord($updated, getLlmModelCapabilitiesMap($db)),
         'message' => $isActivatingFullStart
-            ? 'Full Data Mining activated successfully.'
-            : 'Configuration updated successfully.',
+            ? 'Continuous monitoring activated successfully.'
+            : 'Tracking profile updated successfully.',
     ], 200);
 }
 
@@ -536,23 +536,23 @@ function handleDeleteConfig(?int $id): void {
     $config = $checkStmt->fetch();
 
     if (!$config) {
-        jsonError("Configuration not found.", 404);
+        jsonError("Tracking profile not found.", 404);
     }
 
     if ((int)$config['user_id'] !== $userId && !$isAdmin) {
-        jsonError("Configuration not found.", 404);
+        jsonError("Tracking profile not found.", 404);
     }
 
     $existingStatus = strtolower((string)($config['status'] ?? 'active'));
     $alreadyFullStarted = !empty($config['full_started_at']);
 
     if ($existingStatus === 'deleted') {
-        jsonError("Configuration not found.", 404);
+        jsonError("Tracking profile not found.", 404);
     }
 
     if ($alreadyFullStarted && !in_array($existingStatus, ['stopped', 'archived'], true)) {
         jsonError(
-            "Full-started configurations must be stopped before they can be deleted.",
+            "Started tracking profiles must be stopped before they can be deleted.",
             409
         );
     }
@@ -590,7 +590,7 @@ function handleDeleteConfig(?int $id): void {
         'deleted_at'     => $deletedAt,
         'retained_until' => $retainedUntil,
         'retention_days' => 90,
-        'message'        => 'Configuration deleted successfully.',
+        'message'        => 'Tracking profile deleted successfully.',
     ], 200);
 }
 
@@ -898,7 +898,7 @@ function enforcePlanAndPresetPolicy(
     // 3. Allowed Data Mining schedule interval
     if ((!$isUpdate || isset($data['schedule_interval'])) && !canUserUseScheduleInterval($currentUser, $validated['schedule_interval'], $plan)) {
         jsonError(
-            "Data Mining interval ({$validated['schedule_interval']}) is not included in your current plan ({$plan['tier']}).",
+            "Measurement frequency ({$validated['schedule_interval']}) is not included in your current plan ({$plan['tier']}).",
             403,
             [
                 'required_tier'     => 'starter',
@@ -946,7 +946,7 @@ function enforcePlanAndPresetPolicy(
             $matchedPreset = $findPresetById($requestedPresetId);
             if ($matchedPreset === null) {
                 jsonError(
-                    "The selected Analyse-Set '{$requestedPresetId}' is not available in your current plan ({$plan['tier']}).",
+                    "The selected Model Preset '{$requestedPresetId}' is not available in your current plan ({$plan['tier']}).",
                     403,
                     [
                         'required_tier' => 'growth',
@@ -963,7 +963,7 @@ function enforcePlanAndPresetPolicy(
 
         if (!empty($data['custom_models_mode'])) {
             jsonError(
-                "Custom model and web search configuration requires the Growth or Enterprise plan. Please choose a curated Analyse-Set.",
+                "Custom model and live web search configuration requires the Growth or Enterprise (Managed GEO) plan. Please choose a curated Model Preset.",
                 403,
                 [
                     'required_tier' => 'growth',
@@ -1013,7 +1013,7 @@ function enforcePlanAndPresetPolicy(
         }
 
         jsonError(
-            "Custom model and web search configuration requires the Growth or Enterprise plan. Please select one of the pre-defined Analyse-Sets (Model Presets) available in your plan.",
+            "Custom model and live web search configuration requires the Growth or Enterprise (Managed GEO) plan. Please select one of the curated Model Presets available in your plan.",
             403,
             [
                 'required_tier' => 'growth',

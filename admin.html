@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n="admin.meta_title">Chatlytics.de — Owner Cockpit & Systemverwaltung</title>
-  <meta name="description" content="Chatlytics Owner Cockpit: Benutzerverwaltung, Guthabenanpassung, schreibgeschützte Vorstandsreport-Links und Demodaten-Generator.">
+  <title data-i18n="admin.meta_title">Chatlytics.de — Admin-Cockpit</title>
+  <meta name="description" content="Chatlytics Admin-Cockpit: Mandantenverwaltung, Credit-Kontingente, schreibgeschützte Report-Links und Demodaten-Generator.">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/app.css">
 </head>
@@ -24,12 +24,12 @@
           </svg>
           <span>Chatlytics<span class="logo-tld">.de</span></span>
         </a>
-        <span class="badge badge-admin" data-i18n="admin.badge_owner">Owner Cockpit</span>
+        <span class="badge badge-admin" data-i18n="admin.badge_owner">Admin-Cockpit</span>
       </div>
 
       <nav class="navbar-nav" aria-label="Verwaltungsnavigation">
-        <a href="dashboard.html" class="nav-link" data-i18n="nav.dashboard">Dashboard</a>
-        <a href="admin.html" class="nav-link active" data-i18n="nav.admin">Administration</a>
+        <a href="dashboard.html" class="nav-link" data-i18n="nav.dashboard">GEO Analyse-Cockpit</a>
+        <a href="admin.html" class="nav-link active" data-i18n="nav.admin">Admin-Cockpit</a>
       </nav>
 
       <div class="navbar-actions">
@@ -54,9 +54,9 @@
     <!-- Page Header & Action Bar -->
     <section class="admin-header-section">
       <div class="admin-header-text">
-        <h1 data-i18n="admin.page_title">Owner Cockpit & Systemverwaltung</h1>
+        <h1 data-i18n="admin.page_title">Admin-Cockpit</h1>
         <p class="admin-subtitle" data-i18n="admin.page_subtitle">
-          Zentrale Verwaltung von Mandanten, Guthaben, schreibgeschützten Vorstandsreport-Links und Demodaten.
+          Zentrale Verwaltung von Mandanten, Credit-Kontingenten, Report-Links und Demodaten.
         </p>
       </div>
       <div class="admin-header-actions">
@@ -72,34 +72,34 @@
     <!-- Platform KPI Overview Cards -->
     <section class="kpi-grid admin-kpi-grid" aria-label="Plattform Kennzahlen">
       <div class="kpi-card" id="card-kpi-users">
-        <div class="kpi-label" data-i18n="admin.kpi_users_label">Registrierte Benutzer</div>
+        <div class="kpi-label" data-i18n="admin.kpi_users_label">Mandanten</div>
         <div class="kpi-value" id="kpi-total-users">—</div>
         <div class="kpi-subtext" data-i18n="admin.kpi_users_sub">Aktive Mandantenkonten</div>
       </div>
 
       <div class="kpi-card" id="card-kpi-configs">
-        <div class="kpi-label" data-i18n="admin.kpi_configs_label">Tracking-Konfigurationen</div>
+        <div class="kpi-label" data-i18n="admin.kpi_configs_label">Tracking-Profile</div>
         <div class="kpi-value" id="kpi-total-configs">—</div>
-        <div class="kpi-subtext" data-i18n="admin.kpi_configs_sub">Überwachte Prompt-Keywords</div>
+        <div class="kpi-subtext" data-i18n="admin.kpi_configs_sub">Überwachte Prompt-Profile</div>
       </div>
 
       <div class="kpi-card" id="card-kpi-runs">
-        <div class="kpi-label" data-i18n="admin.kpi_runs_label">Ausgeführte Runs</div>
+        <div class="kpi-label" data-i18n="admin.kpi_runs_label">Analyse-Läufe gesamt</div>
         <div class="kpi-value" id="kpi-total-runs">—</div>
-        <div class="kpi-subtext" data-i18n="admin.kpi_runs_sub">LLM-Audits gesamt</div>
+        <div class="kpi-subtext" data-i18n="admin.kpi_runs_sub">Audit-Läufe gesamt</div>
       </div>
 
       <div class="kpi-card" id="card-kpi-credits">
         <div class="kpi-label" data-i18n="admin.kpi_credits_label">Verfügbare Credits</div>
         <div class="kpi-value" id="kpi-total-credits">—</div>
-        <div class="kpi-subtext" data-i18n="admin.kpi_credits_sub">Im Umlauf befindlich</div>
+        <div class="kpi-subtext" data-i18n="admin.kpi_credits_sub">Guthaben aller Mandanten</div>
       </div>
     </section>
 
-    <!-- Owner Cockpit v2 Navigation Tabs -->
-    <nav class="admin-tabs-bar" role="tablist" aria-label="Owner Cockpit Bereiche">
+    <!-- Admin-Cockpit Navigation Tabs -->
+    <nav class="admin-tabs-bar" role="tablist" aria-label="Admin-Cockpit Bereiche">
       <button type="button" id="admin-tab-users" class="admin-tab-btn is-active" role="tab" aria-selected="true" data-tab="users" data-i18n="admin.tab_users">
-        Benutzer &amp; Telemetrie
+        Mandanten &amp; Telemetrie
       </button>
       <button type="button" id="admin-tab-models" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="models" data-i18n="admin.tab_models">
         KI-Modelle &amp; Live-Engine Sync
@@ -108,7 +108,7 @@
         OpenRouter Provider
       </button>
       <button type="button" id="admin-tab-presets" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="presets" data-i18n="admin.tab_presets">
-        Analyse-Sets (Model Presets)
+        Analyse-Sets
       </button>
       <button type="button" id="admin-tab-plans" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="plans" data-i18n="admin.tab_plans">
         Tarife &amp; Stripe-Mapping
@@ -120,12 +120,12 @@
     <section class="admin-table-section">
       <div class="section-toolbar">
         <div class="toolbar-title-group">
-          <h2 data-i18n="admin.table_title">Benutzerverzeichnis</h2>
-          <span id="user-count-badge" class="badge badge-secondary">0 Benutzer</span>
+          <h2 data-i18n="admin.table_title">Mandantenverzeichnis</h2>
+          <span id="user-count-badge" class="badge badge-secondary">0 Mandanten</span>
         </div>
 
         <div class="toolbar-search-group">
-          <label for="input-user-search" class="visually-hidden" data-i18n="admin.search_label">Benutzer suchen</label>
+          <label for="input-user-search" class="visually-hidden" data-i18n="admin.search_label">Mandanten suchen</label>
           <div class="search-input-wrapper">
             <span class="search-icon" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
@@ -155,9 +155,9 @@
               <th scope="col" data-i18n="admin.col_created_member">Mitglied seit</th>
               <th scope="col" data-i18n="admin.col_profiles">Profile</th>
               <th scope="col" data-i18n="admin.col_tier">Tarif</th>
-              <th scope="col" data-i18n="admin.col_credits_runs">Credits / Runs</th>
+              <th scope="col" data-i18n="admin.col_credits_runs">Credits / Analyse-Läufe</th>
               <th scope="col" data-i18n="admin.col_tokens_total">Tokens Gesamt</th>
-              <th scope="col" data-i18n="admin.col_tokens_per_run">Ø Tokens / Run</th>
+              <th scope="col" data-i18n="admin.col_tokens_per_run">Ø Tokens / Analyse-Lauf</th>
               <th scope="col" data-i18n="admin.col_tokens_per_profile">Ø Tokens / Profil</th>
               <th scope="col" data-i18n="admin.col_status">Status</th>
               <th scope="col" class="text-right" data-i18n="admin.col_actions">Aktionen</th>
@@ -176,9 +176,9 @@
               <path d="M2 20c0-3.5 3.5-6 7-6s7 2.5 7 6M17 8a3 3 0 010 6M22 20c0-2.5-2-4.5-4.5-5"/>
             </svg>
           </div>
-          <h3 class="empty-state-title" data-i18n="admin.empty_title">Keine Benutzerkonten gefunden</h3>
+          <h3 class="empty-state-title" data-i18n="admin.empty_title">Keine Mandanten gefunden</h3>
           <p class="empty-state-desc" data-i18n="admin.empty_desc">
-            Es wurden keine Benutzerkonten gefunden. Passen Sie die Suche an oder generieren Sie realistische Demodaten.
+            Es wurden keine Mandanten gefunden. Passen Sie die Suche an oder generieren Sie Demodaten.
           </p>
           <button id="btn-empty-seed-demo" class="btn btn-secondary">
             <span data-i18n="admin.btn_seed_demo">Demodaten generieren</span>
@@ -187,7 +187,7 @@
       </div>
 
       <!-- Pagination Controls -->
-      <nav class="pagination-bar" id="users-pagination" aria-label="Benutzer Pagination">
+      <nav class="pagination-bar" id="users-pagination" aria-label="Mandanten-Seiten">
         <button id="btn-page-prev" class="btn btn-sm btn-outline" disabled data-i18n="pagination.prev">← Zurück</button>
         <span id="page-indicator" class="page-indicator">Seite 1 von 1</span>
         <button id="btn-page-next" class="btn btn-sm btn-outline" disabled data-i18n="pagination.next">Weiter →</button>
@@ -273,18 +273,18 @@
           </div>
         </div>
         <p class="form-hint" style="margin-bottom: 1rem;" data-i18n="admin.providers_desc">
-          Wählen Sie aus allen verfügbaren OpenRouter-Providern das relevante Set für Chatlytics. Modelle anderer Provider werden beim Sync ignoriert und im Modell-Katalog ausgeblendet. Modelle mit aktiven Kundenkonfigurationen bleiben geschützt und werden vorab deutlich hervorgehoben.
+          Wählen Sie aus allen verfügbaren OpenRouter-Providern das relevante Set für Chatlytics. Modelle anderer Provider werden beim Sync ignoriert und im Modell-Katalog ausgeblendet. Modelle mit aktiven Tracking-Profilen bleiben geschützt und werden vorab deutlich hervorgehoben.
         </p>
 
         <div id="providers-summary-chips" class="admin-provider-summary-row" style="margin-bottom: 1rem;">
           <span id="providers-stat-total" class="badge badge-secondary font-mono">0 Provider</span>
           <span id="providers-stat-relevant" class="badge badge-primary font-mono">0 Relevant</span>
-          <span id="providers-stat-active-usage" class="badge badge-warning font-mono" hidden>0 aktive Konfigs</span>
+          <span id="providers-stat-active-usage" class="badge badge-warning font-mono" hidden>0 aktive Tracking-Profile</span>
         </div>
 
         <div id="providers-impact-warning" class="admin-impact-warning" role="alert" hidden>
           <div class="admin-impact-warning-header">
-            <strong id="providers-impact-warning-title">Achtung: Abgewählte Provider haben aktive Kundenkonfigurationen oder Analyse-Sets</strong>
+            <strong id="providers-impact-warning-title">Achtung: Abgewählte Provider haben aktive Tracking-Profile oder Analyse-Sets</strong>
           </div>
           <div id="providers-impact-warning-body" class="admin-impact-warning-body"></div>
         </div>
@@ -295,7 +295,7 @@
             <option value="all" data-i18n="admin.provider_filter_all">Alle Provider</option>
             <option value="relevant" data-i18n="admin.provider_filter_relevant">Nur Relevante (aktiv)</option>
             <option value="default" data-i18n="admin.provider_filter_default">Nur Standard-Provider</option>
-            <option value="used" data-i18n="admin.provider_filter_used">Mit aktiven Konfigurationen</option>
+            <option value="used" data-i18n="admin.provider_filter_used">Mit aktiven Tracking-Profilen</option>
           </select>
           <span id="provider-filter-count" class="badge badge-secondary font-mono">0 Provider</span>
         </div>
@@ -308,7 +308,7 @@
                 <th scope="col" data-i18n="admin.provider_col_name">Provider &amp; Namespace</th>
                 <th scope="col" data-i18n="admin.provider_col_models">Modelle (OpenRouter / Katalog)</th>
                 <th scope="col" data-i18n="admin.provider_col_samples">Beispielmodelle</th>
-                <th scope="col" data-i18n="admin.provider_col_usage">Aktive Kundenkonfigs &amp; Sets</th>
+                <th scope="col" data-i18n="admin.provider_col_usage">Aktive Tracking-Profile &amp; Analyse-Sets</th>
               </tr>
             </thead>
             <tbody id="providers-tbody"></tbody>
@@ -317,12 +317,12 @@
       </section>
     </div><!-- /#admin-panel-providers -->
 
-    <!-- Tab Panel 4: Analyse-Sets (Model Presets / Cookbooks) -->
+    <!-- Tab Panel 4: Analyse-Sets -->
     <div id="admin-panel-presets" class="admin-tab-panel" role="tabpanel" aria-labelledby="admin-tab-presets" hidden>
       <section class="admin-table-section">
         <div class="section-toolbar">
           <div class="toolbar-title-group">
-            <h2 data-i18n="admin.presets_title">Analyse-Sets (Model Presets)</h2>
+            <h2 data-i18n="admin.presets_title">Analyse-Sets</h2>
             <span id="preset-count-badge" class="badge badge-secondary">0 Analyse-Sets</span>
           </div>
           <div class="admin-toolbar-actions">
@@ -332,7 +332,7 @@
           </div>
         </div>
         <p class="form-hint" style="margin-bottom: 1rem;" data-i18n="admin.presets_desc">
-          Vordefinierte Recherche- &amp; Benchmarking-Rezepte (Modell-Kombination + Websuche-Steuerung). Für Free &amp; Starter sind ausschließlich freigeschaltete Analyse-Sets wählbar; Growth &amp; Enterprise erhalten zusätzlich volle manuelle Modellfreiheit.
+          Vordefinierte Recherche- &amp; Benchmarking-Rezepte (Modell-Kombination + Live-Websuche). Für Free &amp; Starter sind ausschließlich freigeschaltete Analyse-Sets wählbar; Growth &amp; Enterprise (Managed GEO) erhalten zusätzlich freie Modellwahl.
         </p>
         <div id="presets-grid" class="admin-presets-grid"></div>
       </section>
@@ -347,7 +347,7 @@
           </div>
         </div>
         <p class="form-hint" style="margin-bottom: 1rem;" data-i18n="admin.plans_desc">
-          Verknüpfen Sie bestehende Tarife direkt mit Stripe Product-/Price-IDs und konfigurieren Sie Kontingente, erlaubte Analyse-Sets, Datenabruf-Frequenzen sowie öffentliche Leistungsmerkmale zentral.
+          Verknüpfen Sie bestehende Tarife direkt mit Stripe Product-/Price-IDs und konfigurieren Sie Kontingente, erlaubte Analyse-Sets, Mess-Frequenzen sowie öffentliche Leistungsmerkmale zentral.
         </p>
         <div id="plans-grid" class="admin-plans-grid"></div>
       </section>
@@ -364,7 +364,7 @@
       <form id="form-adjust-credits" class="modal-body">
         <input type="hidden" id="credit-user-id" value="">
         <div class="form-info-row">
-          <span class="info-label" data-i18n="admin.modal_user_label">Benutzer:</span>
+          <span class="info-label" data-i18n="admin.modal_user_label">Mandant:</span>
           <strong id="credit-user-email" class="info-value">—</strong>
         </div>
         <div class="form-info-row">
@@ -373,7 +373,7 @@
         </div>
 
         <div class="form-group">
-          <label for="input-credit-delta" class="form-label" data-i18n="admin.modal_delta_label">Guthaben-Änderung (Delta +/-):</label>
+          <label for="input-credit-delta" class="form-label" data-i18n="admin.modal_delta_label">Änderung (Delta +/-):</label>
           <input 
             type="number" 
             id="input-credit-delta" 
@@ -384,7 +384,7 @@
             step="1"
           >
           <small class="form-hint" data-i18n="admin.modal_delta_hint">
-            Positive Werte addieren Credits, negative Werte ziehen Credits ab (minimaler Endwert: 0).
+            Positive Werte addieren Credits, negative Werte ziehen Credits ab (Minimum: 0).
           </small>
         </div>
 
@@ -412,12 +412,12 @@
   <div id="magic-audit-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="magic-modal-title">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3 id="magic-modal-title" class="modal-title" data-i18n="admin.modal_magic_title">Vorstandsreport-Link</h3>
+        <h3 id="magic-modal-title" class="modal-title" data-i18n="admin.modal_magic_title">Report-Link (schreibgeschützt)</h3>
         <button type="button" class="btn-close" id="btn-magic-modal-close" aria-label="Schließen">✕</button>
       </div>
       <div class="modal-body">
         <p class="modal-description" data-i18n="admin.modal_magic_desc">
-          Dieser sichere Link gewährt schreibgeschützten Zugriff auf das Client-Dashboard dieses Kontos ohne Anmeldedaten:
+          Dieser sichere Link gewährt schreibgeschützten Zugriff auf das GEO Analyse-Cockpit dieses Mandanten ohne Login:
         </p>
         <div class="share-url-container">
           <input type="text" id="input-magic-url" class="form-input magic-url-input" readonly>
@@ -441,13 +441,13 @@
   <div id="run-token-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="run-token-modal-title">
     <div class="modal-dialog" style="max-width: 980px; width: 95%;">
       <div class="modal-header">
-        <h3 id="run-token-modal-title" class="modal-title" data-i18n="admin.modal_tokens_title">Runs &amp; Token-Telemetrie (Prompt / Brand-Keyword Paar pro LLM)</h3>
+        <h3 id="run-token-modal-title" class="modal-title" data-i18n="admin.modal_tokens_title">Analyse-Läufe &amp; Token-Inspektor</h3>
         <button type="button" class="btn-close" id="btn-run-token-modal-close" aria-label="Schließen">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-info-row" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
           <div>
-            <span class="info-label" data-i18n="admin.modal_user_label">Benutzer:</span>
+            <span class="info-label" data-i18n="admin.modal_user_label">Mandant:</span>
             <strong id="run-token-user-email" class="info-value font-mono">—</strong>
           </div>
           <div>
@@ -458,7 +458,7 @@
 
         <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
           <div class="card kpi-card" style="padding: 0.75rem 1rem;">
-            <span class="kpi-title">Gesamt-Runs</span>
+            <span class="kpi-title">Analyse-Läufe gesamt</span>
             <div class="kpi-value font-mono" id="run-token-total-runs" style="font-size: 1.35rem;">0</div>
           </div>
           <div class="card kpi-card" style="padding: 0.75rem 1rem;">
@@ -480,7 +480,7 @@
             <thead>
               <tr>
                 <th>Zeitpunkt</th>
-                <th>Konfiguration</th>
+                <th>Tracking-Profil</th>
                 <th>Marke &amp; Prompt</th>
                 <th>LLM / Strategie</th>
                 <th class="text-right">Input Tokens</th>
@@ -490,7 +490,7 @@
             </thead>
             <tbody id="run-token-tbody">
               <tr>
-                <td colspan="7" class="text-center text-muted">Keine Run-Daten geladen.</td>
+                <td colspan="7" class="text-center text-muted">Keine Analyse-Läufe geladen.</td>
               </tr>
             </tbody>
           </table>
@@ -511,7 +511,7 @@
       </div>
       <form id="form-update-tier" class="modal-body">
         <div class="form-info-row">
-          <span class="info-label" data-i18n="admin.modal_user_label">Benutzer:</span>
+          <span class="info-label" data-i18n="admin.modal_user_label">Mandant:</span>
           <strong id="tier-user-email" class="info-value font-mono">—</strong>
         </div>
         <div class="form-group">
@@ -520,7 +520,7 @@
             <option value="free">Free</option>
             <option value="starter">Starter</option>
             <option value="growth">Growth</option>
-            <option value="enterprise_managed">Managed GEO &amp; Pipeline Defense</option>
+            <option value="enterprise_managed">Enterprise · Managed GEO &amp; Pipeline Defense</option>
           </select>
         </div>
         <div class="form-group">
@@ -541,7 +541,7 @@
   <div id="model-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="model-modal-title">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3 id="model-modal-title" class="modal-title" data-i18n="admin.modal_model_title">KI-Modell konfigurieren</h3>
+        <h3 id="model-modal-title" class="modal-title" data-i18n="admin.modal_model_title">KI-Modell bearbeiten</h3>
         <button type="button" class="btn-close" id="btn-model-modal-close" aria-label="Schließen">✕</button>
       </div>
       <form id="form-save-model" class="modal-body">
@@ -594,7 +594,7 @@
           <label class="form-checkbox-row"><input type="checkbox" id="model-supports-batch" checked><span>OpenRouter Batch-API (:batch)</span></label>
           <label class="form-checkbox-row"><input type="checkbox" id="model-supports-tools" checked><span>Tool-Calling (Web-Search Tool)</span></label>
           <label class="form-checkbox-row"><input type="checkbox" id="model-supports-search" checked><span>Live-Websuche fähig</span></label>
-          <label class="form-checkbox-row"><input type="checkbox" id="model-is-allowed" checked><span>Für Kunden freigegeben</span></label>
+          <label class="form-checkbox-row"><input type="checkbox" id="model-is-allowed" checked><span>Für Mandanten freigegeben</span></label>
           <label class="form-checkbox-row"><input type="checkbox" id="model-is-default"><span>Standard-Auswahl</span></label>
         </div>
         <div class="modal-footer">
@@ -605,7 +605,7 @@
     </div>
   </div>
 
-  <!-- Create / Edit Analyse-Set (Model Preset) Modal -->
+  <!-- Create / Edit Analyse-Set Modal -->
   <div id="preset-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="preset-modal-title">
     <div class="modal-dialog" style="max-width: 720px; width: 95%;">
       <div class="modal-header">
@@ -677,7 +677,7 @@
   <div id="provider-impact-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="provider-impact-modal-title">
     <div class="modal-dialog modal-dialog-wide">
       <div class="modal-header">
-        <h3 id="provider-impact-modal-title" class="modal-title" data-i18n="admin.modal_impact_title">Achtung: Modelle mit aktiven Konfigurationen betroffen</h3>
+        <h3 id="provider-impact-modal-title" class="modal-title" data-i18n="admin.modal_impact_title">Achtung: Modelle mit aktiven Tracking-Profilen betroffen</h3>
         <button type="button" id="btn-impact-modal-close" class="btn-close" aria-label="Schließen">✕</button>
       </div>
       <div class="modal-body">
@@ -696,8 +696,8 @@
 
   <footer class="footer">
     <div class="container footer-inner">
-      <div class="footer-brand" data-i18n="footer.copyright">© 2026 Chatlytics.de — Share-of-Model &amp; GEO Intelligence</div>
-      <div class="footer-infra" data-i18n="footer.infra">Gehostet auf dedizierter Infrastruktur in Frankfurt am Main · Keine externen Font-CDNs oder Drittanbieter-Tracker.</div>
+      <div class="footer-brand" data-i18n="footer.copyright">© 2026 Chatlytics.de — KI-Empfehlungsanteil &amp; GEO Analytics</div>
+      <div class="footer-infra" data-i18n="footer.infra">Chatlytics gehostet in Deutschland (Frankfurt am Main, DSGVO-konform, ohne US-CDNs)</div>
     </div>
   </footer>
 

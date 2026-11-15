@@ -80,13 +80,13 @@ if ($configId !== null) {
     $cfgStmt->execute([':id' => $configId]);
     $selectedConfigRow = $cfgStmt->fetch();
     if (!$selectedConfigRow) {
-        jsonError("Configuration not found.", 404);
+        jsonError("Tracking profile not found.", 404);
     }
     if ((int)$selectedConfigRow['user_id'] !== $userId && !$isAdmin) {
-        jsonError("Configuration not found.", 404);
+        jsonError("Tracking profile not found.", 404);
     }
     if (((string)($selectedConfigRow['status'] ?? '')) === 'deleted' && !$isAdmin) {
-        jsonError("Configuration not found.", 404);
+        jsonError("Tracking profile not found.", 404);
     }
 }
 
@@ -396,24 +396,24 @@ foreach ($anomalyCandidates as $quad) {
 
 $prescriptions = [
     '1_CITATION_HIJACK' => [
-        'de' => 'Wettbewerber kapert Ihre Quellen. Schema.org Markup aktualisieren.',
-        'en' => 'Competitor is hijacking your citations. Update Schema.org markup.',
+        'de' => 'Quelle zitiert, Konkurrent empfohlen: Vergleichstabellen, Auswahlkriterien und Schema.org-Markup auf den Quellseiten schärfen.',
+        'en' => 'Source cited, rival recommended: sharpen comparison tables, selection criteria, and Schema.org markup on cited pages.',
     ],
     '2_PARAMETRIC_BLINDSPOT' => [
-        'de' => 'Domain zitiert, aber Marke im Synthesetext ausgelassen. Entitäts-Kookkurrenzen ausbauen.',
-        'en' => 'Domain cited, but brand omitted from synthesis text. Expand entity co-occurrences.',
+        'de' => 'Quelle zitiert, Marke fehlt: Marken-Entität, Autorenschaft und Kategorie im Einstiegsabsatz und Schema.org-Markup direkt koppeln.',
+        'en' => 'Source cited, brand missing: bind brand entity, authorship, and category in the opening section and Schema.org markup.',
     ],
     '3_BRAND_HALO_TRAP' => [
-        'de' => 'Marke im Windschatten des Wettbewerbers gefangen. Differenzierende Alleinstellungsmerkmale schärfen.',
-        'en' => 'Brand trapped in competitor shadow. Sharpen differentiating USPs.',
+        'de' => 'Marke bekannt, aber nur Zweitnennung: Differenzierende Alleinstellungsmerkmale in unabhängigen Fachmedien und Verzeichnissen schärfen.',
+        'en' => 'Brand known, only runner-up: sharpen differentiating USPs across independent trade media and directories.',
     ],
     '4_BURIED_WINNER' => [
-        'de' => 'Gewinner, aber spät genannt. Semantische Dichte optimieren.',
-        'en' => 'Winner, but cited late. Optimize semantic density.',
+        'de' => 'Marke empfohlen, aber erst spät im Text (> 50 %): TL;DR-Zusammenfassungen und Einstiegs-Definitionen an den Seitenanfang ziehen.',
+        'en' => 'Brand recommended, late in text (> 50%): move TL;DR summaries and lead definitions to the top of key pages.',
     ],
     'NONE' => [
-        'de' => 'Keine kritischen GEO-Anomalien festgestellt. Sichtbarkeit stabil.',
-        'en' => 'No critical GEO anomalies detected. Visibility stable.',
+        'de' => 'Kein kritischer Befund festgestellt. Sichtbarkeit und Spitzenposition stabil.',
+        'en' => 'No critical findings detected. Visibility and leading placement stable.',
     ],
 ];
 
@@ -606,10 +606,10 @@ jsonResponse([
     'active_prompt'           => $promptFilter !== '' ? $promptFilter : null,
     'is_first_day'        => $isFirstDay,
     'first_day_message_de'=> $isFirstDay
-        ? 'Tag 1 der Konfiguration: Datensätze werden über den Kalendertag verteilt erhoben. Aggregierte Tageswerte stehen ab morgen bereit.'
+        ? 'Tag 1 des Tracking-Profils: Analyse-Läufe werden über den Kalendertag verteilt ausgeführt. Aggregierte Tageswerte stehen ab morgen bereit.'
         : null,
     'first_day_message_en'=> $isFirstDay
-        ? 'Day 1 of configuration: Datasets are being collected across the calendar day. Aggregated daily results will be available tomorrow.'
+        ? 'Day 1 of tracking profile: Analysis runs are being executed across the calendar day. Aggregated daily results will be available tomorrow.'
         : null,
     'date_range' => [
         'period'         => $periodLabel,

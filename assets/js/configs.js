@@ -22,7 +22,7 @@ export const SCHEDULE_INTERVALS = {
     minutes: 120,
     highFreq: false,
     i18nKey: 'interval.every_120m',
-    fallback: 'Starter · 12 Datensätze / Tag pro LLM (alle 120 Min.)'
+    fallback: 'Basis · 12 Analyse-Läufe / Tag pro LLM (alle 120 Min.)'
   },
   every_60m: {
     runsPerDay: 24,
@@ -30,7 +30,7 @@ export const SCHEDULE_INTERVALS = {
     minutes: 60,
     highFreq: true,
     i18nKey: 'interval.every_60m',
-    fallback: 'Standard · 24 Datensätze / Tag pro LLM (alle 60 Min.)'
+    fallback: 'Standard · 24 Analyse-Läufe / Tag pro LLM (alle 60 Min.)'
   },
   every_30m: {
     runsPerDay: 48,
@@ -38,7 +38,7 @@ export const SCHEDULE_INTERVALS = {
     minutes: 30,
     highFreq: true,
     i18nKey: 'interval.every_30m',
-    fallback: 'High · 48 Datensätze / Tag pro LLM (alle 30 Min.)'
+    fallback: 'Hoch · 48 Analyse-Läufe / Tag pro LLM (alle 30 Min.)'
   },
   every_15m: {
     runsPerDay: 96,
@@ -46,7 +46,7 @@ export const SCHEDULE_INTERVALS = {
     minutes: 15,
     highFreq: true,
     i18nKey: 'interval.every_15m',
-    fallback: 'Precision · 96 Datensätze / Tag pro LLM (alle 15 Min.)'
+    fallback: 'Präzision · 96 Analyse-Läufe / Tag pro LLM (alle 15 Min.)'
   }
 };
 
@@ -137,8 +137,8 @@ export const LLM_CATALOG = [
 export const DEFAULT_PRESETS = [
   {
     id: 'dach_core_baseline',
-    name_de: 'DACH Basis-Radar (Live-Suche)',
-    name_en: 'DACH Core Radar (Live Search)',
+    name_de: 'Basis-Radar (Live-Suche)',
+    name_en: 'Core Radar (Live Search)',
     description_de: 'Direktvergleich über OpenAI GPT-6 Luna und Google Gemini 3.5 Flash via OpenRouter inkl. Live-Websuche & Quellenzitaten.',
     description_en: 'Head-to-head benchmark across OpenAI GPT-6 Luna and Google Gemini 3.5 Flash via OpenRouter with live web search & citations.',
     badge_de: 'Standard',
@@ -151,10 +151,10 @@ export const DEFAULT_PRESETS = [
   },
   {
     id: 'parametric_brand_memory',
-    name_de: 'Parametrisches Marken-Gedächtnis (Batch-API)',
-    name_en: 'Parametric Brand Memory (Batch API)',
-    description_de: 'Prüft das reine Modellwissen über OpenAI, Google Gemini und Mistral via OpenRouter Batch-API ohne Websuche.',
-    description_en: 'Evaluates pure parametric training memory across OpenAI, Google Gemini, and Mistral via OpenRouter Batch API without web search.',
+    name_de: 'Trainingswissen-Radar (Batch-API)',
+    name_en: 'Pre-Trained Knowledge Radar (Batch API)',
+    description_de: 'Prüft das reine Trainingswissen über OpenAI, Google Gemini und Mistral via OpenRouter Batch-API ohne Live-Websuche.',
+    description_en: 'Evaluates pure pre-trained knowledge memory across OpenAI, Google Gemini, and Mistral via OpenRouter Batch API without live web search.',
     badge_de: 'Starter & höher',
     badge_en: 'Starter+',
     target_llms: ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5'],
@@ -165,8 +165,8 @@ export const DEFAULT_PRESETS = [
   },
   {
     id: 'eu_sovereign_dsgvo',
-    name_de: 'Europäische & Open-Weight Modelle (Mistral & GLM)',
-    name_en: 'European & Open-Weight Suite (Mistral & GLM)',
+    name_de: 'Europäisches Modell-Radar',
+    name_en: 'European Model Radar',
     description_de: 'Modell-Mix aus Mistral Medium 3.5, Mistral Large 4.0 und Z.ai GLM 5.3 über das OpenRouter-Gateway.',
     description_en: 'Balanced comparison across Mistral Medium 3.5, Mistral Large 4.0, and Z.ai GLM 5.3 via OpenRouter.',
     badge_de: 'EU & GLM',
@@ -179,8 +179,8 @@ export const DEFAULT_PRESETS = [
   },
   {
     id: 'executive_full_spectrum',
-    name_de: '360° Vorstands-Benchmark (Alle Kernmodelle + Suche)',
-    name_en: '360° Executive Benchmark (All Core Models + Search)',
+    name_de: '360°-Radar (Alle Kernmodelle + Suche)',
+    name_en: '360° Radar (All Core Models + Search)',
     description_de: 'Umfassende Multi-LLM-Abdeckung über OpenAI, Google Gemini, Mistral und Z.ai GLM inkl. Live-Websuche.',
     description_en: 'Complete multi-LLM coverage combining OpenAI, Google Gemini, Mistral, and Z.ai GLM with live web search.',
     badge_de: 'Vollabdeckung',
@@ -419,7 +419,7 @@ export class ConfigManager {
     try {
       res = await apiClient.updateConfig(config.id, { status: nextStatus });
     } catch (err) {
-      showToast(err?.message || (i18n ? i18n.t('toast.config_toggle_error', 'Status der Konfiguration konnte nicht geändert werden.') : 'Status der Konfiguration konnte nicht geändert werden.'), 'error');
+      showToast(err?.message || (i18n ? i18n.t('toast.config_toggle_error', 'Status des Tracking-Profils konnte nicht geändert werden.') : 'Status des Tracking-Profils konnte nicht geändert werden.'), 'error');
       throw err;
     }
     const updated = res?.config || res;
@@ -574,7 +574,7 @@ export class ConfigManager {
         const metaEl = document.createElement('span');
         metaEl.className = 'llm-option-meta';
         const isBatchCapable = Boolean(m.supports_batch_api || m.supportsBatchApi || m.execution_strategy === 'batch_api' || m.executionStrategy === 'batch_api');
-        metaEl.textContent = `${m.id} · ${isBatchCapable ? 'OpenRouter Batch-API' : 'OpenRouter Standard'}`;
+        metaEl.textContent = `${m.id} · ${isBatchCapable ? 'OpenRouter Batch-API' : 'OpenRouter Standard-Lauf'}`;
         textWrap.append(titleEl, metaEl);
         main.append(cb, textWrap);
         label.appendChild(main);
@@ -604,7 +604,7 @@ export class ConfigManager {
 
       if (modeBadge) {
         modeBadge.textContent = canCustomize
-          ? i18n.t('config.presets_badge_template', 'Schnellauswahl + freie Konfiguration')
+          ? i18n.t('config.presets_badge_template', 'Schnellauswahl + freie Modellwahl')
           : i18n.t('config.presets_badge_tier', 'Kuratiertes Analyse-Set');
       }
       if (lockedBanner) {
@@ -688,7 +688,7 @@ export class ConfigManager {
         searchBadge.className = `badge ${preset.search_enabled ? 'badge-active' : 'badge-muted'}`;
         searchBadge.textContent = preset.search_enabled
           ? (lang === 'en' ? 'Live Web Search: ON' : 'Live-Websuche: AN')
-          : (lang === 'en' ? 'Parametric Only' : 'Ohne Websuche');
+          : (lang === 'en' ? 'Batch API (No Search)' : 'Batch-API (ohne Live-Websuche)');
         metaRow.append(llmBadge, searchBadge);
 
         cardBtn.append(topRow, descEl, metaRow);
@@ -734,7 +734,7 @@ export class ConfigManager {
           tierHintEl.classList.remove('hidden');
           tierHintEl.textContent = i18n.t(
             'config.tier_hint_free',
-            'Data-Mining-Genauigkeit über 12 Datensätze/Tag (24, 48 oder 96 Datensätze/Tag pro LLM) erfordert einen bezahlten Tarif (Starter, Growth oder Enterprise).'
+            'Mess-Frequenzen über Basis (24, 48 oder 96 Analyse-Läufe / Tag pro LLM) erfordern einen bezahlten Tarif: Starter, Growth oder Enterprise (Managed GEO).'
           );
         }
       }
@@ -779,11 +779,11 @@ export class ConfigManager {
       };
 
       appendStat(
-        i18n.t('config.credit_preview_per_run', 'Pro Durchlauf'),
+        i18n.t('config.credit_preview_per_run', 'Pro Audit-Lauf'),
         `${est.perRun} Credits`
       );
       appendStat(
-        i18n.t('config.credit_preview_per_day', 'Pro Tag (Gesamt)'),
+        i18n.t('config.credit_preview_per_day', 'Pro Tag'),
         `${est.perDay} Credits`
       );
       appendStat(
@@ -802,7 +802,7 @@ export class ConfigManager {
         warn.className = 'cfg-credit-warning';
         warn.textContent = i18n.t(
           'config.credit_preview_low_warning',
-          'Hinweis: Ihr aktuelles Guthaben deckt weniger als 1 vollen Kalendertag bei dieser Data-Mining-Genauigkeit ab.'
+          'Hinweis: Ihr aktuelles Guthaben deckt weniger als 1 Tag bei dieser Mess-Frequenz ab.'
         );
         previewEl.appendChild(warn);
       }
@@ -848,7 +848,7 @@ export class ConfigManager {
 
       renderCustomModelsList();
       if (config) {
-        if (titleEl) titleEl.textContent = i18n.t('config.modal_edit_title', 'Tracking-Konfiguration bearbeiten');
+        if (titleEl) titleEl.textContent = i18n.t('config.modal_edit_title', 'Tracking-Profil bearbeiten');
         form.dataset.configStatus = config.status || 'active';
         form.dataset.configId = config.id;
         const isLocked = Boolean(config.is_full_started || config.full_started_at);
@@ -872,7 +872,7 @@ export class ConfigManager {
           : DEFAULT_FALLBACK_LLMS;
         applyModelAndSearchFields(savedLlms, config.search_enabled !== undefined ? config.search_enabled : true);
       } else {
-        if (titleEl) titleEl.textContent = i18n.t('config.modal_create_title', 'Neue Tracking-Konfiguration anlegen');
+        if (titleEl) titleEl.textContent = i18n.t('config.modal_create_title', 'Neues Tracking-Profil anlegen');
         delete form.dataset.configStatus;
         delete form.dataset.configId;
         delete form.dataset.promptsLocked;
@@ -957,7 +957,7 @@ export class ConfigManager {
       const rawDomains = document.getElementById('cfg-domains')?.value.trim();
       const rawPrompts = document.getElementById('cfg-prompts')?.value.trim();
       const rawCompetitors = document.getElementById('cfg-competitors')?.value.trim();
-      const name = document.getElementById('cfg-name')?.value.trim() || `${brandName} Tracking`;
+      const name = document.getElementById('cfg-name')?.value.trim() || `${brandName} Profil`;
       const interval = normalizeScheduleIntervalKey(document.getElementById('cfg-interval')?.value || 'every_120m');
 
       if (!brandName) {
@@ -973,7 +973,7 @@ export class ConfigManager {
 
       const prompts = parsePrompts(rawPrompts);
       if (!promptsLocked && prompts.length === 0) {
-        if (errBox) errBox.textContent = 'Bitte hinterlegen Sie mindestens einen Such-Prompt.';
+        if (errBox) errBox.textContent = 'Bitte hinterlegen Sie mindestens einen Prompt.';
         return;
       }
 
@@ -1018,8 +1018,8 @@ export class ConfigManager {
         hideModal();
         showToast(
           configId
-            ? (i18n ? i18n.t('toast.config_saved', 'Konfiguration gespeichert.') : 'Konfiguration gespeichert.')
-            : (i18n ? i18n.t('toast.config_created', 'Konfiguration erstellt.') : 'Konfiguration erstellt.'),
+            ? (i18n ? i18n.t('toast.config_saved', 'Tracking-Profil gespeichert.') : 'Tracking-Profil gespeichert.')
+            : (i18n ? i18n.t('toast.config_created', 'Tracking-Profil erstellt.') : 'Tracking-Profil erstellt.'),
           'success'
         );
         if (typeof onSaveCallback === 'function') {

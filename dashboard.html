@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chatlytics.de — Client Analytics Dashboard</title>
-  <meta name="description" content="Share-of-Model, zeichengenaue Erstnennung und GEO Ursachen-Matrix für Ihre Marke.">
+  <title>Chatlytics.de — GEO Analyse-Cockpit</title>
+  <meta name="description" content="KI-Empfehlungsanteil, zeichengenaue Erstnennung und GEO Ursachen-Matrix im Chatlytics GEO Analyse-Cockpit.">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/app.css">
 </head>
@@ -19,7 +19,7 @@
       </svg>
     </span>
     <span class="banner-text" data-i18n="audit.banner">
-      Sie betrachten einen schreibgeschützten Chatlytics-Vorstandsreport.
+      Sie betrachten einen geteilten Chatlytics GEO-Report (schreibgeschützt).
     </span>
   </div>
 
@@ -41,12 +41,12 @@
 
         <!-- Config Switcher Dropdown -->
         <div class="config-selector-wrapper">
-          <label for="config-select" class="sr-only">Tracking-Konfiguration</label>
+          <label for="config-select" class="sr-only">Tracking-Profil</label>
           <select id="config-select" class="form-control form-select">
-            <option value="">Alle Konfigurationen</option>
+            <option value="" data-i18n="dashboard.all_configs">Alle Tracking-Profile</option>
           </select>
           <button id="btn-new-config" type="button" class="btn btn-dark-outline btn-sm" data-i18n="dashboard.new_config">
-            + Neue Konfiguration
+            + Neues Tracking-Profil
           </button>
         </div>
       </div>
@@ -69,11 +69,11 @@
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
             <polygon points="2,1 11,6 2,11"/>
           </svg>
-          <span data-i18n="dashboard.trigger_run">Abfrage starten</span>
+          <span data-i18n="dashboard.trigger_run">Test-Lauf starten</span>
         </button>
 
         <!-- Credit Balance Badge -->
-        <div class="credits-badge" id="user-credits-badge" title="Verbleibende Abfrage-Credits">
+        <div class="credits-badge" id="user-credits-badge" title="Verbleibende Credits">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
             <polygon points="9,1 3,9 8,9 7,15 13,7 8,7"/>
           </svg>
@@ -82,11 +82,11 @@
         </div>
 
         <!-- Share Board Report Link Button -->
-        <button id="btn-share-audit" type="button" class="btn btn-dark-outline btn-sm" title="Vorstandsreport-Link kopieren">
+        <button id="btn-share-audit" type="button" class="btn btn-dark-outline btn-sm" title="Report-Link kopieren">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
             <path d="M6.5 9.5l3-3M5 11a2.5 2.5 0 010-3.5l2-2M11 5a2.5 2.5 0 010 3.5l-2 2"/>
           </svg>
-          <span data-i18n="dashboard.share">Teilen</span>
+          <span data-i18n="dashboard.share">Report teilen</span>
         </button>
 
         <!-- Language Switcher -->
@@ -98,7 +98,7 @@
         <nav class="user-nav" aria-label="Account Navigation">
           <a href="#billing" id="billing-nav" class="nav-item" data-i18n="nav.billing">Abrechnung</a>
           <a href="#settings" id="profile-settings" class="nav-item" data-i18n="nav.settings">Einstellungen</a>
-          <a href="admin.html" id="admin-nav" class="nav-item hidden" data-i18n="nav.admin">Admin</a>
+          <a href="admin.html" id="admin-nav" class="nav-item hidden" data-i18n="nav.admin">Admin-Cockpit</a>
           <button id="btn-logout" type="button" class="btn btn-ghost-light btn-sm" data-i18n="nav.logout">Abmelden</button>
         </nav>
       </div>
@@ -109,26 +109,26 @@
   <main class="dashboard-main container-fluid">
     <div class="workspace-heading-row">
       <div class="workspace-title-group">
-        <h1 class="workspace-title" data-i18n="dashboard.page_title">Sichtbarkeits-Workspace</h1>
+        <h1 class="workspace-title" data-i18n="dashboard.page_title">GEO Analyse-Cockpit</h1>
         <span id="config-schedule-badge" class="badge badge-neutral hidden"></span>
       </div>
       <div class="config-actions-inline" role="group" aria-label="Profilaktionen">
         <button id="btn-full-start-config" type="button" class="btn btn-primary btn-sm hidden" data-i18n="dashboard.full_start_config">
-          Full Start aktivieren
+          Monitoring aktivieren
         </button>
-        <button id="btn-edit-config" type="button" class="btn btn-secondary btn-sm" disabled title="Profil bearbeiten" data-i18n="dashboard.edit_config">
+        <button id="btn-edit-config" type="button" class="btn btn-secondary btn-sm" disabled title="Tracking-Profil bearbeiten" data-i18n="dashboard.edit_config">
           Bearbeiten
         </button>
         <button id="btn-toggle-config-status" type="button" class="btn btn-secondary btn-sm" disabled title="Zeitplan pausieren oder fortsetzen" data-i18n="dashboard.pause_config">
           Pausieren
         </button>
-        <button id="btn-stop-config" type="button" class="btn btn-outline btn-sm hidden" title="Konfiguration dauerhaft stoppen" data-i18n="dashboard.stop_config">
+        <button id="btn-stop-config" type="button" class="btn btn-outline btn-sm hidden" title="Tracking-Profil dauerhaft stoppen" data-i18n="dashboard.stop_config">
           Stoppen
         </button>
-        <button id="btn-archive-config" type="button" class="btn btn-secondary btn-sm hidden" title="Gestoppte Konfiguration archivieren" data-i18n="dashboard.archive_config">
+        <button id="btn-archive-config" type="button" class="btn btn-secondary btn-sm hidden" title="Gestopptes Tracking-Profil archivieren" data-i18n="dashboard.archive_config">
           Archivieren
         </button>
-        <button id="btn-delete-config" type="button" class="btn btn-outline btn-sm hidden" title="Konfiguration löschen" data-i18n="dashboard.delete_config">
+        <button id="btn-delete-config" type="button" class="btn btn-outline btn-sm hidden" title="Tracking-Profil löschen" data-i18n="dashboard.delete_config">
           Löschen
         </button>
       </div>
@@ -179,8 +179,8 @@
           <span class="run-spinner"></span>
         </span>
         <div class="run-status-copy">
-          <div id="run-status-title" class="run-status-title">Audit-Run gestartet</div>
-          <div id="run-status-detail" class="run-status-detail">Anfrage wird an die KI-Modelle übermittelt…</div>
+          <div id="run-status-title" class="run-status-title">Test-Lauf gestartet</div>
+          <div id="run-status-detail" class="run-status-detail">KI-Antworten werden erfasst…</div>
         </div>
       </div>
       <div class="run-status-meta">
@@ -200,10 +200,10 @@
         </div>
         <div class="first-day-copy">
           <h3 id="first-day-title" class="first-day-title" data-i18n="dashboard.first_day_title">
-            Tag 1 der Konfiguration — Datenerhebung läuft über den Kalendertag
+            Tag 1 des Tracking-Profils — Datenerhebung läuft über den Kalendertag
           </h3>
           <p id="first-day-desc" class="first-day-desc" data-i18n="dashboard.first_day_desc">
-            Ihre Prompts werden gemäß der gewählten Data-Mining-Genauigkeit über den Tag verteilt abgefragt. Aggregierte Tageswerte und Modell-Zeitreihen erscheinen ab morgen im Dashboard.
+            Ihre Prompts werden gemäß der gewählten Mess-Frequenz über den Tag verteilt als Analyse-Läufe ausgeführt. Aggregierte Tageswerte und Modell-Zeitreihen erscheinen ab morgen im Cockpit.
           </p>
         </div>
       </div>
@@ -212,75 +212,75 @@
     <!-- Top 6-Card KPI Bar -->
     <section class="kpi-section" aria-label="Key Performance Indicators">
       <div class="kpi-grid">
-        <!-- 1. Share-of-Model (SoM %) -->
+        <!-- 1. KI-Empfehlungsanteil (%) -->
         <div class="kpi-card card">
           <div class="kpi-header">
-            <span class="kpi-title" data-i18n="kpi.som">Share-of-Model (SoM)</span>
+            <span class="kpi-title" data-i18n="kpi.som">KI-Empfehlungsanteil</span>
             <span id="kpi-som-delta" class="delta-badge delta-neutral">—</span>
           </div>
           <div class="kpi-value-row">
             <span id="kpi-som" class="kpi-value font-mono">0.0 %</span>
           </div>
-          <div class="kpi-subtext" data-i18n="kpi.som_sub">Anteil der Nennungen an allen LLM-Runs</div>
+          <div class="kpi-subtext" data-i18n="kpi.som_sub">Anteil der Nennungen an allen Analyse-Läufen</div>
         </div>
 
-        <!-- 2. Visibility Index (%) -->
+        <!-- 2. Sichtbarkeits-Index (%) -->
         <div class="kpi-card card">
           <div class="kpi-header">
-            <span class="kpi-title" data-i18n="kpi.visibility">Visibility Index</span>
+            <span class="kpi-title" data-i18n="kpi.visibility">Sichtbarkeits-Index</span>
             <span id="kpi-visibility-delta" class="delta-badge delta-neutral">—</span>
           </div>
           <div class="kpi-value-row">
             <span id="kpi-visibility" class="kpi-value font-mono">0.0 %</span>
           </div>
-          <div class="kpi-subtext" data-i18n="kpi.visibility_sub">Markennennung oder Quellenzitat vorhanden</div>
+          <div class="kpi-subtext" data-i18n="kpi.visibility_sub">Markennennung oder Domain-Zitat vorhanden</div>
         </div>
 
-        <!-- 3. Average Earliness (%) -->
+        <!-- 3. Position im Text (Ø) -->
         <div class="kpi-card card">
           <div class="kpi-header">
-            <span class="kpi-title" data-i18n="kpi.earliness">Average Earliness</span>
+            <span class="kpi-title" data-i18n="kpi.earliness">Position im Text (Ø)</span>
             <span id="kpi-earliness-delta" class="delta-badge delta-neutral">—</span>
           </div>
           <div class="kpi-value-row">
             <span id="kpi-earliness" class="kpi-value font-mono">0.0 %</span>
           </div>
-          <div class="kpi-subtext" data-i18n="kpi.earliness_sub">Durchschnittliche relative Position im Text</div>
+          <div class="kpi-subtext" data-i18n="kpi.earliness_sub">Durchschnittliche relative Position im Antworttext</div>
         </div>
 
         <!-- 4. Total Runs Count -->
         <div class="kpi-card card">
           <div class="kpi-header">
-            <span class="kpi-title" data-i18n="kpi.total_runs">Total Runs</span>
+            <span class="kpi-title" data-i18n="kpi.total_runs">Analyse-Läufe gesamt</span>
             <span id="kpi-runs-delta" class="delta-badge delta-neutral">—</span>
           </div>
           <div class="kpi-value-row">
             <span id="kpi-runs" class="kpi-value font-mono">0</span>
           </div>
-          <div class="kpi-subtext" data-i18n="kpi.runs_sub">Durchgeführte Multi-Model Evaluierungen</div>
+          <div class="kpi-subtext" data-i18n="kpi.runs_sub">Abgeschlossene Multi-Modell-Läufe</div>
         </div>
 
-        <!-- 5. Citation Share (%) -->
+        <!-- 5. Domain-Zitat-Anteil (%) -->
         <div class="kpi-card card">
           <div class="kpi-header">
-            <span class="kpi-title" data-i18n="kpi.citation_share">Citations Share</span>
+            <span class="kpi-title" data-i18n="kpi.citation_share">Domain-Zitat-Anteil</span>
             <span id="kpi-citations-delta" class="delta-badge delta-neutral">—</span>
           </div>
           <div class="kpi-value-row">
             <span id="kpi-citations" class="kpi-value font-mono">0.0 %</span>
           </div>
-          <div class="kpi-subtext" data-i18n="kpi.citation_share_sub">Eigene Domain in Grounding-Quellen</div>
+          <div class="kpi-subtext" data-i18n="kpi.citation_share_sub">Eigene Domain in Search-Grounding-Quellen</div>
         </div>
 
-        <!-- 6. Credits Remaining -->
+        <!-- 6. Verbleibende Credits -->
         <div class="kpi-card card">
           <div class="kpi-header">
-            <span class="kpi-title" data-i18n="kpi.credits">Credits Remaining</span>
+            <span class="kpi-title" data-i18n="kpi.credits">Verbleibende Credits</span>
           </div>
           <div class="kpi-value-row">
             <span id="kpi-credits" class="kpi-value font-mono">0</span>
           </div>
-          <div class="kpi-subtext" data-i18n="kpi.credits_sub">Guthaben für Live- und Queue-Audits</div>
+          <div class="kpi-subtext" data-i18n="kpi.credits_sub">Guthaben für Test-Läufe und geplante Audits</div>
         </div>
       </div>
     </section>
@@ -300,10 +300,10 @@
             </select>
           </div>
           <div id="timeline-metric-tabs" class="timeline-tabs" role="tablist" aria-label="Kennzahl auswählen">
-            <button type="button" role="tab" aria-selected="true" class="timeline-tab-btn active" data-metric="som_score" data-i18n="timeline.metric_som">Share-of-Model (%)</button>
-            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="visibility_index" data-i18n="timeline.metric_visibility">Visibility Index (%)</button>
-            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="citation_share" data-i18n="timeline.metric_citations">Quellen-Anteil (%)</button>
-            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="avg_earliness" data-i18n="timeline.metric_earliness">Ø Earliness (%)</button>
+            <button type="button" role="tab" aria-selected="true" class="timeline-tab-btn active" data-metric="som_score" data-i18n="timeline.metric_som">KI-Empfehlungsanteil (%)</button>
+            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="visibility_index" data-i18n="timeline.metric_visibility">Sichtbarkeits-Index (%)</button>
+            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="citation_share" data-i18n="timeline.metric_citations">Domain-Zitate (%)</button>
+            <button type="button" role="tab" aria-selected="false" class="timeline-tab-btn" data-metric="avg_earliness" data-i18n="timeline.metric_earliness">Ø Position im Text (%)</button>
           </div>
         </div>
       </div>
@@ -336,7 +336,7 @@
       </div>
       <h3 class="empty-state-title" data-i18n="dashboard.empty_title">Keine Analysedaten im gewählten Zeitraum</h3>
       <p class="empty-state-desc" data-i18n="dashboard.empty_desc">
-        Für die ausgewählte Konfiguration liegen im Zeitraum noch keine abgeschlossenen Audit-Läufe vor. Starten Sie jetzt Ihre erste Analyse!
+        Für das ausgewählte Tracking-Profil liegen im Zeitraum noch keine abgeschlossenen Analyse-Läufe vor. Starten Sie jetzt Ihren ersten Test-Lauf.
       </p>
       <button class="btn btn-primary" id="btn-empty-trigger">
         Ersten Audit-Run starten
@@ -352,43 +352,43 @@
         <!-- Recommendation Tiers Breakdown -->
         <section class="card mece-trend-card">
           <div class="card-header">
-            <h3 class="card-title" data-i18n="dashboard.mece_trend">Verteilung der 4 Empfehlungs-Stufen</h3>
-            <span class="card-hint" data-i18n="dashboard.mece_sum_hint">Lückenlose Gesamtauswertung (100 %)</span>
+            <h3 class="card-title" data-i18n="dashboard.mece_trend">Verteilung nach den 4 Empfehlungs-Stufen</h3>
+            <span class="card-hint" data-i18n="dashboard.mece_sum_hint">Vollständige Aufteilung über alle ausgewerteten Antworten</span>
           </div>
           <div class="card-body">
             <!-- Progress Bar Stack -->
             <div id="mece-bar" class="mece-progress-bar">
-              <div id="mece-bar-win" class="mece-bar-segment mece-bar-direct-win" style="width: 0%;" title="Platz 1 · Erste Wahl"></div>
-              <div id="mece-bar-halo" class="mece-bar-segment mece-bar-brand-halo" style="width: 0%;" title="Platz 2 · Im Windschatten"></div>
-              <div id="mece-bar-takeover" class="mece-bar-segment mece-bar-competitor-takeover" style="width: 0%;" title="Verdrängt · Wettbewerbs-Übernahme"></div>
-              <div id="mece-bar-generic" class="mece-bar-segment mece-bar-generic" style="width: 0%;" title="Markenfreie Antwort"></div>
+              <div id="mece-bar-win" class="mece-bar-segment mece-bar-direct-win" style="width: 0%;" title="Spitzenreiter · Direkte Empfehlung"></div>
+              <div id="mece-bar-halo" class="mece-bar-segment mece-bar-brand-halo" style="width: 0%;" title="Verfolgerplatz · Zweitnennung"></div>
+              <div id="mece-bar-takeover" class="mece-bar-segment mece-bar-competitor-takeover" style="width: 0%;" title="Marke fehlt · Wettbewerber empfohlen"></div>
+              <div id="mece-bar-generic" class="mece-bar-segment mece-bar-generic" style="width: 0%;" title="Neutral · Keine Anbieter-Nennung"></div>
             </div>
 
             <!-- Breakdown Metrics Grid -->
             <div class="mece-legend-grid">
               <div class="legend-item">
-                <span class="badge mece-direct-win" data-i18n="1_DIRECT_WIN">Platz 1 · Erste Wahl</span>
+                <span class="badge mece-direct-win" data-i18n="1_DIRECT_WIN">Spitzenreiter · Direkte Empfehlung</span>
                 <div class="legend-metric">
                   <span id="mece-count-win" class="font-mono">0</span>
                   <span id="mece-pct-win" class="text-muted text-xs font-mono">(0.0%)</span>
                 </div>
               </div>
               <div class="legend-item">
-                <span class="badge mece-brand-halo" data-i18n="2_BRAND_HALO">Platz 2 · Im Windschatten</span>
+                <span class="badge mece-brand-halo" data-i18n="2_BRAND_HALO">Verfolgerplatz · Zweitnennung</span>
                 <div class="legend-metric">
                   <span id="mece-count-halo" class="font-mono">0</span>
                   <span id="mece-pct-halo" class="text-muted text-xs font-mono">(0.0%)</span>
                 </div>
               </div>
               <div class="legend-item">
-                <span class="badge mece-competitor-takeover" data-i18n="3_COMPETITOR_TAKEOVER">Verdrängt · Wettbewerbs-Übernahme</span>
+                <span class="badge mece-competitor-takeover" data-i18n="3_COMPETITOR_TAKEOVER">Marke fehlt · Wettbewerber empfohlen</span>
                 <div class="legend-metric">
                   <span id="mece-count-takeover" class="font-mono">0</span>
                   <span id="mece-pct-takeover" class="text-muted text-xs font-mono">(0.0%)</span>
                 </div>
               </div>
               <div class="legend-item">
-                <span class="badge mece-generic" data-i18n="4_GENERIC">Markenfreie Antwort</span>
+                <span class="badge mece-generic" data-i18n="4_GENERIC">Neutral · Keine Anbieter-Nennung</span>
                 <div class="legend-metric">
                   <span id="mece-count-generic" class="font-mono">0</span>
                   <span id="mece-pct-generic" class="text-muted text-xs font-mono">(0.0%)</span>
@@ -410,7 +410,7 @@
                   <th style="width: 50px;">#</th>
                   <th data-i18n="table.competitor">Wettbewerber</th>
                   <th data-i18n="table.domain">Domain</th>
-                  <th class="text-right" data-i18n="table.visibility_pct">Sichtbarkeit</th>
+                  <th class="text-right" data-i18n="table.visibility_pct">Sichtbarkeit (%)</th>
                   <th class="text-right" data-i18n="table.mentions">Nennungen</th>
                   <th class="text-right" data-i18n="table.recommendations">Empfehlungen</th>
                   <th class="text-right" data-i18n="table.avg_pos">Ø Position</th>
@@ -426,7 +426,7 @@
         <!-- Grounding Citations Table (Feature 26) -->
         <section class="card citations-card">
           <div class="card-header">
-            <h3 class="card-title" data-i18n="dashboard.citations">Grounding-Zitierungen &amp; Quellen</h3>
+            <h3 class="card-title" data-i18n="dashboard.citations">Zitierte Quell-Domains (Search Grounding)</h3>
           </div>
           <div class="table-responsive">
             <table class="table" id="citations-table">
@@ -457,7 +457,7 @@
                 <circle cx="8" cy="8" r="6.5"/>
                 <polygon points="10.5,5.5 9,9 5.5,10.5 7,7" fill="currentColor"/>
               </svg>
-              <h3 class="card-title" data-i18n="geo.title">GEO Ursachen- &amp; Maßnahmen-Matrix</h3>
+              <h3 class="card-title" data-i18n="geo.title">GEO Ursachen-Matrix</h3>
             </div>
             <div class="geo-status-indicator">
               <span id="geo-active-badge" class="badge geo-badge geo-none" data-i18n="NONE">Kein kritischer Befund</span>
@@ -465,7 +465,7 @@
           </div>
           <div class="card-body">
             <div class="geo-prescription-box">
-              <span class="prescription-label" data-i18n="geo.prescription_label">Empfohlener Chatlytics-Hebel:</span>
+              <span class="prescription-label" data-i18n="geo.prescription_label">Empfohlene Maßnahme:</span>
               <p id="geo-prescription" class="prescription-text">
                 Keine kritischen Ursachen festgestellt. Ihre Sichtbarkeit ist stabil.
               </p>
@@ -474,61 +474,61 @@
             <!-- Interactive 2x2 SVG Coordinate Grid -->
             <div class="geo-svg-container">
               <div class="font-mono text-xs text-muted" style="margin-bottom: 6px;" data-i18n="geo.svg_title">
-                2×2 Ursachen-Verteilung
+                Quellen-Autorität vs. Marken-Prominenz
               </div>
               <svg id="geo-svg-matrix" class="geo-svg-matrix" viewBox="0 0 280 156" role="img" aria-label="2x2 GEO Ursachen-Matrix">
-                <!-- Q1: Gekaperte Vorlage -->
+                <!-- Q1: Quelle zitiert, Konkurrent empfohlen -->
                 <rect id="geo-cell-hijack" class="geo-svg-cell" x="4" y="4" width="132" height="70"/>
-                <text x="12" y="24" class="geo-svg-title-loss" font-family="sans-serif" font-weight="bold" font-size="9">1. GEKAPERTE VORLAGE</text>
-                <text x="12" y="40" class="geo-svg-subtitle" font-family="sans-serif" font-size="8">Zitiert · Konkurrent führt</text>
+                <text x="12" y="24" class="geo-svg-title-loss" font-family="sans-serif" font-weight="bold" font-size="9" data-i18n="svg.q1_title">1. QUELLE ZITIERT</text>
+                <text x="12" y="40" class="geo-svg-subtitle" font-family="sans-serif" font-size="8" data-i18n="svg.q1_sub">Konkurrent empfohlen</text>
 
-                <!-- Q2: Stummes Quell-Zitat -->
+                <!-- Q2: Quelle zitiert, Marke fehlt -->
                 <rect id="geo-cell-blindspot" class="geo-svg-cell" x="144" y="4" width="132" height="70"/>
-                <text x="152" y="24" class="geo-svg-title-loss" font-family="sans-serif" font-weight="bold" font-size="9">2. STUMMES QUELL-ZITAT</text>
-                <text x="152" y="40" class="geo-svg-subtitle" font-family="sans-serif" font-size="8">Zitiert · Marke fehlt</text>
+                <text x="152" y="24" class="geo-svg-title-loss" font-family="sans-serif" font-weight="bold" font-size="9" data-i18n="svg.q2_title">2. QUELLE ZITIERT</text>
+                <text x="152" y="40" class="geo-svg-subtitle" font-family="sans-serif" font-size="8" data-i18n="svg.q2_sub">Marke fehlt im Text</text>
 
-                <!-- Q3: Ewige Zweitnennung -->
+                <!-- Q3: Marke bekannt, aber nur Zweitnennung -->
                 <rect id="geo-cell-trap" class="geo-svg-cell" x="4" y="82" width="132" height="70"/>
-                <text x="12" y="102" class="geo-svg-title-halo" font-family="sans-serif" font-weight="bold" font-size="9">3. EWIGE ZWEITNENNUNG</text>
-                <text x="12" y="118" class="geo-svg-subtitle" font-family="sans-serif" font-size="8">Im Windschatten (Platz 2)</text>
+                <text x="12" y="102" class="geo-svg-title-halo" font-family="sans-serif" font-weight="bold" font-size="9" data-i18n="svg.q3_title">3. MARKE BEKANNT</text>
+                <text x="12" y="118" class="geo-svg-subtitle" font-family="sans-serif" font-size="8" data-i18n="svg.q3_sub">Nur Zweitnennung</text>
 
-                <!-- Q4: Versteckter Gewinner -->
+                <!-- Q4: Marke empfohlen, aber erst spät im Text (> 50 %) -->
                 <rect id="geo-cell-buried" class="geo-svg-cell" x="144" y="82" width="132" height="70"/>
-                <text x="152" y="102" class="geo-svg-title-halo" font-family="sans-serif" font-weight="bold" font-size="9">4. VERSTECKTER GEWINNER</text>
-                <text x="152" y="118" class="geo-svg-subtitle" font-family="sans-serif" font-size="8">Späte Nennung (&gt; 50 %)</text>
+                <text x="152" y="102" class="geo-svg-title-halo" font-family="sans-serif" font-weight="bold" font-size="9" data-i18n="svg.q4_title">4. EMPFOHLEN</text>
+                <text x="152" y="118" class="geo-svg-subtitle" font-family="sans-serif" font-size="8" data-i18n="svg.q4_sub">Erst spät (&gt; 50 %)</text>
               </svg>
             </div>
 
             <div class="geo-quadrants-status">
-              <h4 class="geo-subhead" data-i18n="geo.matrix_title">Diagnose-Matrix:</h4>
+              <h4 class="geo-subhead" data-i18n="geo.matrix_title">Befund-Übersicht:</h4>
               <ul class="geo-quadrant-list">
                 <li id="geo-stat-hijack" class="geo-item">
                   <div class="geo-item-header">
-                    <span class="geo-name" data-i18n="matrix.q1_title">1. Die gekaperte Vorlage</span>
+                    <span class="geo-name" data-i18n="matrix.q1_title">1. Quelle zitiert, Konkurrent empfohlen</span>
                     <span id="geo-count-hijack" class="geo-count font-mono">0</span>
                   </div>
-                  <span class="geo-desc">Wettbewerber empfiehlt sich auf Basis Ihrer Quelle.</span>
+                  <span class="geo-desc" data-i18n="matrix.q1_short">Quelle im Grounding zitiert, aber Wettbewerber wird empfohlen.</span>
                 </li>
                 <li id="geo-stat-blindspot" class="geo-item">
                   <div class="geo-item-header">
-                    <span class="geo-name" data-i18n="matrix.q2_title">2. Das stumme Quell-Zitat</span>
+                    <span class="geo-name" data-i18n="matrix.q2_title">2. Quelle zitiert, Marke fehlt</span>
                     <span id="geo-count-blindspot" class="geo-count font-mono">0</span>
                   </div>
-                  <span class="geo-desc">Website zitiert, aber Markenname fehlt im Text.</span>
+                  <span class="geo-desc" data-i18n="matrix.q2_short">Eigene Website zitiert, aber Markenname fehlt im Antworttext.</span>
                 </li>
                 <li id="geo-stat-trap" class="geo-item">
                   <div class="geo-item-header">
-                    <span class="geo-name" data-i18n="matrix.q3_title">3. Die ewige Zweitnennung</span>
+                    <span class="geo-name" data-i18n="matrix.q3_title">3. Marke bekannt, aber nur Zweitnennung</span>
                     <span id="geo-count-trap" class="geo-count font-mono">0</span>
                   </div>
-                  <span class="geo-desc">Marke landet im Windschatten des Wettbewerbers.</span>
+                  <span class="geo-desc" data-i18n="matrix.q3_short">Marke bekannt, erscheint aber nur als Zweitnennung.</span>
                 </li>
                 <li id="geo-stat-buried" class="geo-item">
                   <div class="geo-item-header">
-                    <span class="geo-name" data-i18n="matrix.q4_title">4. Der versteckte Gewinner</span>
+                    <span class="geo-name" data-i18n="matrix.q4_title">4. Marke empfohlen, aber erst spät im Text (&gt; 50 %)</span>
                     <span id="geo-count-buried" class="geo-count font-mono">0</span>
                   </div>
-                  <span class="geo-desc">Einzige Empfehlung, aber erst spät (&gt; 50 % im Text).</span>
+                  <span class="geo-desc" data-i18n="matrix.q4_short">Marke empfohlen, aber erst spät (&gt; 50 % im Text).</span>
                 </li>
               </ul>
             </div>
@@ -539,16 +539,16 @@
     </div>
 
     <!-- Expandable Accordion Table: Per-User Physical Results Lookup -->
-    <section id="user-results-section" class="card user-results-card" aria-label="Einzelabfragen und KI-Antworten">
+    <section id="user-results-section" class="card user-results-card" aria-label="Einzel-Läufe und KI-Antworten">
       <div class="card-header user-results-header">
         <div class="user-results-title-wrap">
           <div class="user-results-title-row">
-            <h3 class="card-title" data-i18n="results.title">Einzelabfragen &amp; KI-Antworten (Prompt- &amp; Antwort-Archiv)</h3>
+            <h3 class="card-title" data-i18n="results.title">Einzel-Läufe &amp; KI-Antworten (Prompt- &amp; Antwort-Archiv)</h3>
             <span id="user-results-table-badge" class="badge badge-neutral font-mono">user_results</span>
             <span id="user-results-total-badge" class="badge badge-success font-mono">0</span>
           </div>
           <p class="card-hint" data-i18n="results.subtitle">
-            Jede Zeile kann aufgeklappt werden, um das exakte Prompt-Antwort-Paar, Quellen, Region-Auswertung und Telemetrie-Details Ihrer dedizierten Benutzertabelle einzusehen.
+            Jede Zeile kann aufgeklappt werden, um das exakte Prompt-Antwort-Paar, Quellen, Region-Auswertung und Telemetrie-Details Ihrer dedizierten Mandantentabelle einzusehen.
           </p>
         </div>
 
@@ -561,10 +561,10 @@
           </select>
           <select id="results-mece-filter" class="form-control form-select form-control-sm" aria-label="Nach Empfehlungs-Stufe filtern">
             <option value="" data-i18n="results.filter_all_tiers">Alle Empfehlungs-Stufen</option>
-            <option value="1_DIRECT_WIN" data-i18n="1_DIRECT_WIN">Platz 1 · Erste Wahl</option>
-            <option value="2_BRAND_HALO" data-i18n="2_BRAND_HALO">Platz 2 · Im Windschatten</option>
-            <option value="3_COMPETITOR_TAKEOVER" data-i18n="3_COMPETITOR_TAKEOVER">Verdrängt · Wettbewerbs-Übernahme</option>
-            <option value="4_GENERIC" data-i18n="4_GENERIC">Markenfreie Antwort</option>
+            <option value="1_DIRECT_WIN" data-i18n="1_DIRECT_WIN">Spitzenreiter · Direkte Empfehlung</option>
+            <option value="2_BRAND_HALO" data-i18n="2_BRAND_HALO">Verfolgerplatz · Zweitnennung</option>
+            <option value="3_COMPETITOR_TAKEOVER" data-i18n="3_COMPETITOR_TAKEOVER">Marke fehlt · Wettbewerber empfohlen</option>
+            <option value="4_GENERIC" data-i18n="4_GENERIC">Neutral · Keine Anbieter-Nennung</option>
           </select>
           <input
             type="search"
@@ -582,7 +582,7 @@
             <tr>
               <th style="width: 44px;" aria-label="Zeile ausklappen"></th>
               <th data-i18n="results.col_date">Datum</th>
-              <th data-i18n="results.col_prompt">Prompt / Suchanfrage</th>
+              <th data-i18n="results.col_prompt">Prompt</th>
               <th data-i18n="results.col_model">KI-Modell &amp; Strategie</th>
               <th data-i18n="results.col_tier">Empfehlungs-Stufe</th>
               <th class="text-right" data-i18n="results.col_position">Position &amp; Quellen</th>
@@ -590,7 +590,7 @@
           </thead>
           <tbody id="user-results-tbody">
             <tr>
-              <td colspan="6" class="text-center text-muted" data-i18n="results.loading">Lade Einzelabfragen...</td>
+              <td colspan="6" class="text-center text-muted" data-i18n="results.loading">Lade Einzel-Läufe…</td>
             </tr>
           </tbody>
         </table>
@@ -614,7 +614,7 @@
       </div>
       <div class="cta-actions">
         <a href="index.html?auth=signup" class="btn btn-primary btn-sm" data-i18n="audit.cta_btn">
-          Jetzt kostenlos registrieren (40 Abfragen)
+          Jetzt kostenlos registrieren (40 Credits)
         </a>
       </div>
     </div>
@@ -625,7 +625,7 @@
     <div class="modal-backdrop"></div>
     <div class="modal-dialog modal-dialog-wide card">
       <div class="modal-header">
-        <h3 id="config-modal-title" class="modal-title">Neue Tracking-Konfiguration</h3>
+        <h3 id="config-modal-title" class="modal-title" data-i18n="config.modal_create_title">Neues Tracking-Profil anlegen</h3>
         <button id="config-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
       </div>
       <form id="config-form" class="modal-body">
@@ -642,15 +642,15 @@
         </div>
 
         <div class="form-group">
-          <label for="cfg-prompts" class="form-label">Prompts / Suchanfragen (eine pro Zeile) *</label>
+          <label for="cfg-prompts" class="form-label">Prompts (eine pro Zeile) *</label>
           <textarea id="cfg-prompts" class="form-control form-textarea" rows="4" placeholder="Welche HR-Software eignet sich für den Mittelstand?" required></textarea>
           <p id="cfg-prompts-lock-hint" class="cfg-tier-hint hidden" data-i18n="config.prompts_locked_hint">
-            Hinweis: Nach Aktivierung von Full Start sind die Prompts und der Ziel-Markt gesperrt, um konsistente Zeitreihen zu gewährleisten.
+            Hinweis: Nach Aktivierung des Monitorings sind Prompts sowie Suchregion &amp; Sprache gesperrt, um konsistente Zeitreihen zu gewährleisten.
           </p>
         </div>
 
         <div class="form-group">
-          <label for="cfg-market-region" class="form-label" data-i18n="config.market_region_label">Ziel-Markt / Region (optional)</label>
+          <label for="cfg-market-region" class="form-label" data-i18n="config.market_region_label">Suchregion &amp; Sprache (optional)</label>
           <select id="cfg-market-region" class="form-control form-select">
             <option value="" data-i18n="config.market_region_auto">Auto (aus Prompt-Sprache ableiten)</option>
             <option value="DACH">DACH (DE / AT / CH)</option>
@@ -668,8 +668,8 @@
             <option value="__custom__" data-i18n="config.market_region_custom_opt">Benutzerdefiniert…</option>
           </select>
           <input type="text" id="cfg-market-region-custom" class="form-control hidden" style="margin-top: 0.5rem;" maxlength="64" placeholder="z.B. Benelux, Nordics, Bayern" data-i18n-placeholder="config.market_region_custom_placeholder">
-          <p class="form-hint" data-i18n="config.market_region_hint">Leer lassen für automatische Region-Erkennung anhand der Prompt-Sprache. Wenn gesetzt, wird eine kurze Marktvorgabe in der Zielsprache an den User-Prompt angehängt.</p>
-          <p id="cfg-market-region-lock-hint" class="cfg-tier-hint hidden" data-i18n="config.market_region_locked_hint">Hinweis: Nach Full Start ist die Ziel-Region gemeinsam mit den Prompts gesperrt.</p>
+          <p class="form-hint" data-i18n="config.market_region_hint">Leer lassen für automatische Erkennung anhand der Prompt-Sprache. Wenn gesetzt, wird eine kurze Marktvorgabe in der Zielsprache an den Prompt angehängt.</p>
+          <p id="cfg-market-region-lock-hint" class="cfg-tier-hint hidden" data-i18n="config.market_region_locked_hint">Hinweis: Nach Aktivierung des Monitorings ist Suchregion &amp; Sprache gemeinsam mit den Prompts gesperrt.</p>
         </div>
 
         <div class="form-group">
@@ -678,36 +678,36 @@
         </div>
 
         <div class="form-group">
-          <label for="cfg-name" class="form-label">Konfigurationsname</label>
+          <label for="cfg-name" class="form-label">Name des Tracking-Profils</label>
           <input type="text" id="cfg-name" class="form-control" placeholder="z.B. Personio HR DACH Tracking">
         </div>
 
         <div class="form-group">
-          <label for="cfg-interval" class="form-label" data-i18n="config.interval_label">Data-Mining-Genauigkeit (Datensätze / Tag pro KI-Modell)</label>
+          <label for="cfg-interval" class="form-label" data-i18n="config.interval_label">Mess-Frequenz (Analyse-Läufe / Tag pro LLM)</label>
           <select id="cfg-interval" class="form-control form-select">
-            <option value="every_120m" selected data-i18n="interval.every_120m">Starter · 12 Datensätze / Tag pro LLM (alle 120 Min.)</option>
-            <option value="every_60m" data-i18n="interval.every_60m">Standard · 24 Datensätze / Tag pro LLM (alle 60 Min.)</option>
-            <option value="every_30m" data-i18n="interval.every_30m">High · 48 Datensätze / Tag pro LLM (alle 30 Min.)</option>
-            <option value="every_15m" data-i18n="interval.every_15m">Precision · 96 Datensätze / Tag pro LLM (alle 15 Min.)</option>
+            <option value="every_120m" selected data-i18n="interval.every_120m">Basis · 12 Analyse-Läufe / Tag pro LLM (alle 120 Min.)</option>
+            <option value="every_60m" data-i18n="interval.every_60m">Standard · 24 Analyse-Läufe / Tag pro LLM (alle 60 Min.)</option>
+            <option value="every_30m" data-i18n="interval.every_30m">Hoch · 48 Analyse-Läufe / Tag pro LLM (alle 30 Min.)</option>
+            <option value="every_15m" data-i18n="interval.every_15m">Präzision · 96 Analyse-Läufe / Tag pro LLM (alle 15 Min.)</option>
           </select>
           <p id="cfg-tier-hint" class="cfg-tier-hint hidden"></p>
         </div>
 
         <div class="form-group">
-          <span class="form-label" data-i18n="config.presets_label">Analyse-Set (Model Preset) wählen</span>
+          <span class="form-label" data-i18n="config.presets_label">Analyse-Set wählen</span>
           <span id="cfg-preset-mode-badge" class="badge badge-secondary" data-i18n="config.presets_badge_tier">Kuratiertes Analyse-Set</span>
-          <p id="cfg-presets-hint" class="form-hint" data-i18n="config.presets_hint">Kuratiertes KI-Modell- und Websuche-Profil für konsistente Wettbewerbs-Benchmarks.</p>
+          <p id="cfg-presets-hint" class="form-hint" data-i18n="config.presets_hint">Kuratiertes KI-Modell- und Live-Websuche-Profil für konsistente Wettbewerbs-Benchmarks.</p>
           <input type="hidden" id="cfg-preset-id" name="preset_id" value="dach_core_baseline">
           <div id="cfg-presets-grid" class="preset-selector-grid" role="radiogroup" aria-label="Analyse-Sets"></div>
           <div id="cfg-custom-locked-banner" class="cfg-custom-locked-banner hidden" role="note" data-i18n="config.custom_models_locked_hint">
-            Freie Einzelmodell- &amp; Live-Websuche-Konfiguration ist ab dem Tarif Growth verfügbar. Ihr aktueller Tarif nutzt vordefinierte Analyse-Sets.
+            Freie Einzelmodell- &amp; Live-Websuche-Auswahl ist ab dem Tarif Growth verfügbar. Ihr aktueller Tarif nutzt vordefinierte Analyse-Sets.
           </div>
         </div>
 
         <div id="cfg-custom-models-section">
         <div class="form-group">
           <span class="form-label" data-i18n="config.llms_label">Ziel-KI-Modelle (Multi-LLM via OpenRouter)</span>
-          <p class="form-hint" data-i18n="config.llms_hint">Wählen Sie mindestens ein Modell. Alle Modelle werden einheitlich über OpenRouter ausgeführt (ohne System-Prompts, mit Batch-API bei deaktivierter Suche).</p>
+          <p class="form-hint" data-i18n="config.llms_hint">Wählen Sie mindestens ein Modell. Alle Modelle werden einheitlich über OpenRouter ausgeführt (ohne System-Prompts, mit Batch-API bei deaktivierter Live-Websuche).</p>
           <div id="cfg-llms-list" class="llm-selector-grid">
             <label class="llm-option-card">
               <span class="llm-option-main">
@@ -744,7 +744,7 @@
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistralai/mistral-large-4-0">
                 <span>
                   <span class="llm-option-title">Mistral · Large 4.0</span>
-                  <span class="llm-option-meta">mistralai/mistral-large-4-0 · OpenRouter Standard</span>
+                  <span class="llm-option-meta">mistralai/mistral-large-4-0 · OpenRouter Standard-Lauf</span>
                 </span>
               </span>
             </label>
@@ -775,8 +775,8 @@
           <label class="form-checkbox-row">
             <input type="checkbox" id="cfg-search-enabled" checked>
             <span>
-              <span class="llm-option-title" data-i18n="config.search_label">Live-Websuche / Search Grounding aktivieren</span>
-              <span class="llm-option-meta" data-i18n="config.search_hint">Nutzt OpenRouter Web-Search Tool / Web-Plugin für aktuelle Quellenzitate (Sofort-Ausführung; ohne Websuche läuft Batch-API automatisch).</span>
+              <span class="llm-option-title" data-i18n="config.search_label">Live-Websuche (Search Grounding) aktivieren</span>
+              <span class="llm-option-meta" data-i18n="config.search_hint">Nutzt OpenRouter Web-Search Tool / Web-Plugin für aktuelle Quellenzitate (Standard-Lauf; ohne Live-Websuche läuft Batch-API automatisch).</span>
             </span>
           </label>
         </div>
@@ -786,8 +786,8 @@
         <div id="cfg-credit-preview" class="cfg-credit-preview" aria-live="polite"></div>
 
         <div class="modal-footer">
-          <button type="button" id="config-cancel" class="btn btn-secondary">Abbrechen</button>
-          <button type="submit" class="btn btn-primary">Konfiguration speichern</button>
+          <button type="button" id="config-cancel" class="btn btn-secondary" data-i18n="common.cancel">Abbrechen</button>
+          <button type="submit" class="btn btn-primary" data-i18n="config.btn_save">Tracking-Profil speichern</button>
         </div>
       </form>
     </div>
@@ -798,7 +798,7 @@
     <div class="modal-backdrop"></div>
     <div class="modal-dialog card">
       <div class="modal-header">
-        <h3 class="modal-title">Schreibgeschützter Vorstandsreport-Link</h3>
+        <h3 class="modal-title">Schreibgeschützter GEO-Report-Link</h3>
         <button id="share-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
       </div>
       <div class="modal-body">
@@ -818,7 +818,7 @@
     <div class="modal-backdrop"></div>
     <div class="modal-dialog card">
       <div class="modal-header">
-        <h3 id="confirm-modal-title" class="modal-title" data-i18n="run.confirm_title">Abfrage jetzt starten?</h3>
+        <h3 id="confirm-modal-title" class="modal-title" data-i18n="run.confirm_title">Test-Lauf jetzt starten?</h3>
         <button type="button" id="confirm-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
       </div>
       <div class="modal-body">
@@ -838,8 +838,8 @@
 
   <footer class="footer">
     <div class="container-fluid footer-inner">
-      <div class="footer-brand" data-i18n="footer.copyright">© 2026 Chatlytics.de — Share-of-Model &amp; GEO Intelligence</div>
-      <div class="footer-infra" data-i18n="footer.infra">Gehostet auf dedizierter Infrastruktur in Frankfurt am Main · Keine externen Font-CDNs oder Drittanbieter-Tracker.</div>
+      <div class="footer-brand" data-i18n="footer.copyright">© 2026 Chatlytics.de — KI-Empfehlungsanteil &amp; GEO Analytics</div>
+      <div class="footer-infra" data-i18n="footer.infra">Chatlytics gehostet in Deutschland (Frankfurt am Main, DSGVO-konform, ohne US-CDNs)</div>
     </div>
   </footer>
 

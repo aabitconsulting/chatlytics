@@ -144,7 +144,7 @@ $cfgStmt = $db->prepare("SELECT id, user_id, brand_name, market_region, schedule
 $cfgStmt->execute([':id' => $configId]);
 $cfgRecord = $cfgStmt->fetch();
 if (!$cfgRecord) {
-    jsonError("Configuration with id {$configId} does not exist.", 404);
+    jsonError("Tracking profile with id {$configId} does not exist.", 404);
 }
 
 $userId = isset($payload['user_id']) && (int)$payload['user_id'] > 0

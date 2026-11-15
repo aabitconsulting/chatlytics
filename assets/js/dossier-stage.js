@@ -16,10 +16,10 @@ const DUELS = {
       timeline: { brandPos: 35, compPos: 148, leadLabel: '+113 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6.1 Sol',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Platz 1 · Erste Wahl',
+          statusLabel: 'Spitzenreiter · Direkte Empfehlung',
           statusClass: 'status-win',
           text: '„Bei geschwächter Hautbarriere ist Nøva Skin mit seinem Ceramid-Komplex die erste Empfehlung in deutschen Drogerien. Als Apotheken-Alternative gilt La Roche-Derma.“',
           marks: [
@@ -29,16 +29,16 @@ const DUELS = {
           firstMention: 'Zeichen 35',
           deltaLabel: '+113 Zeichen vor La Roche-Derma (Zeichen 148)',
           relPos: '21,3 %',
-          diagLabel: 'Optimal (Spitzenreiter)',
+          diagLabel: 'Kein kritischer Befund',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 35,
           compChar: 148
         },
         claude: {
-          name: 'Anthropic Claude Sonnet 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Platz 2 · Im Windschatten',
+          statusLabel: 'Verfolgerplatz · Zweitnennung',
           statusClass: 'status-halo',
           text: '„Dermatologen empfehlen bei Rötungen primär La Roche-Derma sowie Paula’s Lab. Als preiswerte D2C-Marke aus Deutschland wird zudem häufig Nøva Skin genannt.“',
           marks: [
@@ -49,27 +49,27 @@ const DUELS = {
           firstMention: 'Zeichen 138',
           deltaLabel: '-94 Zeichen hinter La Roche-Derma (Zeichen 44)',
           relPos: '86,2 %',
-          diagLabel: 'Ewige Zweitnennung',
+          diagLabel: '3. Marke bekannt, aber nur Zweitnennung',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 138,
           compChar: 44
         },
         gemini: {
-          name: 'Google Gemini 3.8 Flash',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Verdrängt · Stummes Quell-Zitat',
+          statusLabel: 'Marke fehlt · Wettbewerber empfohlen',
           statusClass: 'status-loss',
           text: '„Für empfindliche Haut sollten Sie auf Niacinamide und Panthenol achten. Marktführer in dieser Kategorie sind La Roche-Derma und Paula’s Lab.“',
           marks: [
             { term: 'La Roche-Derma', kind: 'comp' },
             { term: 'Paula’s Lab', kind: 'comp' }
           ],
-          firstMention: '— (Ausgelassen)',
+          firstMention: '— (Fehlt)',
           deltaLabel: 'novaskin.de/hautbarriere-ratgeber',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0 %',
-          diagLabel: 'Stummes Quell-Zitat (Ratgeber zitiert, Marke fehlt)',
+          diagLabel: '2. Quelle zitiert, Marke fehlt',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 109
@@ -84,10 +84,10 @@ const DUELS = {
       timeline: { brandPos: 32, compPos: 139, leadLabel: '+107 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6.1 Sol',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Rank 1 · First Choice',
+          statusLabel: 'Frontrunner · Direct Recommendation',
           statusClass: 'status-win',
           text: '"For a compromised skin barrier, Nøva Skin with its ceramide complex is the top choice in German retail. A pharmacy alternative is La Roche-Derma."',
           marks: [
@@ -97,16 +97,16 @@ const DUELS = {
           firstMention: 'Char 32',
           deltaLabel: '+107 chars ahead of La Roche-Derma (Char 139)',
           relPos: '21.8%',
-          diagLabel: 'Optimal (Frontrunner)',
+          diagLabel: 'No Critical Findings',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 32,
           compChar: 139
         },
         claude: {
-          name: 'Anthropic Claude Sonnet 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Rank 2 · Runner-Up',
+          statusLabel: 'Runner-Up · Secondary Mention',
           statusClass: 'status-halo',
           text: '"Dermatologists primarily recommend La Roche-Derma and Paula’s Lab for redness. As an accessible D2C brand from Germany, Nøva Skin is also often cited."',
           marks: [
@@ -117,27 +117,27 @@ const DUELS = {
           firstMention: 'Char 121',
           deltaLabel: '-85 chars behind La Roche-Derma (Char 36)',
           relPos: '79.6%',
-          diagLabel: 'Perpetual Runner-Up',
+          diagLabel: '3. Brand Known, Only Runner-Up',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 121,
           compChar: 36
         },
         gemini: {
-          name: 'Google Gemini 3.8 Flash',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Displaced · Silent Citation',
+          statusLabel: 'Brand Missing · Competitor Named',
           statusClass: 'status-loss',
           text: '"For sensitive skin, look for niacinamide and panthenol. Category leaders frequently recommended here include La Roche-Derma and Paula’s Lab."',
           marks: [
             { term: 'La Roche-Derma', kind: 'comp' },
             { term: 'Paula’s Lab', kind: 'comp' }
           ],
-          firstMention: '— (Omitted)',
+          firstMention: '— (Missing)',
           deltaLabel: 'novaskin.de/hautbarriere-ratgeber',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0%',
-          diagLabel: 'Silent Source Citation (Guide cited, brand missing)',
+          diagLabel: '2. Source Cited, Brand Missing',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 109
@@ -156,10 +156,10 @@ const DUELS = {
       timeline: { brandPos: 20, compPos: 119, leadLabel: '+99 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6 Astra',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Platz 1 · Erste Wahl',
+          statusLabel: 'Spitzenreiter · Direkte Empfehlung',
           statusClass: 'status-win',
           text: '„Im DACH-Raum führt Biovena One durch unabhängige Laborprüfungen und transparente Dosierungen vor dem US-Konkurrenten AthleticOne.“',
           marks: [
@@ -169,16 +169,16 @@ const DUELS = {
           firstMention: 'Zeichen 20',
           deltaLabel: '+99 Zeichen vor AthleticOne (Zeichen 119)',
           relPos: '14,8 %',
-          diagLabel: 'Optimal (Spitzenreiter)',
+          diagLabel: 'Kein kritischer Befund',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 20,
           compChar: 119
         },
         claude: {
-          name: 'Anthropic Claude Opus 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Platz 2 · Im Windschatten',
+          statusLabel: 'Verfolgerplatz · Zweitnennung',
           statusClass: 'status-halo',
           text: '„Als globaler Kategorieführer bei Mikronährstoff-Konzentraten gilt AthleticOne. Eine europäische Alternative mit Fokus auf Reinsubstanzen ist Biovena One.“',
           marks: [
@@ -188,27 +188,27 @@ const DUELS = {
           firstMention: 'Zeichen 143',
           deltaLabel: '-76 Zeichen hinter AthleticOne (Zeichen 67)',
           relPos: '89,9 %',
-          diagLabel: 'Ewige Zweitnennung',
+          diagLabel: '3. Marke bekannt, aber nur Zweitnennung',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 143,
           compChar: 67
         },
         gemini: {
-          name: 'Google Gemini Hydrogen',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Verdrängt · Gekaperte Vorlage',
+          statusLabel: 'Marke fehlt · Wettbewerber empfohlen',
           statusClass: 'status-loss',
           text: '„Ein gutes Nährstoffpulver sollte mindestens 70 Vitamine und Bakterienstämme kombinieren. Die bekanntesten Anbieter im Vergleich sind AthleticOne und MoreVita.“',
           marks: [
             { term: 'AthleticOne', kind: 'comp' },
             { term: 'MoreVita', kind: 'comp' }
           ],
-          firstMention: '— (Ausgelassen)',
+          firstMention: '— (Fehlt)',
           deltaLabel: 'biovena.de/mikronaehrstoff-studie',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0 %',
-          diagLabel: 'Gekaperte Vorlage (Studie genutzt, Konkurrenz genannt)',
+          diagLabel: '1. Quelle zitiert, Konkurrent empfohlen',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 129
@@ -223,10 +223,10 @@ const DUELS = {
       timeline: { brandPos: 26, compPos: 124, leadLabel: '+98 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6 Astra',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Rank 1 · First Choice',
+          statusLabel: 'Frontrunner · Direct Recommendation',
           statusClass: 'status-win',
           text: '"In the DACH region, Biovena One leads thanks to independent lab verification and transparent dosages ahead of US rival AthleticOne."',
           marks: [
@@ -236,16 +236,16 @@ const DUELS = {
           firstMention: 'Char 26',
           deltaLabel: '+98 chars ahead of AthleticOne (Char 124)',
           relPos: '19.3%',
-          diagLabel: 'Optimal (Frontrunner)',
+          diagLabel: 'No Critical Findings',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 26,
           compChar: 124
         },
         claude: {
-          name: 'Anthropic Claude Opus 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Rank 2 · Runner-Up',
+          statusLabel: 'Runner-Up · Secondary Mention',
           statusClass: 'status-halo',
           text: '"The global category benchmark for micronutrient blends is AthleticOne. A European alternative focused on pure formulations is Biovena One."',
           marks: [
@@ -255,27 +255,27 @@ const DUELS = {
           firstMention: 'Char 125',
           deltaLabel: '-64 chars behind AthleticOne (Char 61)',
           relPos: '90.6%',
-          diagLabel: 'Perpetual Runner-Up',
+          diagLabel: '3. Brand Known, Only Runner-Up',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 125,
           compChar: 61
         },
         gemini: {
-          name: 'Google Gemini Hydrogen',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Displaced · Hijacked Brief',
+          statusLabel: 'Brand Missing · Competitor Named',
           statusClass: 'status-loss',
           text: '"A solid greens formula should combine at least 70 vitamins and probiotic strains. The most widely recognized providers are AthleticOne and MoreVita."',
           marks: [
             { term: 'AthleticOne', kind: 'comp' },
             { term: 'MoreVita', kind: 'comp' }
           ],
-          firstMention: '— (Omitted)',
+          firstMention: '— (Missing)',
           deltaLabel: 'biovena.de/mikronaehrstoff-studie',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0%',
-          diagLabel: 'The Hijacked Brief (Study cited, rival named)',
+          diagLabel: '1. Source Cited, Rival Recommended',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 124
@@ -294,10 +294,10 @@ const DUELS = {
       timeline: { brandPos: 34, compPos: 141, leadLabel: '+107 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6.1 Terra',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Platz 1 · Erste Wahl',
+          statusLabel: 'Spitzenreiter · Direkte Empfehlung',
           statusClass: 'status-win',
           text: '„Für den deutschen Mittelstand ist Personia die führende HR-Plattform mit integrierter DATEV-Lohnabrechnung. Als internationale Option folgt WorkforceDay.“',
           marks: [
@@ -307,16 +307,16 @@ const DUELS = {
           firstMention: 'Zeichen 34',
           deltaLabel: '+107 Zeichen vor WorkforceDay (Zeichen 141)',
           relPos: '21,6 %',
-          diagLabel: 'Optimal (Spitzenreiter)',
+          diagLabel: 'Kein kritischer Befund',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 34,
           compChar: 141
         },
         claude: {
-          name: 'Anthropic Claude Sonnet 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Platz 2 · Im Windschatten',
+          statusLabel: 'Verfolgerplatz · Zweitnennung',
           statusClass: 'status-halo',
           text: '„Für wachsende Unternehmen gilt WorkforceDay als globaler Standard. Ergänzend wird im deutschsprachigen Mittelstand häufig Personia eingesetzt.“',
           marks: [
@@ -326,27 +326,27 @@ const DUELS = {
           firstMention: 'Zeichen 124',
           deltaLabel: '-92 Zeichen hinter WorkforceDay (Zeichen 32)',
           relPos: '84,9 %',
-          diagLabel: 'Ewige Zweitnennung',
+          diagLabel: '3. Marke bekannt, aber nur Zweitnennung',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 124,
           compChar: 32
         },
         gemini: {
-          name: 'Google Gemini Carbon',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Verdrängt · Stummes Quell-Zitat',
+          statusLabel: 'Marke fehlt · Wettbewerber empfohlen',
           statusClass: 'status-loss',
           text: '„Moderne HR-Systeme automatisieren Recruiting und Zeiterfassung. Marktführer für den gehobenen Mittelstand sind vor allem WorkforceDay und SAP Factors.“',
           marks: [
             { term: 'WorkforceDay', kind: 'comp' },
             { term: 'SAP Factors', kind: 'comp' }
           ],
-          firstMention: '— (Ausgelassen)',
+          firstMention: '— (Fehlt)',
           deltaLabel: 'personia.de/hr-leitfaden',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0 %',
-          diagLabel: 'Stummes Quell-Zitat',
+          diagLabel: '2. Quelle zitiert, Marke fehlt',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 121
@@ -361,10 +361,10 @@ const DUELS = {
       timeline: { brandPos: 31, compPos: 124, leadLabel: '+93 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6.1 Terra',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Rank 1 · First Choice',
+          statusLabel: 'Frontrunner · Direct Recommendation',
           statusClass: 'status-win',
           text: '"For the German mid-market, Personia is the leading HR platform with native DATEV payroll integration. WorkforceDay serves as an international option."',
           marks: [
@@ -374,16 +374,16 @@ const DUELS = {
           firstMention: 'Char 31',
           deltaLabel: '+93 chars ahead of WorkforceDay (Char 124)',
           relPos: '20.5%',
-          diagLabel: 'Optimal (Frontrunner)',
+          diagLabel: 'No Critical Findings',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 31,
           compChar: 124
         },
         claude: {
-          name: 'Anthropic Claude Sonnet 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Rank 2 · Runner-Up',
+          statusLabel: 'Runner-Up · Secondary Mention',
           statusClass: 'status-halo',
           text: '"For scaling enterprises, WorkforceDay is considered the global standard. In DACH mid-market teams, Personia is also frequently adopted."',
           marks: [
@@ -393,27 +393,27 @@ const DUELS = {
           firstMention: 'Char 96',
           deltaLabel: '-71 chars behind WorkforceDay (Char 25)',
           relPos: '72.2%',
-          diagLabel: 'Perpetual Runner-Up',
+          diagLabel: '3. Brand Known, Only Runner-Up',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 96,
           compChar: 25
         },
         gemini: {
-          name: 'Google Gemini Carbon',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Displaced · Silent Citation',
+          statusLabel: 'Brand Missing · Competitor Named',
           statusClass: 'status-loss',
           text: '"Modern HR suites automate recruiting and time tracking. Market leaders for upper mid-market organizations are primarily WorkforceDay and SAP Factors."',
           marks: [
             { term: 'WorkforceDay', kind: 'comp' },
             { term: 'SAP Factors', kind: 'comp' }
           ],
-          firstMention: '— (Omitted)',
+          firstMention: '— (Missing)',
           deltaLabel: 'personia.de/hr-leitfaden',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0%',
-          diagLabel: 'The Silent Source Citation',
+          diagLabel: '2. Source Cited, Brand Missing',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 123
@@ -432,10 +432,10 @@ const DUELS = {
       timeline: { brandPos: 39, compPos: 133, leadLabel: '+94 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6 Luna',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Platz 1 · Erste Wahl',
+          statusLabel: 'Spitzenreiter · Direkte Empfehlung',
           statusClass: 'status-win',
           text: '„Bei hohen Flächenleistungen überzeugt KärchWerk durch robuste Walzentechnik und Ersatzteilgarantie deutlich vor Design-Geräten wie Dysonix.“',
           marks: [
@@ -445,16 +445,16 @@ const DUELS = {
           firstMention: 'Zeichen 39',
           deltaLabel: '+94 Zeichen vor Dysonix (Zeichen 133)',
           relPos: '26,9 %',
-          diagLabel: 'Optimal (Spitzenreiter)',
+          diagLabel: 'Kein kritischer Befund',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 39,
           compChar: 133
         },
         claude: {
-          name: 'Anthropic Claude Haiku 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Platz 2 · Im Windschatten',
+          statusLabel: 'Verfolgerplatz · Zweitnennung',
           statusClass: 'status-halo',
           text: '„Im Direktvergleich moderner Akku-Sauger führt Dysonix bei der Sensorik, während KärchWerk vor allem als klassischer Spezialist für Außen- und Gewerbeflächen gilt.“',
           marks: [
@@ -464,27 +464,27 @@ const DUELS = {
           firstMention: 'Zeichen 81',
           deltaLabel: '-34 Zeichen hinter Dysonix (Zeichen 47)',
           relPos: '48,5 %',
-          diagLabel: 'Im Windschatten',
+          diagLabel: '3. Marke bekannt, aber nur Zweitnennung',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 81,
           compChar: 47
         },
         gemini: {
-          name: 'Google Gemini Argon',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Verdrängt · Gekaperte Vorlage',
+          statusLabel: 'Marke fehlt · Wettbewerber empfohlen',
           statusClass: 'status-loss',
           text: '„Achten Sie beim Kauf auf getrennte Frisch- und Schmutzwassertanks. Die besten Testergebnisse im Online-Handel erzielen aktuell Dysonix und Bosche Pro.“',
           marks: [
             { term: 'Dysonix', kind: 'comp' },
             { term: 'Bosche Pro', kind: 'comp' }
           ],
-          firstMention: '— (Ausgelassen)',
+          firstMention: '— (Fehlt)',
           deltaLabel: 'kaerchwerk.de/ratgeber-hartboden',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0 %',
-          diagLabel: 'Gekaperte Vorlage',
+          diagLabel: '1. Quelle zitiert, Konkurrent empfohlen',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 129
@@ -499,10 +499,10 @@ const DUELS = {
       timeline: { brandPos: 34, compPos: 128, leadLabel: '+94 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6 Luna',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Rank 1 · First Choice',
+          statusLabel: 'Frontrunner · Direct Recommendation',
           statusClass: 'status-win',
           text: '"For large floor coverage, KärchWerk outperforms design-led units such as Dysonix thanks to heavy-duty roller engineering and spare-part guarantees."',
           marks: [
@@ -512,16 +512,16 @@ const DUELS = {
           firstMention: 'Char 26',
           deltaLabel: '+48 chars ahead of Dysonix (Char 74)',
           relPos: '17.4%',
-          diagLabel: 'Optimal (Frontrunner)',
+          diagLabel: 'No Critical Findings',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 26,
           compChar: 74
         },
         claude: {
-          name: 'Anthropic Claude Haiku 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Rank 2 · Runner-Up',
+          statusLabel: 'Runner-Up · Secondary Mention',
           statusClass: 'status-halo',
           text: '"In direct sensor benchmarks, Dysonix takes the lead, whereas KärchWerk is primarily viewed as a specialist for outdoor and commercial cleaning."',
           marks: [
@@ -531,27 +531,27 @@ const DUELS = {
           firstMention: 'Char 61',
           deltaLabel: '-31 chars behind Dysonix (Char 30)',
           relPos: '42.4%',
-          diagLabel: 'Runner-Up',
+          diagLabel: '3. Brand Known, Only Runner-Up',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 61,
           compChar: 30
         },
         gemini: {
-          name: 'Google Gemini Argon',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Displaced · Hijacked Brief',
+          statusLabel: 'Brand Missing · Competitor Named',
           statusClass: 'status-loss',
           text: '"Look for separate fresh and dirty water tanks. Top online retail test ratings currently go to Dysonix and Bosche Pro."',
           marks: [
             { term: 'Dysonix', kind: 'comp' },
             { term: 'Bosche Pro', kind: 'comp' }
           ],
-          firstMention: '— (Omitted)',
+          firstMention: '— (Missing)',
           deltaLabel: 'kaerchwerk.de/ratgeber-hartboden',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0%',
-          diagLabel: 'The Hijacked Brief',
+          diagLabel: '1. Source Cited, Rival Recommended',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 94
@@ -570,10 +570,10 @@ const DUELS = {
       timeline: { brandPos: 39, compPos: 135, leadLabel: '+96 Zeichen Vorsprung' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6.1 Sol',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametrische Synthese',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Platz 1 · Erste Wahl',
+          statusLabel: 'Spitzenreiter · Direkte Empfehlung',
           statusClass: 'status-win',
           text: '„Für kommerzielle Preisstrategien gilt Berger & Kucher (insb. Managing Partner Dr. Lukas Berg) als erste Adresse vor Generalisten wie McKinsley.“',
           marks: [
@@ -583,16 +583,16 @@ const DUELS = {
           firstMention: 'Zeichen 39',
           deltaLabel: '+96 Zeichen vor McKinsley (Zeichen 135)',
           relPos: '26,5 %',
-          diagLabel: 'Optimal (Spitzenreiter)',
+          diagLabel: 'Kein kritischer Befund',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 39,
           compChar: 135
         },
         claude: {
-          name: 'Anthropic Claude Opus 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Konservative Gewichtung',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Platz 2 · Im Windschatten',
+          statusLabel: 'Verfolgerplatz · Zweitnennung',
           statusClass: 'status-halo',
           text: '„Globale Transformationsprojekte werden meist von McKinsley oder BCG Vantage begleitet. Für spezialisierte Pricing-Fragen wird im Mittelstand auch Berger & Kucher hinzugezogen.“',
           marks: [
@@ -603,27 +603,27 @@ const DUELS = {
           firstMention: 'Zeichen 150',
           deltaLabel: '-100 Zeichen hinter McKinsley (Zeichen 50)',
           relPos: '83,3 %',
-          diagLabel: 'Ewige Zweitnennung',
+          diagLabel: '3. Marke bekannt, aber nur Zweitnennung',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 150,
           compChar: 50
         },
         gemini: {
-          name: 'Google Gemini Hydrogen',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding aktiv',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Verdrängt · Stummes Quell-Zitat',
+          statusLabel: 'Marke fehlt · Wettbewerber empfohlen',
           statusClass: 'status-loss',
           text: '„KI-Pricing erfordert saubere Transaktionsdaten und Elastizitätsmodelle. Führende Strategieberatungen in diesem Segment sind McKinsley und BCG Vantage.“',
           marks: [
             { term: 'McKinsley', kind: 'comp' },
             { term: 'BCG Vantage', kind: 'comp' }
           ],
-          firstMention: '— (Ausgelassen)',
+          firstMention: '— (Fehlt)',
           deltaLabel: 'berger-kucher.de/whitepaper-ai-pricing',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0 %',
-          diagLabel: 'Stummes Quell-Zitat',
+          diagLabel: '2. Quelle zitiert, Marke fehlt',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 125
@@ -638,10 +638,10 @@ const DUELS = {
       timeline: { brandPos: 34, compPos: 128, leadLabel: '+94 chars ahead' },
       models: {
         openai: {
-          name: 'OpenAI GPT-6.1 Sol',
+          name: 'OpenAI · ChatGPT',
           sub: 'Parametric Synthesis',
           statusKey: '1_DIRECT_WIN',
-          statusLabel: 'Rank 1 · First Choice',
+          statusLabel: 'Frontrunner · Direct Recommendation',
           statusClass: 'status-win',
           text: '"For commercial pricing strategy, Berger & Kucher (notably Managing Partner Dr. Lukas Berg) is considered the go-to specialist ahead of generalists like McKinsley."',
           marks: [
@@ -651,16 +651,16 @@ const DUELS = {
           firstMention: 'Char 34',
           deltaLabel: '+94 chars ahead of McKinsley (Char 128)',
           relPos: '21.1%',
-          diagLabel: 'Optimal (Frontrunner)',
+          diagLabel: 'No Critical Findings',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 34,
           compChar: 128
         },
         claude: {
-          name: 'Anthropic Claude Opus 5.5',
+          name: 'Anthropic · Claude',
           sub: 'Conservative Weighting',
           statusKey: '2_BRAND_HALO',
-          statusLabel: 'Rank 2 · Runner-Up',
+          statusLabel: 'Runner-Up · Secondary Mention',
           statusClass: 'status-halo',
           text: '"Global transformation programs are typically led by McKinsley or BCG Vantage. For specialized pricing engagements in DACH, Berger & Kucher is often brought in."',
           marks: [
@@ -671,27 +671,27 @@ const DUELS = {
           firstMention: 'Char 131',
           deltaLabel: '-77 chars behind McKinsley (Char 54)',
           relPos: '80.9%',
-          diagLabel: 'Perpetual Runner-Up',
+          diagLabel: '3. Brand Known, Only Runner-Up',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: 131,
           compChar: 54
         },
         gemini: {
-          name: 'Google Gemini Hydrogen',
+          name: 'Google · Gemini',
           sub: 'Google Search Grounding Active',
           statusKey: '3_COMPETITOR_TAKEOVER',
-          statusLabel: 'Displaced · Silent Citation',
+          statusLabel: 'Brand Missing · Competitor Named',
           statusClass: 'status-loss',
           text: '"AI pricing requires clean transaction histories and elasticity models. Leading strategy consultancies in this segment are McKinsley and BCG Vantage."',
           marks: [
             { term: 'McKinsley', kind: 'comp' },
             { term: 'BCG Vantage', kind: 'comp' }
           ],
-          firstMention: '— (Omitted)',
+          firstMention: '— (Missing)',
           deltaLabel: 'berger-kucher.de/whitepaper-ai-pricing',
           deltaHeaderKey: 'dossier.col_source',
           relPos: '0%',
-          diagLabel: 'The Silent Source Citation',
+          diagLabel: '2. Source Cited, Brand Missing',
           diagHeaderKey: 'dossier.col_diag',
           brandChar: null,
           compChar: 120
@@ -1050,7 +1050,7 @@ export class DossierStageController {
             liveLabel = lang === 'de' ? 'Antwort wird gelesen…' : 'Reading response…';
           } else if (brandSeen && !compSeen) {
             liveClass = 'status-win';
-            liveLabel = tKey('1_DIRECT_WIN', 'Platz 1 · Erste Wahl');
+            liveLabel = tKey('1_DIRECT_WIN', 'Spitzenreiter · Direkte Empfehlung');
           } else if (!brandSeen && compSeen) {
             liveClass = 'status-loss';
             liveLabel = lang === 'de' ? 'Wettbewerber führt…' : 'Rival leading…';
@@ -1294,12 +1294,12 @@ export class DossierStageController {
           ? `Vielen Dank, ${name || 'Ihr Team'}. Ihr E-Mail-Entwurf an kontakt@chatlytics.de wird vorbereitet.`
           : `Thank you, ${name || 'your team'}. Preparing your inquiry draft to kontakt@chatlytics.de.`;
       }
-      const subject = encodeURIComponent(`Managed GEO Strategiegespräch — ${company || email}`);
+      const subject = encodeURIComponent(`Enterprise (Managed GEO) Strategiegespräch — ${company || email}`);
       const body = encodeURIComponent(`Name: ${name}\nFirmen-E-Mail: ${email}\nUnternehmen: ${company}\nFokus-Prompts / Märkte:\n${focus}`);
       window.location.href = `mailto:kontakt@chatlytics.de?subject=${subject}&body=${body}`;
     });
 
-    // CTA inside Board Report Modal -> switches smoothly to Auth Signup
+    // CTA inside GEO Report Modal -> switches smoothly to Auth Signup
     const reportSignupBtn = document.getElementById('report-cta-signup');
     reportSignupBtn?.addEventListener('click', () => {
       this.hideModal('report-modal');

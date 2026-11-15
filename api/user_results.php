@@ -130,10 +130,10 @@ if ($configId !== null && $configId > 0) {
     $cfgChk->execute([':id' => $configId]);
     $cfgRow = $cfgChk->fetch();
     if (!$cfgRow || ((int)$cfgRow['user_id'] !== $targetUserId && !$isAdmin)) {
-        jsonError("Configuration not found or access denied.", 404);
+        jsonError("Tracking profile not found or access denied.", 404);
     }
     if (((string)($cfgRow['status'] ?? '')) === 'deleted' && !$isAdmin) {
-        jsonError("Configuration not found or access denied.", 404);
+        jsonError("Tracking profile not found or access denied.", 404);
     }
     $refDate = $cfgRow['full_started_at'] ?: ($cfgRow['created_at'] ?? null);
     if ($refDate !== null && substr((string)$refDate, 1, 10) !== '' && substr((string)$refDate, 0, 10) === $todayDate) {

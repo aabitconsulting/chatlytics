@@ -231,9 +231,9 @@ export class AuthManager {
     let lastFocusedEl = null;
 
     const TIER_LABELS = {
-      free: { de: 'Gewählter Tarif: Free (0 € · 40 Live-Abfragen)', en: 'Selected plan: Free (€0 · 40 live queries)' },
-      starter: { de: 'Gewählter Tarif: Starter (149 € / Monat · 40 Test-Abfragen vorab)', en: 'Selected plan: Starter (€149 / month · 40 trial queries included)' },
-      growth: { de: 'Gewählter Tarif: Growth (399 € / Monat · 40 Test-Abfragen vorab)', en: 'Selected plan: Growth (€399 / month · 40 trial queries included)' }
+      free: { de: 'Gewählter Tarif: Free (0 € · 40 Live-Analyse-Läufe / 40 Gratis-Credits)', en: 'Selected plan: Free (€0 · 40 Live Analysis Runs / 40 free credits)' },
+      starter: { de: 'Gewählter Tarif: Starter (149 € / Monat · 40 Gratis-Credits vorab)', en: 'Selected plan: Starter (€149 / month · 40 free credits included)' },
+      growth: { de: 'Gewählter Tarif: Growth (399 € / Monat · 40 Gratis-Credits vorab)', en: 'Selected plan: Growth (€399 / month · 40 free credits included)' }
     };
 
     const updateTierContext = (tier) => {

@@ -114,24 +114,20 @@ test('Frontier LLM Showcase, Admin ESM Scripts, and Local Favicon Integrity', ()
   const dossierJs = fs.readFileSync(path.join(rootDir, 'assets/js/dossier-stage.js'), 'utf8');
   const i18nJs = fs.readFileSync(path.join(rootDir, 'assets/js/i18n.js'), 'utf8');
 
-  const requiredFrontierModels = [
-    'GPT-6.1 Sol',
-    'GPT-6.1 Terra',
-    'GPT-6 Astra',
-    'GPT-6 Luna',
-    'Claude Opus 5.5',
-    'Claude Sonnet 5.5',
-    'Claude Haiku 5.5',
-    'Gemini Hydrogen',
-    'Gemini Carbon',
-    'Gemini Argon',
-    'Gemini 3.8 Flash',
+  const requiredModelFamilies = [
+    'OpenAI · ChatGPT',
+    'Anthropic · Claude',
+    'Google · Gemini',
   ];
 
-  for (const modelName of requiredFrontierModels) {
-    assert.ok(dossierJs.includes(modelName), `dossier-stage.js must showcase frontier model ${modelName}`);
-    assert.ok(indexHtml.includes(modelName), `index.html must surface frontier model ${modelName}`);
-    assert.ok(i18nJs.includes(modelName), `i18n.js must surface frontier model ${modelName}`);
+  for (const modelName of requiredModelFamilies) {
+    assert.ok(dossierJs.includes(modelName), `dossier-stage.js must showcase model family ${modelName}`);
+    assert.ok(indexHtml.includes(modelName), `index.html must surface model family ${modelName}`);
+    assert.ok(i18nJs.includes(modelName.split(' · ')[0]) && i18nJs.includes(modelName.split(' · ')[1]), `i18n.js must surface model family ${modelName}`);
+  }
+  for (const brandModel of ['ChatGPT', 'Claude', 'Gemini', 'Mistral']) {
+    assert.ok(indexHtml.includes(brandModel), `index.html must reference ${brandModel}`);
+    assert.ok(i18nJs.includes(brandModel), `i18n.js must reference ${brandModel}`);
   }
 
   for (const [label, content] of [
@@ -139,8 +135,14 @@ test('Frontier LLM Showcase, Admin ESM Scripts, and Local Favicon Integrity', ()
     ['dossier-stage.js', dossierJs],
     ['i18n.js', i18nJs],
   ]) {
-    for (const legacyRx of [/GPT-4o/i, /Claude 3\.5/i, /Gemini 1\.5/i]) {
-      assert.equal(legacyRx.test(content), false, `Legacy model pattern ${legacyRx} must not remain in ${label}`);
+    for (const legacyRx of [
+      /GPT-4o/i,
+      /GPT-6\.1/i,
+      /\bGPT-6\b/i,
+      /Claude\s+(?:3\.5|Opus 5\.5|Sonnet 5\.5|Haiku 5\.5)/i,
+      /Gemini\s+(?:1\.5|3\.8|Hydrogen|Carbon|Argon)/i
+    ]) {
+      assert.equal(legacyRx.test(content), false, `Legacy/fictional model pattern ${legacyRx} must not remain in ${label}`);
     }
   }
 
