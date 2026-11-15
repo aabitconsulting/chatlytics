@@ -347,4 +347,22 @@ CREATE TABLE IF NOT EXISTS `subscription_plans` (
   PRIMARY KEY (`tier`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- -----------------------------------------------------------------------------
+-- Table 10: openrouter_providers
+-- Discovered OpenRouter provider namespaces & admin-selected relevant set.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `openrouter_providers` (
+  `provider_key` VARCHAR(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `display_name` VARCHAR(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_relevant` TINYINT(1) NOT NULL DEFAULT 0,
+  `is_default` TINYINT(1) NOT NULL DEFAULT 0,
+  `discovered_model_count` INT NOT NULL DEFAULT 0,
+  `sample_models` JSON NULL,
+  `last_discovered_at` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`provider_key`),
+  KEY `idx_op_relevant` (`is_relevant`, `provider_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

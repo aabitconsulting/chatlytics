@@ -77,7 +77,7 @@ Because n8n `2.44.5+` blocks `$env` access in nodes by default (`N8N_BLOCK_ENV_A
 - **HTTP Request Binding**: Every OpenRouter HTTP Request node (`Discover OpenRouter Models`, `Call OpenRouter Chat`, `Submit OpenRouter Batch`, `Fetch OpenRouter Batch Status`) uses:
   - `"authentication": "predefinedCredentialType"`
   - `"nodeCredentialType": "openRouterApi"`
-- **Allowed Catalog Providers**: `openai`, `google`, `anthropic`, `mistralai`, `x-ai`, `deepseek`, `qwen`, `xiaomi`, `z-ai` (`zhipu`), `meta-llama`, `nvidia`, `azure`, `microsoft`, `perplexity`, `moonshotai`, `minimax`. New discovered models default to `is_allowed = false` until explicitly activated in the Admin panel (`?action=discover_models` collapses `:batch` variants onto the base slug with `supports_batch_api = true`).
+- **Default Allowed Catalog Providers**: `openai`, `google`, `anthropic`, `mistralai`, `x-ai`, `deepseek`, `qwen`, `xiaomi`, `z-ai` (`zhipu`), `meta-llama`, `meta` (Muse Spark / Wonder etc.), `nvidia`, `azure`, `microsoft`, `perplexity`, `moonshotai`, `minimax` (customizable live in the Admin **OpenRouter Provider** tab; optionally overridden per call via `allowed_providers`). New discovered models default to `is_allowed = false` until explicitly activated in the Admin panel (`?action=discover_models` collapses `:batch` variants onto the base slug with `supports_batch_api = true`).
 
 ### 3.2 Backend Header Auth Credential (`httpHeaderAuth`)
 1. Left sidebar -> **Credentials** -> **Add Credential** -> **Header Auth** (`httpHeaderAuth`), name it `Chatlytics Backend Secret`:
@@ -118,7 +118,7 @@ curl -X POST "http://localhost:5678/webhook/chatlytics-run" \
   -d '{ "action": "discover_models" }'
 ```
 
-Returns `{ status: "ok", action: "discover_models", source: "openrouter_live_api", count, provider_credentials: [...], models: [...] }`.
+Returns `{ status: "ok", action: "discover_models", source: "openrouter_live_api", count, provider_count, provider_credentials: [...], providers: [...], models: [...] }` (passing `allowed_providers: [...]` filters `models` while always returning the full `providers` catalog).
 
 ### 5.3 Synchronous / Async Audit Webhook
 
@@ -151,5 +151,5 @@ curl -X POST "http://localhost:5678/webhook/chatlytics-run" \
 | **1** | **Canvas Import** | Import `n8n/chatlytics_universal_worker.json` | 31 connected nodes, `executionOrder: "v1"` | [ ] |
 | **2** | **OpenRouter Credential** | Confirm ID `tjmYBMIQa9Fo3kYL` (`OpenRouter - Chatlytics - Chatlytics-dev-1`) | Connected to `Discover`, `Call Chat`, `Submit Batch`, `Fetch Batch` | [ ] |
 | **3** | **Backend Header Auth** | Confirm `Chatlytics Backend Secret` (`X-N8N-Secret`) | Attached to Poll / Open Batches / Register / Fail / Ingest nodes | [ ] |
-| **4** | **Live Model Sync** | Trigger Admin *"Modelle live aus Worker-Engine abrufen"* | Fetches live OpenRouter text models across 15 provider groups | [ ] |
+| **4** | **Live Model Sync** | Trigger Admin *"Modelle live aus Worker-Engine abrufen"* | Fetches live OpenRouter text models across the admin-configured relevant provider set (17 default providers incl. `meta`) | [ ] |
 | **5** | **Batch Collector** | Trigger `Schedule Poller Trigger` with non-search batchable model | Submits `/api/v1/batches`, registers, polls & ingests results | [ ] |

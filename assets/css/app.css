@@ -4517,3 +4517,89 @@ input[type="radio"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* Admin OpenRouter Providers Tab & Active Config Impact Warnings */
+.admin-provider-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-impact-warning {
+  margin-bottom: 1rem;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid rgba(217, 119, 6, 0.55);
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--text-primary);
+}
+
+.admin-impact-warning-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: #b45309;
+}
+
+.admin-impact-warning-body {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.admin-impact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.admin-impact-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-impact-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.admin-impact-item-meta {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.provider-sample-chips,
+.provider-usage-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.provider-row-deselected-used {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}

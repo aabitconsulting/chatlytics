@@ -1196,6 +1196,19 @@ function ensureAdminCatalogTables(PDO $db): void
                     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             ");
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS `openrouter_providers` (
+                    `provider_key` TEXT PRIMARY KEY,
+                    `display_name` TEXT NOT NULL,
+                    `is_relevant` INTEGER NOT NULL DEFAULT 0,
+                    `is_default` INTEGER NOT NULL DEFAULT 0,
+                    `discovered_model_count` INTEGER NOT NULL DEFAULT 0,
+                    `sample_models` TEXT NULL DEFAULT NULL,
+                    `last_discovered_at` DATETIME NULL DEFAULT NULL,
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
         } else {
             $db->exec("
                 CREATE TABLE IF NOT EXISTS `llm_models` (
@@ -1269,6 +1282,21 @@ function ensureAdminCatalogTables(PDO $db): void
                     PRIMARY KEY (`tier`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ");
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS `openrouter_providers` (
+                    `provider_key` VARCHAR(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+                    `display_name` VARCHAR(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+                    `is_relevant` TINYINT(1) NOT NULL DEFAULT 0,
+                    `is_default` TINYINT(1) NOT NULL DEFAULT 0,
+                    `discovered_model_count` INT NOT NULL DEFAULT 0,
+                    `sample_models` JSON NULL,
+                    `last_discovered_at` TIMESTAMP NULL DEFAULT NULL,
+                    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`provider_key`),
+                    KEY `idx_op_relevant` (`is_relevant`, `provider_key`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
         }
 
         // Upgrade existing llm_models schema idempotently
@@ -1317,6 +1345,14 @@ function ensureAdminCatalogTables(PDO $db): void
         if ($sCount === 0) {
             foreach (getDefaultSubscriptionPlansSeed() as $planSeed) {
                 upsertSubscriptionPlan($db, $planSeed);
+            }
+        }
+
+        // Seed default OpenRouter relevant providers when table is empty
+        $opCount = (int)$db->query("SELECT COUNT(*) FROM openrouter_providers")->fetchColumn();
+        if ($opCount === 0) {
+            foreach (getDefaultOpenRouterProvidersSeed() as $provSeed) {
+                upsertOpenRouterProvider($db, $provSeed, false);
             }
         }
     } catch (\Throwable $e) {
@@ -1882,4 +1918,744 @@ function getPlanForTier(PDO $db, string $tier): array
         }
     }
     return formatSubscriptionPlanRow(getDefaultSubscriptionPlansSeed()[0]);
+}
+
+/**
+ * Canonicalizes provider alias keys (`zhipu` -> `z-ai`, `moonshot` -> `moonshotai`)
+ * without conflating distinct OpenRouter namespaces (`meta` vs `meta-llama`).
+ */
+function normalizeCanonicalOpenRouterProvider(string $providerKey): string
+{
+    $key = strtolower(trim($providerKey));
+    if ($key === 'zhipu') {
+        return 'z-ai';
+    }
+    if ($key === 'moonshot') {
+        return 'moonshotai';
+    }
+    return $key;
+}
+
+/**
+ * Returns a human-readable display label for an OpenRouter provider namespace.
+ */
+function getOpenRouterProviderDisplayName(string $providerKey): string
+{
+    $key = strtolower(trim($providerKey));
+    static $labels = [
+        'openai'     => 'OpenAI',
+        'google'     => 'Google',
+        'anthropic'  => 'Anthropic',
+        'mistralai'  => 'Mistral AI',
+        'x-ai'       => 'xAI (Grok)',
+        'deepseek'   => 'DeepSeek',
+        'qwen'       => 'Qwen',
+        'xiaomi'     => 'Xiaomi',
+        'z-ai'       => 'Z.ai (GLM)',
+        'meta-llama' => 'Meta Llama',
+        'meta'       => 'Meta (Muse Spark / Wonder)',
+        'nvidia'     => 'NVIDIA',
+        'azure'      => 'Azure OpenAI',
+        'microsoft'  => 'Microsoft',
+        'perplexity' => 'Perplexity',
+        'moonshotai' => 'Moonshot AI (Kimi)',
+        'minimax'    => 'MiniMax',
+        'cohere'     => 'Cohere',
+        'amazon'     => 'Amazon Bedrock / Nova',
+        'ai21'       => 'AI21 Labs',
+    ];
+    if (isset($labels[$key])) {
+        return $labels[$key];
+    }
+    return ucwords(str_replace(['-', '_'], ' ', $key));
+}
+
+/**
+ * Returns default OpenRouter provider seed rows matching `getDefaultOpenRouterProviders()`.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function getDefaultOpenRouterProvidersSeed(): array
+{
+    $defaults = function_exists('getDefaultOpenRouterProviders')
+        ? getDefaultOpenRouterProviders()
+        : [
+            'openai', 'google', 'anthropic', 'mistralai', 'x-ai',
+            'deepseek', 'qwen', 'xiaomi', 'z-ai', 'meta-llama', 'meta',
+            'nvidia', 'azure', 'microsoft', 'perplexity', 'moonshotai', 'minimax',
+        ];
+    $seed = [];
+    foreach ($defaults as $key) {
+        $norm = strtolower(trim((string)$key));
+        if ($norm === '') {
+            continue;
+        }
+        $seed[] = [
+            'provider_key'           => $norm,
+            'display_name'           => getOpenRouterProviderDisplayName($norm),
+            'is_relevant'            => true,
+            'is_default'             => true,
+            'discovered_model_count' => 0,
+            'sample_models'          => [],
+            'last_discovered_at'     => null,
+        ];
+    }
+    return $seed;
+}
+
+/**
+ * Formats an `openrouter_providers` database row into API shape.
+ *
+ * @param array<string, mixed> $row
+ * @return array<string, mixed>
+ */
+function formatOpenRouterProviderRow(array $row): array
+{
+    $key = strtolower(trim((string)($row['provider_key'] ?? '')));
+    $display = trim((string)($row['display_name'] ?? ''));
+    return [
+        'provider_key'           => $key,
+        'display_name'           => $display !== '' ? $display : getOpenRouterProviderDisplayName($key),
+        'is_relevant'            => !empty($row['is_relevant']),
+        'is_default'             => !empty($row['is_default']),
+        'discovered_model_count' => max(0, (int)($row['discovered_model_count'] ?? 0)),
+        'sample_models'          => decodeCatalogJsonArray($row['sample_models'] ?? [], []),
+        'last_discovered_at'     => $row['last_discovered_at'] ?? null,
+    ];
+}
+
+/**
+ * Inserts or updates an OpenRouter provider record (SQLite + MySQL compatible).
+ */
+function upsertOpenRouterProvider(PDO $db, array $data, bool $preserveSelectionIfExists = true): array
+{
+    $key = strtolower(trim((string)($data['provider_key'] ?? '')));
+    if ($key === '') {
+        throw new \InvalidArgumentException('provider_key is required');
+    }
+
+    $defaultSet = array_flip(array_map('strtolower', function_exists('getDefaultOpenRouterProviders')
+        ? getDefaultOpenRouterProviders()
+        : []));
+    $isRelevant = !empty($data['is_relevant']);
+    $isDefault = array_key_exists('is_default', $data) ? !empty($data['is_default']) : isset($defaultSet[$key]);
+    $displayName = trim((string)($data['display_name'] ?? ''));
+    if ($displayName === '') {
+        $displayName = getOpenRouterProviderDisplayName($key);
+    }
+    $discoveredCount = max(0, (int)($data['discovered_model_count'] ?? 0));
+    $sampleModels = is_array($data['sample_models'] ?? null)
+        ? array_values(array_slice($data['sample_models'], 0, 5))
+        : decodeCatalogJsonArray($data['sample_models'] ?? [], []);
+    $lastDiscoveredAt = $data['last_discovered_at'] ?? null;
+
+    if ($preserveSelectionIfExists) {
+        $existingStmt = $db->prepare("SELECT * FROM openrouter_providers WHERE provider_key = :k LIMIT 1");
+        $existingStmt->execute([':k' => $key]);
+        $existing = $existingStmt->fetch();
+        if ($existing) {
+            $isRelevant = !empty($existing['is_relevant']);
+            $isDefault = $isDefault || !empty($existing['is_default']);
+            if ($discoveredCount === 0 && !empty($existing['discovered_model_count'])) {
+                $discoveredCount = (int)$existing['discovered_model_count'];
+            }
+            if (empty($sampleModels) && !empty($existing['sample_models'])) {
+                $sampleModels = decodeCatalogJsonArray($existing['sample_models'], []);
+            }
+            if ($lastDiscoveredAt === null && !empty($existing['last_discovered_at'])) {
+                $lastDiscoveredAt = $existing['last_discovered_at'];
+            }
+        }
+    }
+
+    $sampleJson = json_encode($sampleModels, JSON_UNESCAPED_UNICODE);
+    if ($sampleJson === false) {
+        $sampleJson = '[]';
+    }
+
+    $driver = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME));
+    $conflictClause = ($driver === 'sqlite')
+        ? "ON CONFLICT(provider_key) DO UPDATE SET
+            display_name = excluded.display_name,
+            is_relevant = excluded.is_relevant,
+            is_default = excluded.is_default,
+            discovered_model_count = excluded.discovered_model_count,
+            sample_models = excluded.sample_models,
+            last_discovered_at = excluded.last_discovered_at"
+        : "ON DUPLICATE KEY UPDATE
+            display_name = VALUES(display_name),
+            is_relevant = VALUES(is_relevant),
+            is_default = VALUES(is_default),
+            discovered_model_count = VALUES(discovered_model_count),
+            sample_models = VALUES(sample_models),
+            last_discovered_at = VALUES(last_discovered_at)";
+
+    $stmt = $db->prepare("
+        INSERT INTO openrouter_providers (
+            provider_key, display_name, is_relevant, is_default,
+            discovered_model_count, sample_models, last_discovered_at
+        ) VALUES (
+            :provider_key, :display_name, :is_relevant, :is_default,
+            :discovered_model_count, :sample_models, :last_discovered_at
+        )
+        {$conflictClause}
+    ");
+    $stmt->execute([
+        ':provider_key'           => $key,
+        ':display_name'           => $displayName,
+        ':is_relevant'            => $isRelevant ? 1 : 0,
+        ':is_default'             => $isDefault ? 1 : 0,
+        ':discovered_model_count' => $discoveredCount,
+        ':sample_models'          => $sampleJson,
+        ':last_discovered_at'     => $lastDiscoveredAt,
+    ]);
+
+    return formatOpenRouterProviderRow([
+        'provider_key'           => $key,
+        'display_name'           => $displayName,
+        'is_relevant'            => $isRelevant ? 1 : 0,
+        'is_default'             => $isDefault ? 1 : 0,
+        'discovered_model_count' => $discoveredCount,
+        'sample_models'          => $sampleModels,
+        'last_discovered_at'     => $lastDiscoveredAt,
+    ]);
+}
+
+/**
+ * Extracts aggregated provider summaries from a raw OpenRouter `/api/v1/models` `data` array.
+ *
+ * @param array<int, array<string, mixed>> $rawModels
+ * @return array<int, array<string, mixed>>
+ */
+function extractOpenRouterProvidersFromRawModels(array $rawModels): array
+{
+    $byProvider = [];
+    foreach ($rawModels as $raw) {
+        if (!is_array($raw)) {
+            continue;
+        }
+        $rawId = trim((string)($raw['id'] ?? ''));
+        if ($rawId === '' || !str_contains($rawId, '/')) {
+            continue;
+        }
+        $cleanId = preg_replace('/:(batch|online)$/i', '', $rawId);
+        [$prefix] = explode('/', $cleanId, 2);
+        $providerKey = strtolower(trim($prefix));
+        if ($providerKey === '') {
+            continue;
+        }
+
+        if (!isset($byProvider[$providerKey])) {
+            $byProvider[$providerKey] = [
+                'provider_key'           => $providerKey,
+                'display_name'           => getOpenRouterProviderDisplayName($providerKey),
+                'discovered_model_count' => 0,
+                'sample_models'          => [],
+                '_seen_ids'              => [],
+            ];
+        }
+
+        if (!isset($byProvider[$providerKey]['_seen_ids'][$cleanId])) {
+            $byProvider[$providerKey]['_seen_ids'][$cleanId] = true;
+            $byProvider[$providerKey]['discovered_model_count']++;
+            if (count($byProvider[$providerKey]['sample_models']) < 5) {
+                $byProvider[$providerKey]['sample_models'][] = $cleanId;
+            }
+        }
+    }
+
+    $result = [];
+    foreach ($byProvider as $item) {
+        unset($item['_seen_ids']);
+        $result[] = $item;
+    }
+    usort($result, static function ($a, $b) {
+        $cmp = ($b['discovered_model_count'] <=> $a['discovered_model_count']);
+        return $cmp !== 0 ? $cmp : strcmp($a['provider_key'], $b['provider_key']);
+    });
+    return $result;
+}
+
+/**
+ * Persists newly discovered OpenRouter providers while preserving existing admin `is_relevant` flags.
+ *
+ * @param array<int, array<string, mixed>> $providersList
+ */
+function syncDiscoveredOpenRouterProviders(PDO $db, array $providersList, ?string $syncedAt = null): void
+{
+    ensureAdminCatalogTables($db);
+    $timestamp = $syncedAt ?: gmdate('Y-m-d H:i:s');
+    $startedTx = false;
+    if (!$db->inTransaction()) {
+        $db->beginTransaction();
+        $startedTx = true;
+    }
+
+    try {
+        foreach ($providersList as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $key = strtolower(trim((string)($item['provider_key'] ?? $item['id'] ?? '')));
+            if ($key === '') {
+                continue;
+            }
+            upsertOpenRouterProvider($db, [
+                'provider_key'           => $key,
+                'display_name'           => (string)($item['display_name'] ?? getOpenRouterProviderDisplayName($key)),
+                'is_relevant'            => false,
+                'discovered_model_count' => max(0, (int)($item['discovered_model_count'] ?? $item['model_count'] ?? 0)),
+                'sample_models'          => is_array($item['sample_models'] ?? null) ? $item['sample_models'] : [],
+                'last_discovered_at'     => $timestamp,
+            ], true);
+        }
+        if ($startedTx) {
+            $db->commit();
+        }
+    } catch (\Throwable $e) {
+        if ($startedTx && $db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+}
+
+/**
+ * Computes active/paused tracking config and active preset usage per model ID and per provider.
+ * Works identically on MySQL and SQLite without requiring JSON_TABLE.
+ *
+ * @return array{by_model:array<string,array<string,mixed>>,by_provider:array<string,array<string,mixed>>}
+ */
+function getModelActiveUsageStats(PDO $db): array
+{
+    $modelMeta = [];
+    try {
+        foreach ($db->query("SELECT id, provider, display_name, is_allowed, is_default FROM llm_models")->fetchAll() as $mRow) {
+            $mid = trim((string)($mRow['id'] ?? ''));
+            if ($mid !== '') {
+                $modelMeta[$mid] = [
+                    'display_name' => (string)($mRow['display_name'] ?? $mid),
+                    'provider'     => normalizeCanonicalOpenRouterProvider((string)($mRow['provider'] ?? '')),
+                    'is_allowed'   => !empty($mRow['is_allowed']),
+                    'is_default'   => !empty($mRow['is_default']),
+                ];
+            }
+        }
+    } catch (\Throwable $e) {
+        // Ignore on minimal test schemas without llm_models
+    }
+
+    $resolveToken = static function (string $rawToken): array {
+        $clean = trim($rawToken);
+        if ($clean === '') {
+            return ['id' => '', 'provider' => ''];
+        }
+        if (function_exists('resolveTargetLlmSpec')) {
+            $spec = resolveTargetLlmSpec($clean);
+            $id = trim((string)($spec['id'] ?? ''));
+            $prov = normalizeCanonicalOpenRouterProvider((string)($spec['provider'] ?? ''));
+            if ($prov === '' && str_contains($id, '/')) {
+                $prov = normalizeCanonicalOpenRouterProvider(explode('/', $id, 2)[0]);
+            }
+            return ['id' => $id, 'provider' => $prov];
+        }
+        $clean = preg_replace('/:(batch|online)$/i', '', $clean);
+        if (!str_contains($clean, '/')) {
+            return ['id' => $clean, 'provider' => normalizeCanonicalOpenRouterProvider($clean)];
+        }
+        [$p] = explode('/', $clean, 2);
+        return ['id' => $clean, 'provider' => normalizeCanonicalOpenRouterProvider($p)];
+    };
+
+    $byModel = [];
+    $byProviderInternal = [];
+
+    $ensureModelEntry = static function (string $modelId, string $provider) use (&$byModel, &$byProviderInternal, $modelMeta): void {
+        if (!isset($byModel[$modelId])) {
+            $meta = $modelMeta[$modelId] ?? null;
+            $effectiveProvider = $provider !== '' ? $provider : ($meta['provider'] ?? '');
+            $byModel[$modelId] = [
+                'model_id'            => $modelId,
+                'provider'            => $effectiveProvider,
+                'display_name'        => $meta['display_name'] ?? $modelId,
+                'is_allowed'          => $meta ? !empty($meta['is_allowed']) : false,
+                'is_default'          => $meta ? !empty($meta['is_default']) : false,
+                'active_config_count' => 0,
+                'paused_config_count' => 0,
+                'total_config_count'  => 0,
+                'preset_count'        => 0,
+                'config_samples'      => [],
+                'preset_names'        => [],
+            ];
+        }
+        $pKey = $byModel[$modelId]['provider'];
+        if ($pKey !== '' && !isset($byProviderInternal[$pKey])) {
+            $byProviderInternal[$pKey] = [
+                'active_config_ids' => [],
+                'paused_config_ids' => [],
+                'preset_ids'        => [],
+                'model_ids'         => [],
+            ];
+        }
+        if ($pKey !== '') {
+            $byProviderInternal[$pKey]['model_ids'][$modelId] = true;
+        }
+    };
+
+    // Seed entries for every managed model that is already in llm_models (only emitted under used_models if actually used)
+    // Scan tracking_configs (status IN ('active', 'paused'))
+    $configRows = [];
+    try {
+        $configRows = $db->query("SELECT id, name, brand_name, status, target_llms, deleted_at FROM tracking_configs WHERE status IN ('active', 'paused')")->fetchAll();
+    } catch (\Throwable $e) {
+        try {
+            $configRows = $db->query("SELECT id, name, status, target_llms FROM tracking_configs WHERE status IN ('active', 'paused')")->fetchAll();
+        } catch (\Throwable $inner) {
+            $configRows = [];
+        }
+    }
+
+    foreach ($configRows as $cfg) {
+        if (!empty($cfg['deleted_at'])) {
+            continue;
+        }
+        $cfgId = (int)($cfg['id'] ?? 0);
+        $status = strtolower(trim((string)($cfg['status'] ?? 'active')));
+        if ($status !== 'active' && $status !== 'paused') {
+            continue;
+        }
+        $cfgName = trim((string)($cfg['name'] ?? ($cfg['brand_name'] ?? '')));
+        if ($cfgName === '') {
+            $cfgName = 'Config #' . $cfgId;
+        }
+        $llms = decodeCatalogJsonArray($cfg['target_llms'] ?? [], []);
+        $seenModelsInCfg = [];
+        foreach ($llms as $tok) {
+            $resolved = $resolveToken((string)$tok);
+            $mid = $resolved['id'];
+            $prov = $resolved['provider'];
+            if ($mid === '' || isset($seenModelsInCfg[$mid])) {
+                continue;
+            }
+            $seenModelsInCfg[$mid] = true;
+            $ensureModelEntry($mid, $prov);
+            if ($status === 'active') {
+                $byModel[$mid]['active_config_count']++;
+            } else {
+                $byModel[$mid]['paused_config_count']++;
+            }
+            $byModel[$mid]['total_config_count']++;
+            if (count($byModel[$mid]['config_samples']) < 10) {
+                $byModel[$mid]['config_samples'][] = [
+                    'id'     => $cfgId,
+                    'name'   => $cfgName,
+                    'status' => $status,
+                ];
+            }
+
+            $pKey = $byModel[$mid]['provider'];
+            if ($pKey !== '' && $cfgId > 0) {
+                if ($status === 'active') {
+                    $byProviderInternal[$pKey]['active_config_ids'][$cfgId] = true;
+                } else {
+                    $byProviderInternal[$pKey]['paused_config_ids'][$cfgId] = true;
+                }
+            }
+        }
+    }
+
+    // Scan active model_presets (Analyse-Sets)
+    $presetRows = [];
+    try {
+        $presetRows = $db->query("SELECT id, name_de, name_en, target_llms FROM model_presets WHERE is_active = 1")->fetchAll();
+    } catch (\Throwable $e) {
+        $presetRows = [];
+    }
+
+    foreach ($presetRows as $pRow) {
+        $pid = trim((string)($pRow['id'] ?? ''));
+        $pName = trim((string)($pRow['name_de'] ?? ($pRow['name_en'] ?? $pid)));
+        $llms = decodeCatalogJsonArray($pRow['target_llms'] ?? [], []);
+        $seenModelsInPreset = [];
+        foreach ($llms as $tok) {
+            $resolved = $resolveToken((string)$tok);
+            $mid = $resolved['id'];
+            $prov = $resolved['provider'];
+            if ($mid === '' || isset($seenModelsInPreset[$mid])) {
+                continue;
+            }
+            $seenModelsInPreset[$mid] = true;
+            $ensureModelEntry($mid, $prov);
+            $byModel[$mid]['preset_count']++;
+            if ($pName !== '' && count($byModel[$mid]['preset_names']) < 10) {
+                $byModel[$mid]['preset_names'][] = $pName;
+            }
+            $pKey = $byModel[$mid]['provider'];
+            if ($pKey !== '' && $pid !== '') {
+                $byProviderInternal[$pKey]['preset_ids'][$pid] = true;
+            }
+        }
+    }
+
+    $byProvider = [];
+    foreach ($byProviderInternal as $pKey => $agg) {
+        $usedModels = [];
+        foreach (array_keys($agg['model_ids']) as $mid) {
+            if (isset($byModel[$mid])) {
+                $usedModels[] = $byModel[$mid];
+            }
+        }
+        usort($usedModels, static function ($a, $b) {
+            $scoreA = ($a['active_config_count'] * 100) + ($a['paused_config_count'] * 10) + $a['preset_count'];
+            $scoreB = ($b['active_config_count'] * 100) + ($b['paused_config_count'] * 10) + $b['preset_count'];
+            if ($scoreA !== $scoreB) {
+                return $scoreB <=> $scoreA;
+            }
+            return strcmp($a['model_id'], $b['model_id']);
+        });
+        $byProvider[$pKey] = [
+            'active_config_count' => count($agg['active_config_ids']),
+            'paused_config_count' => count($agg['paused_config_ids']),
+            'total_config_count'  => count($agg['active_config_ids'] + $agg['paused_config_ids']),
+            'preset_count'        => count($agg['preset_ids']),
+            'used_models'         => $usedModels,
+        ];
+    }
+
+    return [
+        'by_model'    => $byModel,
+        'by_provider' => $byProvider,
+    ];
+}
+
+/**
+ * Returns full OpenRouter provider list with selection state, model counts, and active config/preset usage stats.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function getOpenRouterProvidersCatalog(PDO $db): array
+{
+    ensureAdminCatalogTables($db);
+    $rows = $db->query("
+        SELECT * FROM openrouter_providers
+        ORDER BY is_relevant DESC, is_default DESC, discovered_model_count DESC, provider_key ASC
+    ")->fetchAll();
+
+    $providersByKey = [];
+    foreach ($rows as $row) {
+        $formatted = formatOpenRouterProviderRow($row);
+        if ($formatted['provider_key'] !== '') {
+            $providersByKey[$formatted['provider_key']] = $formatted;
+        }
+    }
+
+    // Aggregate llm_models counts per canonical provider
+    $catalogCounts = [];
+    $allowedCounts = [];
+    try {
+        foreach ($db->query("SELECT provider, is_allowed FROM llm_models")->fetchAll() as $mRow) {
+            $pKey = normalizeCanonicalOpenRouterProvider((string)($mRow['provider'] ?? ''));
+            if ($pKey === '') {
+                continue;
+            }
+            $catalogCounts[$pKey] = ($catalogCounts[$pKey] ?? 0) + 1;
+            if (!empty($mRow['is_allowed'])) {
+                $allowedCounts[$pKey] = ($allowedCounts[$pKey] ?? 0) + 1;
+            }
+            if (!isset($providersByKey[$pKey])) {
+                $providersByKey[$pKey] = formatOpenRouterProviderRow([
+                    'provider_key'           => $pKey,
+                    'display_name'           => getOpenRouterProviderDisplayName($pKey),
+                    'is_relevant'            => 0,
+                    'is_default'             => 0,
+                    'discovered_model_count' => 0,
+                    'sample_models'          => [],
+                ]);
+            }
+        }
+    } catch (\Throwable $e) {
+        // Ignore when llm_models unavailable
+    }
+
+    $usage = getModelActiveUsageStats($db);
+    foreach ($usage['by_provider'] as $pKey => $uStats) {
+        if ($pKey !== '' && !isset($providersByKey[$pKey])) {
+            $providersByKey[$pKey] = formatOpenRouterProviderRow([
+                'provider_key'           => $pKey,
+                'display_name'           => getOpenRouterProviderDisplayName($pKey),
+                'is_relevant'            => 0,
+                'is_default'             => 0,
+                'discovered_model_count' => 0,
+                'sample_models'          => [],
+            ]);
+        }
+    }
+
+    $result = [];
+    foreach ($providersByKey as $pKey => $item) {
+        $u = $usage['by_provider'][$pKey] ?? null;
+        $item['catalog_model_count'] = $catalogCounts[$pKey] ?? 0;
+        $item['allowed_model_count'] = $allowedCounts[$pKey] ?? 0;
+        $item['active_config_count'] = $u ? (int)$u['active_config_count'] : 0;
+        $item['paused_config_count'] = $u ? (int)$u['paused_config_count'] : 0;
+        $item['total_config_count']  = $u ? (int)$u['total_config_count'] : 0;
+        $item['preset_count']        = $u ? (int)$u['preset_count'] : 0;
+        $item['used_models']         = $u ? $u['used_models'] : [];
+        $result[] = $item;
+    }
+
+    usort($result, static function ($a, $b) {
+        if ($a['is_relevant'] !== $b['is_relevant']) {
+            return $a['is_relevant'] ? -1 : 1;
+        }
+        if ($a['is_default'] !== $b['is_default']) {
+            return $a['is_default'] ? -1 : 1;
+        }
+        if ($a['discovered_model_count'] !== $b['discovered_model_count']) {
+            return $b['discovered_model_count'] <=> $a['discovered_model_count'];
+        }
+        return strcmp($a['provider_key'], $b['provider_key']);
+    });
+
+    return $result;
+}
+
+/**
+ * Updates `openrouter_providers.is_relevant` to match `$selectedProviders` and safely prunes
+ * only unactivated (`is_allowed = 0 AND is_default = 0`) models with zero active/paused configs
+ * or active presets whose provider was deselected.
+ *
+ * @param array<int, string> $selectedProviders
+ * @return array{selected_providers:array<int,string>,pruned_model_ids:array<int,string>,preserved_active_models:array<int,array<string,mixed>>}
+ */
+function saveRelevantOpenRouterProviders(PDO $db, array $selectedProviders): array
+{
+    ensureAdminCatalogTables($db);
+
+    $normalized = [];
+    $seen = [];
+    foreach ($selectedProviders as $rawKey) {
+        $key = normalizeCanonicalOpenRouterProvider((string)$rawKey);
+        if ($key !== '' && !isset($seen[$key])) {
+            $seen[$key] = true;
+            $normalized[] = $key;
+        }
+    }
+
+    $expandedAllowed = function_exists('expandOpenRouterProviderAliases')
+        ? expandOpenRouterProviderAliases($normalized)
+        : $normalized;
+    $expandedSet = array_flip($expandedAllowed);
+
+    $startedTx = false;
+    if (!$db->inTransaction()) {
+        $db->beginTransaction();
+        $startedTx = true;
+    }
+
+    $prunedIds = [];
+    $preservedModels = [];
+
+    try {
+        $db->exec("UPDATE openrouter_providers SET is_relevant = 0");
+
+        foreach ($normalized as $key) {
+            $existingStmt = $db->prepare("SELECT provider_key FROM openrouter_providers WHERE provider_key = :k LIMIT 1");
+            $existingStmt->execute([':k' => $key]);
+            if ($existingStmt->fetch()) {
+                $upd = $db->prepare("UPDATE openrouter_providers SET is_relevant = 1 WHERE provider_key = :k");
+                $upd->execute([':k' => $key]);
+            } else {
+                upsertOpenRouterProvider($db, [
+                    'provider_key'           => $key,
+                    'display_name'           => getOpenRouterProviderDisplayName($key),
+                    'is_relevant'            => true,
+                    'discovered_model_count' => 0,
+                    'sample_models'          => [],
+                ], false);
+            }
+        }
+
+        $usage = getModelActiveUsageStats($db);
+        $byModelUsage = $usage['by_model'];
+
+        foreach ($db->query("SELECT id, provider, display_name, is_allowed, is_default FROM llm_models")->fetchAll() as $mRow) {
+            $mid = trim((string)($mRow['id'] ?? ''));
+            $rawProv = strtolower(trim((string)($mRow['provider'] ?? '')));
+            $canonProv = normalizeCanonicalOpenRouterProvider($rawProv);
+            if ($mid === '') {
+                continue;
+            }
+            $isProviderRelevant = isset($expandedSet[$rawProv]) || isset($expandedSet[$canonProv]);
+            if ($isProviderRelevant) {
+                continue;
+            }
+
+            $u = $byModelUsage[$mid] ?? null;
+            $hasActiveUsage = $u && (
+                ($u['active_config_count'] ?? 0) > 0
+                || ($u['paused_config_count'] ?? 0) > 0
+                || ($u['preset_count'] ?? 0) > 0
+            );
+            $isActivated = !empty($mRow['is_allowed']) || !empty($mRow['is_default']);
+
+            if (!$isActivated && !$hasActiveUsage) {
+                $delStmt = $db->prepare("DELETE FROM llm_models WHERE id = :id");
+                $delStmt->execute([':id' => $mid]);
+                $prunedIds[] = $mid;
+            } else {
+                $preservedModels[] = [
+                    'model_id'            => $mid,
+                    'provider'            => $canonProv,
+                    'display_name'        => (string)($mRow['display_name'] ?? $mid),
+                    'is_allowed'          => !empty($mRow['is_allowed']),
+                    'is_default'          => !empty($mRow['is_default']),
+                    'active_config_count' => $u ? (int)$u['active_config_count'] : 0,
+                    'paused_config_count' => $u ? (int)$u['paused_config_count'] : 0,
+                    'preset_count'        => $u ? (int)$u['preset_count'] : 0,
+                ];
+            }
+        }
+
+        if ($startedTx) {
+            $db->commit();
+        }
+    } catch (\Throwable $e) {
+        if ($startedTx && $db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+
+    return [
+        'selected_providers'      => $normalized,
+        'pruned_model_ids'        => $prunedIds,
+        'preserved_active_models' => $preservedModels,
+    ];
+}
+
+/**
+ * Resets `openrouter_providers.is_relevant` back to the canonical 17 defaults (including `meta`).
+ *
+ * @return array{selected_providers:array<int,string>,pruned_model_ids:array<int,string>,preserved_active_models:array<int,array<string,mixed>>}
+ */
+function resetOpenRouterProvidersToDefault(PDO $db): array
+{
+    ensureAdminCatalogTables($db);
+    foreach (getDefaultOpenRouterProvidersSeed() as $seedRow) {
+        $existingStmt = $db->prepare("SELECT provider_key FROM openrouter_providers WHERE provider_key = :k LIMIT 1");
+        $existingStmt->execute([':k' => $seedRow['provider_key']]);
+        if ($existingStmt->fetch()) {
+            $upd = $db->prepare("UPDATE openrouter_providers SET is_default = 1 WHERE provider_key = :k");
+            $upd->execute([':k' => $seedRow['provider_key']]);
+        } else {
+            upsertOpenRouterProvider($db, $seedRow, false);
+        }
+    }
+
+    $defaults = function_exists('getDefaultOpenRouterProviders')
+        ? getDefaultOpenRouterProviders()
+        : array_column(getDefaultOpenRouterProvidersSeed(), 'provider_key');
+
+    return saveRelevantOpenRouterProviders($db, $defaults);
 }

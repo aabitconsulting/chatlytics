@@ -1258,24 +1258,38 @@ SEARCH: true`;
       assert.deepEqual(failedCorr[0].json.custom_ids, ['cid_1', 'cid_2']);
     });
 
-    it('Filter & Normalize OpenRouter Models collapses :batch suffix and filters 15-provider whitelist + modalities', () => {
+    it('Filter & Normalize OpenRouter Models collapses :batch suffix, includes meta, and returns full providers list + dynamic overrides', () => {
       const filterNode = workflow.nodes.find(n => n.name === 'Filter & Normalize OpenRouter Models');
-      const res = executeNodeJsCode(filterNode.parameters.jsCode, [{
-        json: {
-          data: [
-            { id: 'openai/gpt-6-luna', name: 'GPT-6 Luna', supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
-            { id: 'openai/gpt-6-luna:batch', name: 'GPT-6 Luna (Batch)', supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
-            { id: 'openai/gpt-image-1', name: 'Image Model', architecture: { input_modalities: ['text'], output_modalities: ['image'] } },
-            { id: 'cohere/command-a', name: 'Cohere Model', architecture: { input_modalities: ['text'], output_modalities: ['text'] } }
-          ]
-        }
-      }]);
+      const samplePayload = {
+        data: [
+          { id: 'openai/gpt-6-luna', name: 'GPT-6 Luna', supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+          { id: 'openai/gpt-6-luna:batch', name: 'GPT-6 Luna (Batch)', supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+          { id: 'meta/muse-wonder', name: 'Meta Muse Wonder', supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+          { id: 'openai/gpt-image-1', name: 'Image Model', architecture: { input_modalities: ['text'], output_modalities: ['image'] } },
+          { id: 'cohere/command-a', name: 'Cohere Model', architecture: { input_modalities: ['text'], output_modalities: ['text'] } }
+        ]
+      };
+      const res = executeNodeJsCode(filterNode.parameters.jsCode, [{ json: samplePayload }]);
       assert.equal(res[0].json.status, 'ok');
-      assert.equal(res[0].json.models.length, 1);
-      assert.equal(res[0].json.models[0].id, 'openai/gpt-6-luna');
-      assert.equal(res[0].json.models[0].supports_batch_api, true);
-      assert.equal(res[0].json.models[0].supports_tools, true);
-      assert.equal(res[0].json.models[0].is_allowed, false);
+      assert.equal(res[0].json.models.length, 2);
+      const openaiM = res[0].json.models.find(m => m.id === 'openai/gpt-6-luna');
+      const metaM = res[0].json.models.find(m => m.id === 'meta/muse-wonder');
+      assert.ok(openaiM);
+      assert.ok(metaM);
+      assert.equal(openaiM.supports_batch_api, true);
+      assert.equal(openaiM.supports_tools, true);
+      assert.equal(openaiM.is_allowed, false);
+      assert.equal(res[0].json.providers.some(p => p.provider_key === 'cohere' && p.is_relevant === false), true);
+      assert.equal(res[0].json.providers.some(p => p.provider_key === 'meta' && p.is_relevant === true), true);
+
+      // Dynamic allowed_providers override via request body
+      const customRes = executeNodeJsCode(filterNode.parameters.jsCode, [{
+        json: { ...samplePayload, body: { allowed_providers: ['cohere'] } }
+      }]);
+      assert.equal(customRes[0].json.models.length, 1);
+      assert.equal(customRes[0].json.models[0].id, 'cohere/command-a');
+      assert.equal(customRes[0].json.providers.find(p => p.provider_key === 'cohere').is_relevant, true);
+      assert.equal(customRes[0].json.providers.find(p => p.provider_key === 'openai').is_relevant, false);
     });
 
     it('Regression guard: assets/js/admin.js has zero bare setButtonLoading(...) calls so live sync never throws ReferenceError', () => {

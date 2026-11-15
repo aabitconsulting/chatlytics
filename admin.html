@@ -104,6 +104,9 @@
       <button type="button" id="admin-tab-models" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="models" data-i18n="admin.tab_models">
         KI-Modelle &amp; Live-Engine Sync
       </button>
+      <button type="button" id="admin-tab-providers" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="providers" data-i18n="admin.tab_providers">
+        OpenRouter Provider
+      </button>
       <button type="button" id="admin-tab-presets" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="presets" data-i18n="admin.tab_presets">
         Analyse-Sets (Model Presets)
       </button>
@@ -246,7 +249,75 @@
       </section>
     </div><!-- /#admin-panel-models -->
 
-    <!-- Tab Panel 3: Analyse-Sets (Model Presets / Cookbooks) -->
+    <!-- Tab Panel 3: OpenRouter Provider Registry & Relevant Set -->
+    <div id="admin-panel-providers" class="admin-tab-panel" role="tabpanel" aria-labelledby="admin-tab-providers" hidden>
+      <section class="admin-table-section">
+        <div class="section-toolbar">
+          <div class="toolbar-title-group">
+            <h2 data-i18n="admin.providers_title">OpenRouter Provider (Relevantes Set)</h2>
+            <span id="providers-sync-status-badge" class="badge badge-secondary" data-i18n="admin.sync_status_idle">Status: Bereit</span>
+          </div>
+          <div class="admin-toolbar-actions">
+            <button type="button" id="btn-sync-providers" class="btn btn-outline btn-sm" data-i18n="admin.btn_sync_providers">
+              Alle OpenRouter-Provider abrufen
+            </button>
+            <button type="button" id="btn-reset-providers" class="btn btn-outline btn-sm" data-i18n="admin.btn_reset_providers">
+              Standard wiederherstellen (inkl. meta)
+            </button>
+            <button type="button" id="btn-save-providers" class="btn btn-primary btn-sm" data-i18n="admin.btn_save_providers">
+              Relevantes Set speichern
+            </button>
+            <button type="button" id="btn-save-sync-providers" class="btn btn-primary btn-sm" data-i18n="admin.btn_save_sync_providers">
+              Speichern &amp; Modelle syncen
+            </button>
+          </div>
+        </div>
+        <p class="form-hint" style="margin-bottom: 1rem;" data-i18n="admin.providers_desc">
+          Wählen Sie aus allen verfügbaren OpenRouter-Providern das relevante Set für Chatlytics. Modelle anderer Provider werden beim Sync ignoriert und im Modell-Katalog ausgeblendet. Modelle mit aktiven Kundenkonfigurationen bleiben geschützt und werden vorab deutlich hervorgehoben.
+        </p>
+
+        <div id="providers-summary-chips" class="admin-provider-summary-row" style="margin-bottom: 1rem;">
+          <span id="providers-stat-total" class="badge badge-secondary font-mono">0 Provider</span>
+          <span id="providers-stat-relevant" class="badge badge-primary font-mono">0 Relevant</span>
+          <span id="providers-stat-active-usage" class="badge badge-warning font-mono" hidden>0 aktive Konfigs</span>
+        </div>
+
+        <div id="providers-impact-warning" class="admin-impact-warning" role="alert" hidden>
+          <div class="admin-impact-warning-header">
+            <strong id="providers-impact-warning-title">Achtung: Abgewählte Provider haben aktive Kundenkonfigurationen oder Analyse-Sets</strong>
+          </div>
+          <div id="providers-impact-warning-body" class="admin-impact-warning-body"></div>
+        </div>
+
+        <div id="providers-filter-bar" class="search-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
+          <input type="search" id="provider-filter-search" class="form-input" style="max-width: 300px;" placeholder="Provider, Name oder Beispielmodell suchen…" data-i18n-placeholder="admin.provider_search_placeholder">
+          <select id="provider-filter-mode" class="form-control" style="max-width: 240px;">
+            <option value="all" data-i18n="admin.provider_filter_all">Alle Provider</option>
+            <option value="relevant" data-i18n="admin.provider_filter_relevant">Nur Relevante (aktiv)</option>
+            <option value="default" data-i18n="admin.provider_filter_default">Nur Standard-Provider</option>
+            <option value="used" data-i18n="admin.provider_filter_used">Mit aktiven Konfigurationen</option>
+          </select>
+          <span id="provider-filter-count" class="badge badge-secondary font-mono">0 Provider</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table users-table" id="providers-table">
+            <thead>
+              <tr>
+                <th scope="col" style="width: 90px;" data-i18n="admin.provider_col_relevant">Relevant</th>
+                <th scope="col" data-i18n="admin.provider_col_name">Provider &amp; Namespace</th>
+                <th scope="col" data-i18n="admin.provider_col_models">Modelle (OpenRouter / Katalog)</th>
+                <th scope="col" data-i18n="admin.provider_col_samples">Beispielmodelle</th>
+                <th scope="col" data-i18n="admin.provider_col_usage">Aktive Kundenkonfigs &amp; Sets</th>
+              </tr>
+            </thead>
+            <tbody id="providers-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div><!-- /#admin-panel-providers -->
+
+    <!-- Tab Panel 4: Analyse-Sets (Model Presets / Cookbooks) -->
     <div id="admin-panel-presets" class="admin-tab-panel" role="tabpanel" aria-labelledby="admin-tab-presets" hidden>
       <section class="admin-table-section">
         <div class="section-toolbar">
@@ -492,6 +563,7 @@
               <option value="xiaomi">xiaomi</option>
               <option value="z-ai">z-ai</option>
               <option value="meta-llama">meta-llama</option>
+              <option value="meta">meta</option>
               <option value="nvidia">nvidia</option>
               <option value="azure">azure</option>
               <option value="microsoft">microsoft</option>
@@ -598,6 +670,24 @@
           <button type="submit" id="btn-preset-save" class="btn btn-primary" data-i18n="common.save">Speichern</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Active Configuration Impact Confirmation Modal -->
+  <div id="provider-impact-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="provider-impact-modal-title">
+    <div class="modal-dialog modal-dialog-wide">
+      <div class="modal-header">
+        <h3 id="provider-impact-modal-title" class="modal-title" data-i18n="admin.modal_impact_title">Achtung: Modelle mit aktiven Konfigurationen betroffen</h3>
+        <button type="button" id="btn-impact-modal-close" class="btn-close" aria-label="Schließen">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="provider-impact-modal-summary" class="form-hint" style="margin-bottom: 0.75rem;"></p>
+        <div id="provider-impact-modal-list" class="admin-impact-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-impact-cancel" class="btn btn-outline" data-i18n="common.cancel">Abbrechen</button>
+        <button type="button" id="btn-impact-confirm" class="btn btn-danger" data-i18n="admin.modal_impact_confirm">Verstanden &amp; Trotzdem durchführen</button>
+      </div>
     </div>
   </div>
 

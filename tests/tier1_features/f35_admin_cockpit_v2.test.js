@@ -728,6 +728,10 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
 
     assert.ok(adminHtml.includes('id="admin-tab-users"'));
     assert.ok(adminHtml.includes('id="admin-tab-models"'));
+    assert.ok(adminHtml.includes('id="admin-tab-providers"'));
+    assert.ok(adminHtml.includes('id="admin-panel-providers"'));
+    assert.ok(adminHtml.includes('id="provider-impact-modal"'));
+    assert.ok(adminHtml.includes('<option value="meta">meta</option>'));
     assert.ok(adminHtml.includes('id="admin-tab-presets"'));
     assert.ok(adminHtml.includes('id="admin-tab-plans"'));
     assert.ok(adminHtml.includes('id="tier-modal"'));
@@ -755,6 +759,11 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
     assert.equal(typeof adminMod.switchAdminTab, 'function');
     assert.equal(typeof adminMod.triggerN8nModelSync, 'function');
     assert.equal(typeof adminMod.handleSavePlan, 'function');
+    assert.equal(typeof adminMod.loadOpenRouterProviders, 'function');
+    assert.equal(typeof adminMod.syncOpenRouterProviders, 'function');
+    assert.equal(typeof adminMod.handleSaveOpenRouterProviders, 'function');
+    assert.equal(typeof adminMod.handleResetOpenRouterProviders, 'function');
+    assert.equal(typeof adminMod.computeDeselectedProviderImpact, 'function');
 
     const { canUserCustomizeModels, DEFAULT_PRESETS } = require(path.join(PROJECT_ROOT, 'assets/js/configs.js'));
     assert.equal(typeof canUserCustomizeModels, 'function');
@@ -763,5 +772,209 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
     assert.equal(canUserCustomizeModels({ role: 'user', tier: 'growth' }), true);
     assert.equal(canUserCustomizeModels({ role: 'admin', tier: 'free' }), true);
     assert.ok(Array.isArray(DEFAULT_PRESETS) && DEFAULT_PRESETS.length >= 4);
+  });
+
+  it('35.7 OpenRouter Provider Registry, meta default, active configuration usage stats & safe pruning', async () => {
+    let lastN8nPayload = null;
+    const mockOpenRouterServer = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        data: [
+          { id: 'openai/gpt-6-luna', name: 'GPT-6 Luna' },
+          { id: 'meta/muse-spark', name: 'Meta Muse Spark' },
+          { id: 'meta/muse-wonder', name: 'Meta Muse Wonder' },
+          { id: 'cohere/command-a', name: 'Cohere Command A' },
+          { id: 'allenai/olmo-2', name: 'AllenAI OLMo 2' }
+        ]
+      }));
+    });
+    const mockN8nServer = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', c => { body += c; });
+      req.on('end', () => {
+        try { lastN8nPayload = JSON.parse(body); } catch (_) {}
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'ok',
+          models: [
+            {
+              id: 'openai/gpt-6-luna',
+              provider: 'openai',
+              model_name: 'gpt-6-luna',
+              display_name: 'OpenAI · GPT-6 Luna',
+              supports_web_search: true,
+              supports_batch_api: true
+            },
+            {
+              id: 'meta/muse-spark',
+              provider: 'meta',
+              model_name: 'muse-spark',
+              display_name: 'Meta · Muse Spark',
+              supports_web_search: true,
+              supports_batch_api: false
+            },
+            {
+              id: 'cohere/command-a',
+              provider: 'cohere',
+              model_name: 'command-a',
+              display_name: 'Cohere · Command A',
+              supports_web_search: true,
+              supports_batch_api: false
+            }
+          ]
+        }));
+      });
+    });
+
+    const orPort = await getFreePort();
+    const n8nPort = await getFreePort();
+    await new Promise(resolve => mockOpenRouterServer.listen(orPort, '127.0.0.1', resolve));
+    await new Promise(resolve => mockN8nServer.listen(n8nPort, '127.0.0.1', resolve));
+
+    const srv = await createSqliteBackedPhpServer({
+      OPENROUTER_MODELS_URL: `http://127.0.0.1:${orPort}/api/v1/models`,
+      N8N_WEBHOOK_URL: `http://127.0.0.1:${n8nPort}/webhook/chatlytics-run`
+    });
+    try {
+      await fetch(`${srv.baseUrl}/__seed_telemetry`);
+      const admHeaders = { 'Content-Type': 'application/json', 'Authorization': 'Bearer adm_token_f35' };
+
+      // 0. Non-admin access rejected with 403
+      const nonAdmRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=list_openrouter_providers`, {
+        headers: { 'Authorization': 'Bearer starter_token_f35' }
+      });
+      assert.equal(nonAdmRes.status, 403);
+
+      // 1. Default provider registry includes all 16 legacy defaults + meta, plus active config counts (ignoring deleted Cfg Deleted)
+      const listRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=list_openrouter_providers`, {
+        headers: { 'Authorization': 'Bearer adm_token_f35' }
+      });
+      const listJson = await listRes.json();
+      assert.equal(listRes.status, 200);
+      const defaults = listJson.data.default_providers;
+      assert.equal(defaults.length, 17);
+      assert.ok(defaults.includes('meta'), 'Default providers must include meta alongside meta-llama');
+      assert.ok(defaults.includes('meta-llama'));
+      const openaiProv = listJson.data.providers.find(p => p.provider_key === 'openai');
+      assert.ok(openaiProv);
+      assert.equal(openaiProv.is_relevant, true);
+      assert.equal(openaiProv.active_config_count, 1, 'Cfg A active counted, Cfg Deleted ignored');
+      assert.equal(openaiProv.paused_config_count, 1, 'Cfg B paused counted');
+      assert.ok(openaiProv.used_models.some(m => m.model_id === 'openai/gpt-6-luna' && m.config_samples.some(c => c.name === 'Cfg A')));
+
+      // 2. list_models also attaches active configuration usage stats
+      const modelsListRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=list_models`, {
+        headers: { 'Authorization': 'Bearer adm_token_f35' }
+      });
+      const modelsListJson = await modelsListRes.json();
+      const gpt6 = modelsListJson.data.models.find(m => m.id === 'openai/gpt-6-luna');
+      assert.ok(gpt6);
+      assert.equal(gpt6.active_config_count, 1);
+      assert.equal(gpt6.paused_config_count, 1);
+
+      // 3. sync_openrouter_providers discovers providers via n8n and direct OpenRouter fallback
+      const syncProvRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=sync_openrouter_providers`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({})
+      });
+      assert.equal(syncProvRes.status, 200);
+      assert.equal(lastN8nPayload?.include_all_providers, true);
+
+      const directSrv = await createSqliteBackedPhpServer({
+        OPENROUTER_MODELS_URL: `http://127.0.0.1:${orPort}/api/v1/models`,
+        N8N_WEBHOOK_URL: 'http://127.0.0.1:9/unreachable'
+      });
+      try {
+        const directRes = await fetch(`${directSrv.baseUrl}/api/admin_users.php?action=sync_openrouter_providers`, {
+          method: 'POST',
+          headers: admHeaders,
+          body: JSON.stringify({})
+        });
+        const directJson = await directRes.json();
+        assert.equal(directRes.status, 200);
+        assert.equal(directJson.data.synced, true);
+        assert.equal(directJson.data.source, 'openrouter_direct');
+        const allenai = directJson.data.providers.find(p => p.provider_key === 'allenai');
+        const metaProv = directJson.data.providers.find(p => p.provider_key === 'meta');
+        assert.ok(allenai);
+        assert.equal(allenai.is_relevant, false);
+        assert.equal(allenai.discovered_model_count, 1);
+        assert.ok(metaProv && metaProv.is_relevant === true);
+        assert.equal(metaProv.discovered_model_count, 2);
+        assert.ok(metaProv.sample_models.includes('meta/muse-spark'));
+        assert.ok(metaProv.sample_models.includes('meta/muse-wonder'));
+      } finally {
+        directSrv.close();
+      }
+
+      // 4. Live n8n sync with default set includes meta/muse-spark and excludes cohere/command-a
+      const syncModels1 = await fetch(`${srv.baseUrl}/api/admin_users.php?action=sync_n8n_models`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({})
+      });
+      const syncModels1Json = await syncModels1.json();
+      assert.equal(syncModels1.status, 200);
+      assert.ok(Array.isArray(lastN8nPayload?.allowed_providers) && lastN8nPayload.allowed_providers.includes('meta'));
+      assert.equal(syncModels1Json.data.models.some(m => m.id === 'meta/muse-spark'), true);
+      assert.equal(syncModels1Json.data.models.some(m => m.id === 'cohere/command-a'), false);
+
+      // 5. Enable cohere -> re-sync includes cohere/command-a (is_allowed=false initially)
+      const addCohereRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=save_openrouter_providers`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({ providers: [...defaults, 'cohere'] })
+      });
+      const addCohereJson = await addCohereRes.json();
+      assert.equal(addCohereRes.status, 200);
+      assert.ok(addCohereJson.data.relevant_providers.includes('cohere'));
+
+      const syncModels2 = await fetch(`${srv.baseUrl}/api/admin_users.php?action=sync_n8n_models`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({})
+      });
+      const syncModels2Json = await syncModels2.json();
+      assert.ok(lastN8nPayload?.allowed_providers?.includes('cohere'));
+      const cohereModel = syncModels2Json.data.models.find(m => m.id === 'cohere/command-a');
+      assert.ok(cohereModel && cohereModel.is_allowed === false);
+
+      // 6. Remove cohere AND openai: unused cohere/command-a is pruned, active openai/gpt-6-luna stays preserved in DB!
+      const withoutCohereOpenai = defaults.filter(p => p !== 'openai');
+      const pruneRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=save_openrouter_providers`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({ providers: withoutCohereOpenai })
+      });
+      const pruneJson = await pruneRes.json();
+      assert.equal(pruneRes.status, 200);
+      assert.ok(pruneJson.data.pruned_model_ids.includes('cohere/command-a'));
+      assert.ok(pruneJson.data.preserved_active_models.some(m => m.model_id === 'openai/gpt-6-luna' && m.active_config_count === 1));
+      assert.equal(pruneJson.data.models.some(m => m.id === 'openai/gpt-6-luna'), false, 'Default list_models hides deselected providers');
+
+      const inclExcludedRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=list_models&include_excluded=1`, {
+        headers: { 'Authorization': 'Bearer adm_token_f35' }
+      });
+      const inclExcludedJson = await inclExcludedRes.json();
+      assert.equal(inclExcludedJson.data.models.some(m => m.id === 'openai/gpt-6-luna'), true, 'Active model still preserved in llm_models');
+      assert.equal(inclExcludedJson.data.models.some(m => m.id === 'cohere/command-a'), false, 'Unused deselected model was pruned');
+
+      // 7. Reset back to defaults restores all 17 providers (including openai & meta)
+      const resetRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=reset_openrouter_providers`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({})
+      });
+      const resetJson = await resetRes.json();
+      assert.equal(resetRes.status, 200);
+      assert.ok(resetJson.data.relevant_providers.includes('openai'));
+      assert.ok(resetJson.data.relevant_providers.includes('meta'));
+      assert.equal(resetJson.data.models.some(m => m.id === 'openai/gpt-6-luna'), true);
+    } finally {
+      try { mockOpenRouterServer.close(); } catch (_) {}
+      try { mockN8nServer.close(); } catch (_) {}
+      srv.close();
+    }
   });
 });

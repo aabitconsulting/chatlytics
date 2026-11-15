@@ -553,12 +553,12 @@ function requireWritePermission(?array $user = null): void
 // -----------------------------------------------------------------------------
 
 /**
- * Returns the 15 whitelisted OpenRouter provider namespaces (including canonical alias variants)
- * used to filter live model discovery and catalog administration.
+ * Returns the default canonical OpenRouter provider namespaces for Chatlytics.
+ * Includes `meta` (Muse Spark / Wonder etc.) alongside `meta-llama`.
  *
  * @return array<int, string>
  */
-function getAllowedOpenRouterProviders(): array
+function getDefaultOpenRouterProviders(): array
 {
     return [
         'openai',
@@ -570,16 +570,76 @@ function getAllowedOpenRouterProviders(): array
         'qwen',
         'xiaomi',
         'z-ai',
-        'zhipu',
         'meta-llama',
+        'meta',
         'nvidia',
         'azure',
         'microsoft',
         'perplexity',
         'moonshotai',
-        'moonshot',
         'minimax',
     ];
+}
+
+/**
+ * Expands canonical OpenRouter provider keys with recognized alias prefixes.
+ *
+ * @param array<int, string> $providers
+ * @return array<int, string>
+ */
+function expandOpenRouterProviderAliases(array $providers): array
+{
+    $result = [];
+    $seen = [];
+    $add = static function (string $key) use (&$result, &$seen): void {
+        $normalized = strtolower(trim($key));
+        if ($normalized === '' || isset($seen[$normalized])) {
+            return;
+        }
+        $seen[$normalized] = true;
+        $result[] = $normalized;
+    };
+
+    foreach ($providers as $provider) {
+        $p = strtolower(trim((string)$provider));
+        if ($p === '') {
+            continue;
+        }
+        $add($p);
+        if ($p === 'z-ai') {
+            $add('zhipu');
+        } elseif ($p === 'moonshotai') {
+            $add('moonshot');
+        }
+    }
+
+    return $result;
+}
+
+/**
+ * Returns the whitelisted OpenRouter provider namespaces (including canonical alias variants)
+ * used to filter live model discovery and catalog administration.
+ * Reads admin-configured `is_relevant = 1` providers from `openrouter_providers` when `$db`
+ * is provided and seeded, falling back to `getDefaultOpenRouterProviders()`.
+ *
+ * @return array<int, string>
+ */
+function getAllowedOpenRouterProviders(?PDO $db = null): array
+{
+    if ($db !== null) {
+        try {
+            $totalCount = (int)$db->query("SELECT COUNT(*) FROM openrouter_providers")->fetchColumn();
+            if ($totalCount > 0) {
+                $stmt = $db->query("SELECT provider_key FROM openrouter_providers WHERE is_relevant = 1 ORDER BY provider_key ASC");
+                $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                return expandOpenRouterProviderAliases(is_array($rows) ? $rows : []);
+            }
+        } catch (\Throwable $e) {
+            // Fall back to default set if table is missing in partial schemas/tests
+        }
+    }
+
+    return expandOpenRouterProviderAliases(getDefaultOpenRouterProviders());
 }
 
 /**

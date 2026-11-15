@@ -78,9 +78,15 @@ const AdminState = {
   models: [],
   modelFilters: { search: '', provider: '', capability: '' },
   providerCredentials: [],
+  providers: [],
+  defaultProviders: [],
+  providerDraftSet: new Set(),
+  providerFilters: { search: '', mode: 'all' },
+  pendingImpactAction: null,
+  pendingImpactCancel: null,
   presets: [],
   plans: [],
-  loadedTabs: { users: false, models: false, presets: false, plans: false },
+  loadedTabs: { users: false, models: false, providers: false, presets: false, plans: false },
   isSeeding: false,
   isAdjustingCredit: false,
   searchDebounceTimer: null
@@ -957,6 +963,30 @@ function bindAdminV2Events() {
     });
   }
 
+  // OpenRouter Provider Management Controls & Impact Modal
+  document.getElementById('btn-sync-providers')?.addEventListener('click', () => syncOpenRouterProviders());
+  document.getElementById('btn-reset-providers')?.addEventListener('click', () => handleResetOpenRouterProviders());
+  document.getElementById('btn-save-providers')?.addEventListener('click', () => handleSaveOpenRouterProviders(false));
+  document.getElementById('btn-save-sync-providers')?.addEventListener('click', () => handleSaveOpenRouterProviders(true));
+  document.getElementById('provider-filter-search')?.addEventListener('input', (e) => {
+    AdminState.providerFilters.search = String(e.target?.value || '').trim().toLowerCase();
+    renderOpenRouterProvidersTable(AdminState.providers);
+  });
+  document.getElementById('provider-filter-mode')?.addEventListener('change', (e) => {
+    AdminState.providerFilters.mode = String(e.target?.value || 'all').trim();
+    renderOpenRouterProvidersTable(AdminState.providers);
+  });
+
+  document.getElementById('btn-impact-modal-close')?.addEventListener('click', () => closeProviderImpactModal(true));
+  document.getElementById('btn-impact-cancel')?.addEventListener('click', () => closeProviderImpactModal(true));
+  document.getElementById('btn-impact-confirm')?.addEventListener('click', () => confirmProviderImpactModal());
+  const impactModal = document.getElementById('provider-impact-modal');
+  if (impactModal) {
+    impactModal.addEventListener('click', (e) => {
+      if (e.target === impactModal) closeProviderImpactModal(true);
+    });
+  }
+
   // Preset Management Controls & Modal
   document.getElementById('btn-new-preset')?.addEventListener('click', () => openPresetModal(null));
   document.getElementById('form-save-preset')?.addEventListener('submit', handleSavePreset);
@@ -974,12 +1004,13 @@ function bindAdminV2Events() {
       closeTierModal();
       closeModelModal();
       closePresetModal();
+      closeProviderImpactModal(true);
     }
   });
 }
 
 async function switchAdminTab(tabKey) {
-  const validTabs = ['users', 'models', 'presets', 'plans'];
+  const validTabs = ['users', 'models', 'providers', 'presets', 'plans'];
   const nextTab = validTabs.includes(tabKey) ? tabKey : 'users';
   AdminState.activeTab = nextTab;
 
@@ -996,6 +1027,8 @@ async function switchAdminTab(tabKey) {
 
   if (nextTab === 'models' && !AdminState.loadedTabs.models) {
     await loadAdminModels();
+  } else if (nextTab === 'providers') {
+    await loadOpenRouterProviders();
   } else if (nextTab === 'presets') {
     if (!AdminState.loadedTabs.models) await loadAdminModels();
     await loadAdminPresets();
@@ -1259,6 +1292,28 @@ function renderModelsTable(models) {
     provSpan.style.fontSize = '0.78rem';
     provSpan.textContent = `${m.provider} · Sync: ${m.n8n_sync_status || 'seeded'}`;
     tdId.append(idStrong, provSpan);
+    const activeCnt = Number(m.active_config_count || 0);
+    const pausedCnt = Number(m.paused_config_count || 0);
+    const presetCnt = Number(m.preset_count || 0);
+    if (activeCnt > 0 || pausedCnt > 0 || presetCnt > 0) {
+      const usageLine = document.createElement('div');
+      usageLine.className = 'provider-usage-detail';
+      usageLine.style.marginTop = '4px';
+      const usageBadge = document.createElement('span');
+      usageBadge.className = `badge ${activeCnt > 0 ? 'badge-warning' : 'badge-secondary'}`;
+      usageBadge.style.fontSize = '0.72rem';
+      const parts = [];
+      if (activeCnt > 0) parts.push(`${activeCnt} aktive Konfig(s)`);
+      if (pausedCnt > 0) parts.push(`${pausedCnt} pausiert`);
+      if (presetCnt > 0) parts.push(`${presetCnt} Analyse-Set(s)`);
+      usageBadge.textContent = parts.join(' · ');
+      const samples = Array.isArray(m.config_samples) ? m.config_samples : [];
+      if (samples.length > 0) {
+        usageBadge.title = samples.map((s) => `${s.name} (${s.status})`).join(', ');
+      }
+      usageLine.appendChild(usageBadge);
+      tdId.appendChild(usageLine);
+    }
     tr.appendChild(tdId);
 
     const tdName = document.createElement('td');
@@ -1298,7 +1353,7 @@ function renderModelsTable(models) {
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.checked = Boolean(checkedVal);
-      input.addEventListener('change', () => handleToggleModelField(m.id, fieldName, input.checked));
+      input.addEventListener('change', () => handleToggleModelField(m.id, fieldName, input.checked, input));
       const span = document.createElement('span');
       span.className = 'admin-switch-label';
       span.textContent = input.checked ? 'AN' : 'AUS';
@@ -1368,7 +1423,7 @@ async function triggerN8nModelSync() {
   }
 }
 
-async function handleToggleModelField(modelId, field, nextVal) {
+async function executeToggleModelField(modelId, field, nextVal) {
   try {
     const res = await fetch('api/admin_users.php?action=toggle_model', {
       method: 'POST',
@@ -1385,9 +1440,34 @@ async function handleToggleModelField(modelId, field, nextVal) {
     renderModelsTable(AdminState.models);
     showToast(`Modell ${modelId} aktualisiert.`, 'success');
   } catch (err) {
-    console.error('handleToggleModelField error:', err);
+    console.error('executeToggleModelField error:', err);
     showToast('Netzwerkfehler beim Speichern der Modell-Einstellung.', 'error');
   }
+}
+
+async function handleToggleModelField(modelId, field, nextVal, sourceInputEl = null) {
+  if (field === 'is_allowed' && !nextVal && sourceInputEl && document.getElementById('provider-impact-modal')) {
+    const targetModel = (AdminState.models || []).find((item) => item.id === modelId);
+    const hasUsage = targetModel && (
+      Number(targetModel.active_config_count || 0) > 0
+      || Number(targetModel.paused_config_count || 0) > 0
+      || Number(targetModel.preset_count || 0) > 0
+    );
+    if (hasUsage) {
+      openProviderImpactConfirmModal(
+        `Das Modell "${modelId}" wird noch in aktiven/pausierten Kundenkonfigurationen oder Analyse-Sets verwendet. Bei Deaktivierung können Kunden dieses Modell nicht mehr neu auswählen; prüfen Sie betroffene Konfigurationen unten:`,
+        [targetModel],
+        () => executeToggleModelField(modelId, field, false),
+        () => {
+          sourceInputEl.checked = true;
+          renderModelsTable(AdminState.models);
+        }
+      );
+      return;
+    }
+  }
+
+  await executeToggleModelField(modelId, field, nextVal);
 }
 
 function openModelModal(model = null) {
@@ -1402,6 +1482,22 @@ function openModelModal(model = null) {
   const searchEl = document.getElementById('model-supports-search');
   const allowEl = document.getElementById('model-is-allowed');
   const defEl = document.getElementById('model-is-default');
+
+  if (provSelect) {
+    const existingOpts = new Set(Array.from(provSelect.options).map((o) => String(o.value || '').toLowerCase()));
+    const dynamicProvs = (AdminState.providers || []).filter((p) => p.is_relevant).map((p) => p.provider_key);
+    if (model && model.provider) dynamicProvs.push(String(model.provider).toLowerCase());
+    dynamicProvs.forEach((pKey) => {
+      const cleanKey = String(pKey || '').trim().toLowerCase();
+      if (cleanKey && !existingOpts.has(cleanKey)) {
+        const opt = document.createElement('option');
+        opt.value = cleanKey;
+        opt.textContent = cleanKey;
+        provSelect.appendChild(opt);
+        existingOpts.add(cleanKey);
+      }
+    });
+  }
 
   if (model) {
     AdminState.editingModelId = model.id;
@@ -1987,6 +2083,557 @@ if (typeof document !== 'undefined') {
 }
 
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// 8.5 OpenRouter Provider Registry & Active Config Impact Warning Helpers
+// -----------------------------------------------------------------------------
+function populateProviderDraftFromList(providers) {
+  const list = Array.isArray(providers) ? providers : [];
+  AdminState.providerDraftSet = new Set(
+    list.filter((p) => Boolean(p && p.is_relevant)).map((p) => String(p.provider_key || '').toLowerCase()).filter(Boolean)
+  );
+}
+
+function getProviderDraftSelectedArray() {
+  if (!(AdminState.providerDraftSet instanceof Set)) {
+    return [];
+  }
+  return Array.from(AdminState.providerDraftSet).sort();
+}
+
+function computeDeselectedProviderImpact(selectedKeysSet = null) {
+  const activeSet = selectedKeysSet instanceof Set
+    ? selectedKeysSet
+    : (AdminState.providerDraftSet instanceof Set ? AdminState.providerDraftSet : new Set());
+  const affectedModels = [];
+
+  (AdminState.providers || []).forEach((p) => {
+    const key = String(p.provider_key || '').toLowerCase();
+    if (!key || activeSet.has(key)) return;
+    const usedModels = Array.isArray(p.used_models) ? p.used_models : [];
+    usedModels.forEach((m) => {
+      if (
+        Number(m.active_config_count || 0) > 0
+        || Number(m.paused_config_count || 0) > 0
+        || Number(m.preset_count || 0) > 0
+      ) {
+        affectedModels.push(m);
+      }
+    });
+  });
+
+  return affectedModels;
+}
+
+function renderModelImpactCards(container, affectedModels) {
+  if (!container) return;
+  container.textContent = '';
+
+  (affectedModels || []).forEach((m) => {
+    const item = document.createElement('div');
+    item.className = 'admin-impact-item';
+
+    const head = document.createElement('div');
+    head.className = 'admin-impact-item-head';
+
+    const idSpan = document.createElement('strong');
+    idSpan.className = 'font-mono';
+    idSpan.textContent = m.model_id || m.id || '';
+
+    const badgesWrap = document.createElement('div');
+    badgesWrap.className = 'provider-usage-detail';
+
+    const actCount = Number(m.active_config_count || 0);
+    const pausedCount = Number(m.paused_config_count || 0);
+    const presetCount = Number(m.preset_count || 0);
+
+    if (actCount > 0) {
+      const bAct = document.createElement('span');
+      bAct.className = 'badge badge-warning';
+      bAct.textContent = `${actCount} aktive Konfig(s)`;
+      badgesWrap.appendChild(bAct);
+    }
+    if (pausedCount > 0) {
+      const bPau = document.createElement('span');
+      bPau.className = 'badge badge-secondary';
+      bPau.textContent = `${pausedCount} pausiert`;
+      badgesWrap.appendChild(bPau);
+    }
+    if (presetCount > 0) {
+      const bPre = document.createElement('span');
+      bPre.className = 'badge badge-primary';
+      bPre.textContent = `${presetCount} Analyse-Set(s)`;
+      badgesWrap.appendChild(bPre);
+    }
+
+    head.append(idSpan, badgesWrap);
+    item.appendChild(head);
+
+    const samples = Array.isArray(m.config_samples) ? m.config_samples : [];
+    if (samples.length > 0) {
+      const cfgMeta = document.createElement('div');
+      cfgMeta.className = 'admin-impact-item-meta';
+      const names = samples.map((s) => `${s.name || ('#' + s.id)} (${s.status === 'active' ? 'aktiv' : 'pausiert'})`).join(', ');
+      cfgMeta.textContent = `Konfigurationen: ${names}${samples.length >= 10 ? ' …' : ''}`;
+      item.appendChild(cfgMeta);
+    }
+
+    const presetNames = Array.isArray(m.preset_names) ? m.preset_names : [];
+    if (presetNames.length > 0) {
+      const preMeta = document.createElement('div');
+      preMeta.className = 'admin-impact-item-meta';
+      preMeta.textContent = `Analyse-Sets: ${presetNames.join(', ')}`;
+      item.appendChild(preMeta);
+    }
+
+    container.appendChild(item);
+  });
+}
+
+function renderProviderImpactWarning() {
+  const providers = Array.isArray(AdminState.providers) ? AdminState.providers : [];
+  const draftSet = AdminState.providerDraftSet instanceof Set ? AdminState.providerDraftSet : new Set();
+
+  const totalBadge = document.getElementById('providers-stat-total');
+  const relevantBadge = document.getElementById('providers-stat-relevant');
+  const activeUsageBadge = document.getElementById('providers-stat-active-usage');
+  const warningBox = document.getElementById('providers-impact-warning');
+  const warningBody = document.getElementById('providers-impact-warning-body');
+
+  if (totalBadge) totalBadge.textContent = `${providers.length} Provider`;
+  if (relevantBadge) relevantBadge.textContent = `${draftSet.size} Relevant`;
+
+  const affectedModels = computeDeselectedProviderImpact(draftSet);
+  if (activeUsageBadge) {
+    if (affectedModels.length > 0) {
+      activeUsageBadge.hidden = false;
+      activeUsageBadge.textContent = `${affectedModels.length} verwendete Modell(e) bei abgewählten Providern`;
+    } else {
+      activeUsageBadge.hidden = true;
+    }
+  }
+
+  if (warningBox && warningBody) {
+    if (affectedModels.length === 0) {
+      warningBox.hidden = true;
+      warningBody.textContent = '';
+    } else {
+      warningBox.hidden = false;
+      warningBody.textContent = '';
+      const intro = document.createElement('p');
+      intro.style.margin = '0 0 8px 0';
+      intro.textContent = 'Folgende Modelle abgewählter Provider werden noch in aktiven/pausierten Kundenkonfigurationen oder Analyse-Sets genutzt. Unbenutzte Modelle werden beim Speichern entfernt; bereits freigeschaltete/verwendete Modelle bleiben für bestehende Konfigs geschützt, werden aber aus dem neuen Standard-Katalog gefiltert:';
+      const listContainer = document.createElement('div');
+      listContainer.className = 'admin-impact-list';
+      renderModelImpactCards(listContainer, affectedModels);
+      warningBody.append(intro, listContainer);
+    }
+  }
+}
+
+function openProviderImpactConfirmModal(summaryText, affectedModelsList, onConfirm, onCancel = null) {
+  const modal = document.getElementById('provider-impact-modal');
+  const summaryEl = document.getElementById('provider-impact-modal-summary');
+  const listEl = document.getElementById('provider-impact-modal-list');
+
+  if (!modal || !listEl) {
+    if (typeof onConfirm === 'function') onConfirm();
+    return;
+  }
+
+  AdminState.pendingImpactAction = typeof onConfirm === 'function' ? onConfirm : null;
+  AdminState.pendingImpactCancel = typeof onCancel === 'function' ? onCancel : null;
+
+  if (summaryEl) {
+    summaryEl.textContent = summaryText || 'Betroffene Modelle mit aktiven Kundenkonfigurationen oder Analyse-Sets:';
+  }
+  renderModelImpactCards(listEl, affectedModelsList);
+  modal.style.display = 'flex';
+}
+
+function closeProviderImpactModal(invokeCancel = false) {
+  const modal = document.getElementById('provider-impact-modal');
+  if (modal) modal.style.display = 'none';
+  const cancelCb = AdminState.pendingImpactCancel;
+  AdminState.pendingImpactAction = null;
+  AdminState.pendingImpactCancel = null;
+  if (invokeCancel && typeof cancelCb === 'function') {
+    cancelCb();
+  }
+}
+
+async function confirmProviderImpactModal() {
+  const actionCb = AdminState.pendingImpactAction;
+  AdminState.pendingImpactCancel = null;
+  closeProviderImpactModal(false);
+  if (typeof actionCb === 'function') {
+    await actionCb();
+  }
+}
+
+function renderOpenRouterProvidersTable(providers = []) {
+  const tbody = document.getElementById('providers-tbody');
+  const countBadge = document.getElementById('provider-filter-count');
+  renderProviderImpactWarning();
+  if (!tbody) return;
+
+  const list = Array.isArray(providers) ? providers : [];
+  const draftSet = AdminState.providerDraftSet instanceof Set ? AdminState.providerDraftSet : new Set();
+  const q = String(AdminState.providerFilters?.search || '').trim().toLowerCase();
+  const mode = String(AdminState.providerFilters?.mode || 'all');
+
+  const filtered = list.filter((p) => {
+    const key = String(p.provider_key || '').toLowerCase();
+    const name = String(p.display_name || '').toLowerCase();
+    const samples = Array.isArray(p.sample_models) ? p.sample_models.join(' ').toLowerCase() : '';
+    const isRelDraft = draftSet.has(key);
+    const hasUsage = Number(p.active_config_count || 0) > 0
+      || Number(p.paused_config_count || 0) > 0
+      || Number(p.preset_count || 0) > 0;
+
+    if (mode === 'relevant' && !isRelDraft) return false;
+    if (mode === 'default' && !p.is_default) return false;
+    if (mode === 'used' && !hasUsage) return false;
+    if (q && !key.includes(q) && !name.includes(q) && !samples.includes(q)) return false;
+    return true;
+  });
+
+  if (countBadge) {
+    countBadge.textContent = `${filtered.length} / ${list.length} Provider`;
+  }
+
+  tbody.textContent = '';
+  if (filtered.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.className = 'text-muted';
+    td.textContent = 'Keine passenden OpenRouter-Provider gefunden.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  filtered.forEach((p) => {
+    const pKey = String(p.provider_key || '').toLowerCase();
+    const isRelDraft = draftSet.has(pKey);
+    const actCount = Number(p.active_config_count || 0);
+    const pausedCount = Number(p.paused_config_count || 0);
+    const presetCount = Number(p.preset_count || 0);
+    const hasUsage = actCount > 0 || pausedCount > 0 || presetCount > 0;
+
+    const tr = document.createElement('tr');
+    if (!isRelDraft && hasUsage) {
+      tr.className = 'provider-row-deselected-used';
+    }
+
+    // Col 1: Relevant switch
+    const tdToggle = document.createElement('td');
+    const lbl = document.createElement('label');
+    lbl.className = 'admin-switch';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isRelDraft;
+    checkbox.setAttribute('aria-label', `Provider ${pKey} relevant`);
+    const spanTxt = document.createElement('span');
+    spanTxt.className = 'admin-switch-label';
+    spanTxt.textContent = isRelDraft ? 'AN' : 'AUS';
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        AdminState.providerDraftSet.add(pKey);
+      } else {
+        AdminState.providerDraftSet.delete(pKey);
+      }
+      spanTxt.textContent = checkbox.checked ? 'AN' : 'AUS';
+      tr.classList.toggle('provider-row-deselected-used', !checkbox.checked && hasUsage);
+      renderProviderImpactWarning();
+    });
+    lbl.append(checkbox, spanTxt);
+    tdToggle.appendChild(lbl);
+    tr.appendChild(tdToggle);
+
+    // Col 2: Display Name + Namespace + Default Badge
+    const tdName = document.createElement('td');
+    const titleWrap = document.createElement('div');
+    const strongName = document.createElement('strong');
+    strongName.textContent = p.display_name || pKey;
+    titleWrap.appendChild(strongName);
+    if (p.is_default) {
+      const defBadge = document.createElement('span');
+      defBadge.className = 'badge badge-secondary';
+      defBadge.style.marginLeft = '6px';
+      defBadge.textContent = 'Default';
+      titleWrap.appendChild(defBadge);
+    }
+    const nsLine = document.createElement('div');
+    nsLine.className = 'font-mono text-muted';
+    nsLine.style.fontSize = '0.78rem';
+    nsLine.textContent = pKey;
+    tdName.append(titleWrap, nsLine);
+    tr.appendChild(tdName);
+
+    // Col 3: Model counts
+    const tdCounts = document.createElement('td');
+    const discovered = Number(p.discovered_model_count || 0);
+    const catalogCnt = Number(p.catalog_model_count || 0);
+    const allowedCnt = Number(p.allowed_model_count || 0);
+    const countTop = document.createElement('div');
+    countTop.className = 'font-mono';
+    countTop.textContent = `${discovered} OpenRouter`;
+    const countSub = document.createElement('div');
+    countSub.className = 'text-muted';
+    countSub.style.fontSize = '0.78rem';
+    countSub.textContent = `${catalogCnt} im Katalog (${allowedCnt} frei)`;
+    tdCounts.append(countTop, countSub);
+    tr.appendChild(tdCounts);
+
+    // Col 4: Sample models
+    const tdSamples = document.createElement('td');
+    const sampleWrap = document.createElement('div');
+    sampleWrap.className = 'provider-sample-chips';
+    const samples = Array.isArray(p.sample_models) ? p.sample_models.slice(0, 4) : [];
+    if (samples.length === 0) {
+      const emptyTxt = document.createElement('span');
+      emptyTxt.className = 'text-muted';
+      emptyTxt.style.fontSize = '0.78rem';
+      emptyTxt.textContent = 'Noch nicht gesynct';
+      sampleWrap.appendChild(emptyTxt);
+    } else {
+      samples.forEach((sId) => {
+        const chip = document.createElement('span');
+        chip.className = 'badge badge-secondary font-mono';
+        chip.textContent = sId;
+        sampleWrap.appendChild(chip);
+      });
+    }
+    tdSamples.appendChild(sampleWrap);
+    tr.appendChild(tdSamples);
+
+    // Col 5: Active customer configs & Analyse-Sets usage
+    const tdUsage = document.createElement('td');
+    if (!hasUsage) {
+      const noneTxt = document.createElement('span');
+      noneTxt.className = 'text-muted';
+      noneTxt.style.fontSize = '0.78rem';
+      noneTxt.textContent = 'Keine aktiven Konfigs';
+      tdUsage.appendChild(noneTxt);
+    } else {
+      const badgeRow = document.createElement('div');
+      badgeRow.className = 'provider-usage-detail';
+      if (actCount > 0) {
+        const bA = document.createElement('span');
+        bA.className = 'badge badge-warning';
+        bA.textContent = `${actCount} aktive Konfig(s)`;
+        badgeRow.appendChild(bA);
+      }
+      if (pausedCount > 0) {
+        const bP = document.createElement('span');
+        bP.className = 'badge badge-secondary';
+        bP.textContent = `${pausedCount} pausiert`;
+        badgeRow.appendChild(bP);
+      }
+      if (presetCount > 0) {
+        const bS = document.createElement('span');
+        bS.className = 'badge badge-primary';
+        bS.textContent = `${presetCount} Analyse-Set(s)`;
+        badgeRow.appendChild(bS);
+      }
+      tdUsage.appendChild(badgeRow);
+
+      const usedModels = Array.isArray(p.used_models) ? p.used_models : [];
+      if (usedModels.length > 0) {
+        const detailLine = document.createElement('div');
+        detailLine.className = 'admin-impact-item-meta';
+        detailLine.style.marginTop = '4px';
+        detailLine.textContent = usedModels.slice(0, 3).map((um) => {
+          const cfgs = Array.isArray(um.config_samples) && um.config_samples.length > 0
+            ? ` [${um.config_samples.slice(0, 2).map((c) => c.name).join(', ')}]`
+            : '';
+          return `${um.model_id}${cfgs}`;
+        }).join(' · ');
+        tdUsage.appendChild(detailLine);
+      }
+    }
+    tr.appendChild(tdUsage);
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadOpenRouterProviders() {
+  const statusBadge = document.getElementById('providers-sync-status-badge');
+  try {
+    const res = await fetch('api/admin_users.php?action=list_openrouter_providers', {
+      headers: getAdminAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || json.status === 'error') {
+      showToast(json.message || 'OpenRouter-Provider konnten nicht geladen werden.', 'error');
+      return;
+    }
+    AdminState.providers = json.data?.providers || [];
+    AdminState.defaultProviders = json.data?.default_providers || [];
+    populateProviderDraftFromList(AdminState.providers);
+    AdminState.loadedTabs.providers = true;
+    renderOpenRouterProvidersTable(AdminState.providers);
+    if (statusBadge) {
+      statusBadge.className = 'badge badge-secondary';
+      statusBadge.textContent = `${AdminState.providerDraftSet.size} / ${AdminState.providers.length} aktiv`;
+    }
+  } catch (err) {
+    console.error('loadOpenRouterProviders error:', err);
+    showToast('Netzwerkfehler beim Laden der OpenRouter-Provider.', 'error');
+  }
+}
+
+async function syncOpenRouterProviders() {
+  const btn = document.getElementById('btn-sync-providers');
+  const statusBadge = document.getElementById('providers-sync-status-badge');
+  try {
+    setAdminButtonLoading(btn, true, 'Lade alle OpenRouter-Provider...');
+    const res = await fetch('api/admin_users.php?action=sync_openrouter_providers', {
+      method: 'POST',
+      headers: getAdminAuthHeaders(),
+      body: JSON.stringify({})
+    });
+    const json = await res.json();
+    if (!res.ok || json.status === 'error') {
+      showToast(json.message || 'Provider-Discovery fehlgeschlagen.', 'error');
+      return;
+    }
+    AdminState.providers = json.data?.providers || [];
+    AdminState.defaultProviders = json.data?.default_providers || AdminState.defaultProviders;
+    populateProviderDraftFromList(AdminState.providers);
+    AdminState.loadedTabs.providers = true;
+    renderOpenRouterProvidersTable(AdminState.providers);
+    if (statusBadge) {
+      statusBadge.className = json.data?.synced ? 'badge badge-active' : 'badge badge-warning';
+      statusBadge.textContent = json.data?.synced
+        ? `Live-Sync OK (${json.data.source})`
+        : 'Lokaler Fallback';
+    }
+    showToast(json.data?.message || 'OpenRouter-Provider aktualisiert.', json.data?.synced ? 'success' : 'info');
+  } catch (err) {
+    console.error('syncOpenRouterProviders error:', err);
+    showToast('Netzwerkfehler beim Provider-Sync.', 'error');
+  } finally {
+    setAdminButtonLoading(btn, false);
+  }
+}
+
+async function executeSaveOpenRouterProviders(selectedArray, syncModelsAfter = false) {
+  const btn = document.getElementById(syncModelsAfter ? 'btn-save-sync-providers' : 'btn-save-providers');
+  try {
+    setAdminButtonLoading(btn, true, syncModelsAfter ? 'Speichere & synce...' : 'Speichere Set...');
+    const res = await fetch('api/admin_users.php?action=save_openrouter_providers', {
+      method: 'POST',
+      headers: getAdminAuthHeaders(),
+      body: JSON.stringify({ providers: selectedArray })
+    });
+    const json = await res.json();
+    if (!res.ok || json.status === 'error') {
+      showToast(json.message || 'Provider-Auswahl konnte nicht gespeichert werden.', 'error');
+      return;
+    }
+    AdminState.providers = json.data?.providers || AdminState.providers;
+    AdminState.defaultProviders = json.data?.default_providers || AdminState.defaultProviders;
+    populateProviderDraftFromList(AdminState.providers);
+    AdminState.loadedTabs.providers = true;
+    renderOpenRouterProvidersTable(AdminState.providers);
+
+    if (Array.isArray(json.data?.models)) {
+      AdminState.models = json.data.models;
+      AdminState.loadedTabs.models = true;
+      renderModelsTable(AdminState.models);
+    }
+
+    const prunedCount = Array.isArray(json.data?.pruned_model_ids) ? json.data.pruned_model_ids.length : 0;
+    const preservedCount = Array.isArray(json.data?.preserved_active_models) ? json.data.preserved_active_models.length : 0;
+    let infoMsg = json.data?.message || 'Relevante OpenRouter-Provider gespeichert.';
+    if (prunedCount > 0 || preservedCount > 0) {
+      infoMsg += ` (${prunedCount} unbenutzte Modelle bereinigt, ${preservedCount} aktive/verwendete geschützt)`;
+    }
+    showToast(infoMsg, 'success');
+
+    if (syncModelsAfter) {
+      await triggerN8nModelSync();
+    }
+  } catch (err) {
+    console.error('executeSaveOpenRouterProviders error:', err);
+    showToast('Netzwerkfehler beim Speichern der Provider-Auswahl.', 'error');
+  } finally {
+    setAdminButtonLoading(btn, false);
+  }
+}
+
+async function handleSaveOpenRouterProviders(syncModelsAfter = false) {
+  const selected = getProviderDraftSelectedArray();
+  const affectedModels = computeDeselectedProviderImpact(new Set(selected));
+
+  if (affectedModels.length > 0 && document.getElementById('provider-impact-modal')) {
+    openProviderImpactConfirmModal(
+      'Mindestens ein abgewählter Provider enthält noch Modelle mit aktiven/pausierten Kundenkonfigurationen oder Analyse-Sets. Laufende Konfigurationen bleiben durch DB-Schutz erhalten, die Provider werden jedoch aus künftigen Syncs und dem aktiven Katalog ausgeschlossen:',
+      affectedModels,
+      () => executeSaveOpenRouterProviders(selected, syncModelsAfter)
+    );
+    return;
+  }
+
+  await executeSaveOpenRouterProviders(selected, syncModelsAfter);
+}
+
+async function executeResetOpenRouterProviders() {
+  const btn = document.getElementById('btn-reset-providers');
+  try {
+    setAdminButtonLoading(btn, true, 'Setze auf Default zurück...');
+    const res = await fetch('api/admin_users.php?action=reset_openrouter_providers', {
+      method: 'POST',
+      headers: getAdminAuthHeaders(),
+      body: JSON.stringify({})
+    });
+    const json = await res.json();
+    if (!res.ok || json.status === 'error') {
+      showToast(json.message || 'Default-Wiederherstellung fehlgeschlagen.', 'error');
+      return;
+    }
+    AdminState.providers = json.data?.providers || [];
+    AdminState.defaultProviders = json.data?.default_providers || AdminState.defaultProviders;
+    populateProviderDraftFromList(AdminState.providers);
+    AdminState.loadedTabs.providers = true;
+    renderOpenRouterProvidersTable(AdminState.providers);
+
+    if (Array.isArray(json.data?.models)) {
+      AdminState.models = json.data.models;
+      AdminState.loadedTabs.models = true;
+      renderModelsTable(AdminState.models);
+    }
+    showToast(json.data?.message || 'Standard-Provider wiederhergestellt (inkl. meta).', 'success');
+  } catch (err) {
+    console.error('executeResetOpenRouterProviders error:', err);
+    showToast('Netzwerkfehler beim Zurücksetzen der Provider.', 'error');
+  } finally {
+    setAdminButtonLoading(btn, false);
+  }
+}
+
+async function handleResetOpenRouterProviders() {
+  const defaultKeys = Array.isArray(AdminState.defaultProviders) && AdminState.defaultProviders.length > 0
+    ? AdminState.defaultProviders
+    : (AdminState.providers || []).filter((p) => p.is_default).map((p) => p.provider_key);
+  const affectedModels = computeDeselectedProviderImpact(new Set(defaultKeys.map((k) => String(k).toLowerCase())));
+
+  if (affectedModels.length > 0 && document.getElementById('provider-impact-modal')) {
+    openProviderImpactConfirmModal(
+      'Beim Zurücksetzen auf die Standard-Provider werden benutzerdefinierte Provider abgewählt, deren Modelle noch aktive/pausierte Kundenkonfigurationen oder Analyse-Sets haben:',
+      affectedModels,
+      () => executeResetOpenRouterProviders()
+    );
+    return;
+  }
+
+  await executeResetOpenRouterProviders();
+}
+
+// -----------------------------------------------------------------------------
 // 9. Universal Module Exports (Node.js Test Runner & Browser Global)
 // -----------------------------------------------------------------------------
 if (typeof window !== 'undefined') {
@@ -2023,7 +2670,17 @@ if (typeof window !== 'undefined') {
     handleSavePreset,
     handleDeletePreset,
     loadAdminPlans,
-    handleSavePlan
+    handleSavePlan,
+    loadOpenRouterProviders,
+    syncOpenRouterProviders,
+    renderOpenRouterProvidersTable,
+    computeDeselectedProviderImpact,
+    renderProviderImpactWarning,
+    openProviderImpactConfirmModal,
+    closeProviderImpactModal,
+    confirmProviderImpactModal,
+    handleSaveOpenRouterProviders,
+    handleResetOpenRouterProviders
   };
   window.buildCreditPayload = buildCreditPayload;
 }
@@ -2055,6 +2712,16 @@ if (typeof module !== 'undefined' && module.exports) {
     handleDeletePreset,
     loadAdminPlans,
     handleSavePlan,
+    loadOpenRouterProviders,
+    syncOpenRouterProviders,
+    renderOpenRouterProvidersTable,
+    computeDeselectedProviderImpact,
+    renderProviderImpactWarning,
+    openProviderImpactConfirmModal,
+    closeProviderImpactModal,
+    confirmProviderImpactModal,
+    handleSaveOpenRouterProviders,
+    handleResetOpenRouterProviders,
     AdminState
   };
 }

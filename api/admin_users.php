@@ -72,6 +72,22 @@ switch ($action) {
         handleSyncN8nModels($requestData);
         break;
 
+    case 'list_openrouter_providers':
+        handleListOpenRouterProviders();
+        break;
+
+    case 'sync_openrouter_providers':
+        handleSyncOpenRouterProviders($requestData);
+        break;
+
+    case 'save_openrouter_providers':
+        handleSaveOpenRouterProviders($requestData);
+        break;
+
+    case 'reset_openrouter_providers':
+        handleResetOpenRouterProviders($requestData);
+        break;
+
     case 'list_presets':
         handleListPresets();
         break;
@@ -1208,14 +1224,46 @@ function handleUpdateUserTier(array $data): void
 /**
  * Lists all managed LLM models and provider credential health.
  */
+function enrichAndFilterAdminModels(PDO $db, array $models, bool $filterRelevantOnly = true): array
+{
+    $usage = getModelActiveUsageStats($db);
+    $byModel = $usage['by_model'];
+    $allowedSet = array_flip(getAllowedOpenRouterProviders($db));
+    $enriched = [];
+
+    foreach ($models as $model) {
+        $mid = (string)($model['id'] ?? '');
+        $rawProv = strtolower(trim((string)($model['provider'] ?? '')));
+        $canonProv = normalizeCanonicalOpenRouterProvider($rawProv);
+        $isRelevant = isset($allowedSet[$rawProv]) || isset($allowedSet[$canonProv]);
+        if ($filterRelevantOnly && !$isRelevant) {
+            continue;
+        }
+
+        $u = $byModel[$mid] ?? null;
+        $model['provider_is_relevant'] = $isRelevant;
+        $model['active_config_count'] = $u ? (int)$u['active_config_count'] : 0;
+        $model['paused_config_count'] = $u ? (int)$u['paused_config_count'] : 0;
+        $model['total_config_count']  = $u ? (int)$u['total_config_count'] : 0;
+        $model['preset_count']        = $u ? (int)$u['preset_count'] : 0;
+        $model['config_samples']      = $u ? $u['config_samples'] : [];
+        $model['preset_names']        = $u ? $u['preset_names'] : [];
+        $enriched[] = $model;
+    }
+
+    return $enriched;
+}
+
 function handleListModels(): void
 {
     $db = getDb();
     ensureCoreSchemaColumns($db);
-    $models = getAdminModelsCatalog($db, false);
+    $includeExcluded = !empty($_GET['include_excluded']) && $_GET['include_excluded'] !== '0' && $_GET['include_excluded'] !== 'false';
+    $models = enrichAndFilterAdminModels($db, getAdminModelsCatalog($db, false), !$includeExcluded);
 
     jsonResponse([
         'models'               => $models,
+        'relevant_providers'   => getAllowedOpenRouterProviders($db),
         'provider_credentials' => buildProviderCredentialSummary($models),
     ]);
 }
@@ -1268,11 +1316,34 @@ function handleSaveModel(array $data): void
     ];
 
     $saved = upsertLlmModel($db, $payload, false);
-    $models = getAdminModelsCatalog($db, false);
+
+    $canonProv = normalizeCanonicalOpenRouterProvider((string)$payload['provider']);
+    if ($canonProv !== '' && !in_array($canonProv, getAllowedOpenRouterProviders($db), true)) {
+        $chkStmt = $db->prepare("SELECT provider_key FROM openrouter_providers WHERE provider_key = :k LIMIT 1");
+        $chkStmt->execute([':k' => $canonProv]);
+        if ($chkStmt->fetch()) {
+            $upd = $db->prepare("UPDATE openrouter_providers SET is_relevant = 1 WHERE provider_key = :k");
+            $upd->execute([':k' => $canonProv]);
+        } else {
+            upsertOpenRouterProvider($db, [
+                'provider_key' => $canonProv,
+                'is_relevant'  => true,
+            ], false);
+        }
+    }
+
+    $models = enrichAndFilterAdminModels($db, getAdminModelsCatalog($db, false), true);
+    $enrichedSaved = $saved;
+    foreach ($models as $mItem) {
+        if ($mItem['id'] === $saved['id']) {
+            $enrichedSaved = $mItem;
+            break;
+        }
+    }
 
     jsonResponse([
         'success' => true,
-        'model'   => $saved,
+        'model'   => $enrichedSaved,
         'models'  => $models,
         'message' => "Model '{$saved['display_name']}' saved.",
     ]);
@@ -1324,11 +1395,22 @@ function handleToggleModel(array $data): void
     ];
 
     $saved = upsertLlmModel($db, $merged, false);
+    $allEnriched = enrichAndFilterAdminModels($db, getAdminModelsCatalog($db, false), false);
+    $models = [];
+    $enrichedSaved = $saved;
+    foreach ($allEnriched as $mItem) {
+        if ($mItem['id'] === $saved['id']) {
+            $enrichedSaved = $mItem;
+        }
+        if (!empty($mItem['provider_is_relevant'])) {
+            $models[] = $mItem;
+        }
+    }
 
     jsonResponse([
         'success' => true,
-        'model'   => $saved,
-        'models'  => getAdminModelsCatalog($db, false),
+        'model'   => $enrichedSaved,
+        'models'  => $models,
     ]);
 }
 
@@ -1336,84 +1418,199 @@ function handleToggleModel(array $data): void
  * Queries connected n8n workflow credentials/models live (`action=discover_models`) and syncs `llm_models`,
  * gracefully falling back to the local seeded catalog when n8n is unreachable.
  */
-function handleSyncN8nModels(array $data): void
+/**
+ * Shared HTTP POST helper calling n8n's `discover_models` webhook branch.
+ *
+ * @param array<int, string>|null $allowedProviders
+ * @return array{ok:bool,decoded:?array,error:string}
+ */
+function postAdminN8nDiscoverModels(bool $includeAllProviders = false, ?array $allowedProviders = null): array
 {
-    $db = getDb();
-    ensureCoreSchemaColumns($db);
-
     $appConfig = getConfig();
     $envUrl = getenv('N8N_WEBHOOK_URL');
     $webhookUrl = trim((string)($envUrl !== false && $envUrl !== '' ? $envUrl : ($appConfig['n8n']['webhook_url'] ?? '')));
     $envSecret = getenv('N8N_SHARED_SECRET');
     $sharedSecret = (string)($envSecret !== false ? $envSecret : ($appConfig['n8n']['shared_secret'] ?? ''));
 
+    if ($webhookUrl === '' || preg_match('#^https?://#i', $webhookUrl) !== 1) {
+        return ['ok' => false, 'decoded' => null, 'error' => 'Invalid or unconfigured N8N_WEBHOOK_URL'];
+    }
+
+    $bodyPayload = [
+        'action'                => 'discover_models',
+        'timestamp'             => date('c'),
+        'include_all_providers' => $includeAllProviders,
+    ];
+    if ($allowedProviders !== null) {
+        $bodyPayload['allowed_providers'] = array_values($allowedProviders);
+    }
+
+    $payloadJson = json_encode($bodyPayload);
+    $rawResp = false;
+    $httpCode = 0;
+    $errorDetail = '';
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($webhookUrl);
+        if ($ch !== false) {
+            $host = strtolower((string)(parse_url($webhookUrl, PHP_URL_HOST) ?? ''));
+            $isLocal = in_array($host, ['127.0.0.1', 'localhost', '::1'], true);
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $payloadJson,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 15,
+                CURLOPT_CONNECTTIMEOUT => 4,
+                CURLOPT_HTTPHEADER     => [
+                    'Content-Type: application/json',
+                    'X-N8N-Secret: ' . $sharedSecret,
+                    'X-Chatlytics-Webhook-Secret: ' . $sharedSecret,
+                ],
+            ]);
+            if ($isLocal) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            }
+            $rawResp = curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($rawResp === false) {
+                $errorDetail = curl_error($ch);
+            }
+            curl_close($ch);
+        }
+    } else {
+        $ctx = stream_context_create([
+            'http' => [
+                'method'        => 'POST',
+                'header'        => "Content-Type: application/json\r\nX-N8N-Secret: {$sharedSecret}\r\n",
+                'content'       => $payloadJson,
+                'timeout'       => 15,
+                'ignore_errors' => true,
+            ],
+        ]);
+        $rawResp = @file_get_contents($webhookUrl, false, $ctx);
+        $httpCode = ($rawResp !== false) ? 200 : 0;
+    }
+
+    if (is_string($rawResp) && $rawResp !== '' && $httpCode >= 200 && $httpCode < 300) {
+        $decoded = json_decode($rawResp, true);
+        if (is_array($decoded)) {
+            return ['ok' => true, 'decoded' => $decoded, 'error' => ''];
+        }
+    }
+
+    if ($errorDetail === '' && $httpCode > 0) {
+        $errorDetail = "HTTP {$httpCode}";
+    }
+    return ['ok' => false, 'decoded' => null, 'error' => $errorDetail];
+}
+
+/**
+ * Direct fallback fetch of OpenRouter's public `/api/v1/models` catalog for provider discovery.
+ * Can be overridden with `OPENROUTER_MODELS_URL` or disabled via `'disabled'`.
+ *
+ * @return array{ok:bool,models:array<int,array<string,mixed>>,error:string}
+ */
+function fetchOpenRouterCatalogDirectly(): array
+{
+    $envUrl = getenv('OPENROUTER_MODELS_URL');
+    $modelsUrl = $envUrl !== false ? trim((string)$envUrl) : 'https://openrouter.ai/api/v1/models';
+    if ($modelsUrl === '' || in_array(strtolower($modelsUrl), ['disabled', 'false', 'off', 'none'], true)) {
+        return ['ok' => false, 'models' => [], 'error' => 'Direct OpenRouter discovery disabled'];
+    }
+    if (preg_match('#^https?://#i', $modelsUrl) !== 1) {
+        return ['ok' => false, 'models' => [], 'error' => 'Invalid OPENROUTER_MODELS_URL'];
+    }
+
+    $apiKey = trim((string)(getenv('OPENROUTER_API_KEY') ?: ''));
+    $headers = ['Accept: application/json', 'User-Agent: Chatlytics-Admin/1.0'];
+    if ($apiKey !== '') {
+        $headers[] = 'Authorization: Bearer ' . $apiKey;
+    }
+
+    $rawResp = false;
+    $httpCode = 0;
+    $errorDetail = '';
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($modelsUrl);
+        if ($ch !== false) {
+            $host = strtolower((string)(parse_url($modelsUrl, PHP_URL_HOST) ?? ''));
+            $isLocal = in_array($host, ['127.0.0.1', 'localhost', '::1'], true);
+            curl_setopt_array($ch, [
+                CURLOPT_HTTPGET        => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 12,
+                CURLOPT_CONNECTTIMEOUT => 4,
+                CURLOPT_HTTPHEADER     => $headers,
+            ]);
+            if ($isLocal) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            }
+            $rawResp = curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($rawResp === false) {
+                $errorDetail = curl_error($ch);
+            }
+            curl_close($ch);
+        }
+    } else {
+        $ctx = stream_context_create([
+            'http' => [
+                'method'        => 'GET',
+                'header'        => implode("\r\n", $headers) . "\r\n",
+                'timeout'       => 12,
+                'ignore_errors' => true,
+            ],
+        ]);
+        $rawResp = @file_get_contents($modelsUrl, false, $ctx);
+        $httpCode = ($rawResp !== false) ? 200 : 0;
+    }
+
+    if (is_string($rawResp) && $rawResp !== '' && $httpCode >= 200 && $httpCode < 300) {
+        $decoded = json_decode($rawResp, true);
+        $list = $decoded['data'] ?? ($decoded['models'] ?? null);
+        if (is_array($list) && !empty($list)) {
+            return ['ok' => true, 'models' => $list, 'error' => ''];
+        }
+    }
+
+    return ['ok' => false, 'models' => [], 'error' => $errorDetail !== '' ? $errorDetail : "HTTP {$httpCode}"];
+}
+
+function handleSyncN8nModels(array $data): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+
     $now = date('Y-m-d H:i:s');
+    $allowedProviders = getAllowedOpenRouterProviders($db);
+    $n8nResult = postAdminN8nDiscoverModels(false, $allowedProviders);
+    $decoded = $n8nResult['decoded'];
+    $errorDetail = $n8nResult['error'];
+
     $syncedLive = false;
     $discoveredModels = [];
     $providerCredentials = [];
-    $errorDetail = '';
 
-    if ($webhookUrl !== '' && preg_match('#^https?://#i', $webhookUrl) === 1) {
-        $payloadJson = json_encode(['action' => 'discover_models', 'timestamp' => date('c')]);
-        $rawResp = false;
-        $httpCode = 0;
-
-        if (function_exists('curl_init')) {
-            $ch = curl_init($webhookUrl);
-            if ($ch !== false) {
-                $host = strtolower((string)(parse_url($webhookUrl, PHP_URL_HOST) ?? ''));
-                $isLocal = in_array($host, ['127.0.0.1', 'localhost', '::1'], true);
-                curl_setopt_array($ch, [
-                    CURLOPT_POST           => true,
-                    CURLOPT_POSTFIELDS     => $payloadJson,
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT        => 15,
-                    CURLOPT_CONNECTTIMEOUT => 4,
-                    CURLOPT_HTTPHEADER     => [
-                        'Content-Type: application/json',
-                        'X-N8N-Secret: ' . $sharedSecret,
-                        'X-Chatlytics-Webhook-Secret: ' . $sharedSecret,
-                    ],
-                ]);
-                if ($isLocal) {
-                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-                }
-                $rawResp = curl_exec($ch);
-                $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                if ($rawResp === false) {
-                    $errorDetail = curl_error($ch);
-                }
-                curl_close($ch);
-            }
-        } else {
-            $ctx = stream_context_create([
-                'http' => [
-                    'method'        => 'POST',
-                    'header'        => "Content-Type: application/json\r\nX-N8N-Secret: {$sharedSecret}\r\n",
-                    'content'       => $payloadJson,
-                    'timeout'       => 15,
-                    'ignore_errors' => true,
-                ],
-            ]);
-            $rawResp = @file_get_contents($webhookUrl, false, $ctx);
-            $httpCode = ($rawResp !== false) ? 200 : 0;
-        }
-
-        if (is_string($rawResp) && $rawResp !== '' && $httpCode >= 200 && $httpCode < 300) {
-            $decoded = json_decode($rawResp, true);
-            if (is_array($decoded) && !empty($decoded['models']) && is_array($decoded['models'])) {
-                $syncedLive = true;
-                $discoveredModels = $decoded['models'];
-                if (!empty($decoded['provider_credentials']) && is_array($decoded['provider_credentials'])) {
-                    $providerCredentials = $decoded['provider_credentials'];
-                }
-            }
+    if ($n8nResult['ok'] && is_array($decoded) && !empty($decoded['models']) && is_array($decoded['models'])) {
+        $syncedLive = true;
+        $discoveredModels = $decoded['models'];
+        if (!empty($decoded['provider_credentials']) && is_array($decoded['provider_credentials'])) {
+            $providerCredentials = $decoded['provider_credentials'];
         }
     }
 
     if ($syncedLive) {
-        $allowedProviders = getAllowedOpenRouterProviders();
+        if (!empty($decoded['providers']) && is_array($decoded['providers'])) {
+            syncDiscoveredOpenRouterProviders($db, $decoded['providers'], $now);
+        } else {
+            $extractedProviders = extractOpenRouterProvidersFromRawModels($discoveredModels);
+            if (!empty($extractedProviders)) {
+                syncDiscoveredOpenRouterProviders($db, $extractedProviders, $now);
+            }
+        }
         $batchBases = [];
         foreach ($discoveredModels as $item) {
             if (is_array($item)) {
@@ -1487,13 +1684,14 @@ function handleSyncN8nModels(array $data): void
             $syncedCount++;
         }
 
-        $models = getAdminModelsCatalog($db, false);
+        $models = enrichAndFilterAdminModels($db, getAdminModelsCatalog($db, false), true);
         jsonResponse([
             'success'              => true,
             'synced'               => true,
             'fallback'             => false,
             'source'               => 'n8n_live',
             'last_synced_at'       => $now,
+            'relevant_providers'   => $allowedProviders,
             'provider_credentials' => !empty($providerCredentials) ? $providerCredentials : buildProviderCredentialSummary($models, 'connected'),
             'models'               => $models,
             'message'              => $syncedCount . ' OpenRouter model(s) synchronized from live n8n credentials.',
@@ -1508,17 +1706,191 @@ function handleSyncN8nModels(array $data): void
         // Ignore if table not writable
     }
 
-    $models = getAdminModelsCatalog($db, false);
+    $models = enrichAndFilterAdminModels($db, getAdminModelsCatalog($db, false), true);
     jsonResponse([
         'success'              => true,
         'synced'               => false,
         'fallback'             => true,
         'source'               => 'fallback_local',
         'last_synced_at'       => $now,
+        'relevant_providers'   => $allowedProviders,
         'provider_credentials' => buildProviderCredentialSummary($models, 'fallback_local'),
         'models'               => $models,
         'detail'               => $errorDetail,
         'message'              => 'n8n webhook unreachable; loaded local managed model catalog.',
+    ]);
+}
+
+/**
+ * Builds summary metrics for the OpenRouter providers admin payload.
+ *
+ * @param array<int, array<string, mixed>> $providers
+ * @return array<string, int>
+ */
+function buildOpenRouterProviderSummary(array $providers): array
+{
+    $relevantCount = 0;
+    $usedExcludedCount = 0;
+    $activeConfigsTotal = 0;
+    foreach ($providers as $p) {
+        if (!empty($p['is_relevant'])) {
+            $relevantCount++;
+        } elseif (($p['active_config_count'] ?? 0) > 0 || ($p['paused_config_count'] ?? 0) > 0 || ($p['preset_count'] ?? 0) > 0) {
+            $usedExcludedCount++;
+        }
+        $activeConfigsTotal += (int)($p['active_config_count'] ?? 0);
+    }
+    return [
+        'total_count'          => count($providers),
+        'relevant_count'       => $relevantCount,
+        'used_excluded_count'  => $usedExcludedCount,
+        'active_configs_total' => $activeConfigsTotal,
+    ];
+}
+
+/**
+ * Lists all known OpenRouter providers, relevance selections, and active config/preset usage stats.
+ */
+function handleListOpenRouterProviders(): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+    $providers = getOpenRouterProvidersCatalog($db);
+
+    jsonResponse([
+        'providers'          => $providers,
+        'default_providers'  => getDefaultOpenRouterProviders(),
+        'relevant_providers' => getAllowedOpenRouterProviders($db),
+        'summary'            => buildOpenRouterProviderSummary($providers),
+    ]);
+}
+
+/**
+ * Discovers ALL available OpenRouter providers via n8n (`include_all_providers: true`)
+ * with a fallback direct GET to `OPENROUTER_MODELS_URL`, preserving admin selections.
+ */
+function handleSyncOpenRouterProviders(array $data): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+    $now = date('Y-m-d H:i:s');
+
+    $n8nResult = postAdminN8nDiscoverModels(true, getAllowedOpenRouterProviders($db));
+    $decoded = $n8nResult['decoded'];
+    $errorDetail = $n8nResult['error'];
+
+    $discoveredProviders = [];
+    $source = 'fallback_local';
+    $synced = false;
+    $fallback = true;
+
+    if ($n8nResult['ok'] && is_array($decoded)) {
+        if (!empty($decoded['providers']) && is_array($decoded['providers'])) {
+            $discoveredProviders = $decoded['providers'];
+            $source = 'n8n_live';
+            $synced = true;
+            $fallback = false;
+        } elseif (!empty($decoded['models']) && is_array($decoded['models'])) {
+            $discoveredProviders = extractOpenRouterProvidersFromRawModels($decoded['models']);
+            if (!empty($discoveredProviders)) {
+                $source = 'n8n_live';
+                $synced = true;
+                $fallback = false;
+            }
+        }
+    }
+
+    if (!$synced) {
+        $direct = fetchOpenRouterCatalogDirectly();
+        if ($direct['ok'] && !empty($direct['models'])) {
+            $discoveredProviders = extractOpenRouterProvidersFromRawModels($direct['models']);
+            if (!empty($discoveredProviders)) {
+                $source = 'openrouter_direct';
+                $synced = true;
+                $fallback = false;
+            }
+        } elseif ($direct['error'] !== '') {
+            $errorDetail = trim($errorDetail . ($errorDetail !== '' ? '; ' : '') . $direct['error']);
+        }
+    }
+
+    if ($synced && !empty($discoveredProviders)) {
+        syncDiscoveredOpenRouterProviders($db, $discoveredProviders, $now);
+    }
+
+    $providers = getOpenRouterProvidersCatalog($db);
+    jsonResponse([
+        'success'            => true,
+        'synced'             => $synced,
+        'fallback'           => $fallback,
+        'source'             => $source,
+        'last_synced_at'     => $now,
+        'providers'          => $providers,
+        'default_providers'  => getDefaultOpenRouterProviders(),
+        'relevant_providers' => getAllowedOpenRouterProviders($db),
+        'summary'            => buildOpenRouterProviderSummary($providers),
+        'detail'             => $errorDetail,
+        'message'            => $synced
+            ? count($providers) . ' OpenRouter provider(s) synchronized (' . $source . ').'
+            : 'Live provider discovery unreachable; showing local OpenRouter provider registry.',
+    ]);
+}
+
+/**
+ * Persists admin-selected relevant OpenRouter providers, safely pruning only unactivated,
+ * unused models of deselected providers while keeping all models with active configs/presets.
+ */
+function handleSaveOpenRouterProviders(array $data): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+
+    $rawList = $data['providers'] ?? ($data['relevant_providers'] ?? null);
+    if (!is_array($rawList)) {
+        jsonError('providers array is required.', 422);
+    }
+
+    $saveResult = saveRelevantOpenRouterProviders($db, $rawList);
+    $providers = getOpenRouterProvidersCatalog($db);
+    $models = enrichAndFilterAdminModels($db, getAdminModelsCatalog($db, false), true);
+
+    jsonResponse([
+        'success'                 => true,
+        'selected_providers'      => $saveResult['selected_providers'],
+        'pruned_model_ids'        => $saveResult['pruned_model_ids'],
+        'preserved_active_models' => $saveResult['preserved_active_models'],
+        'providers'               => $providers,
+        'default_providers'       => getDefaultOpenRouterProviders(),
+        'relevant_providers'      => getAllowedOpenRouterProviders($db),
+        'models'                  => $models,
+        'summary'                 => buildOpenRouterProviderSummary($providers),
+        'message'                 => count($saveResult['selected_providers']) . ' relevant OpenRouter provider(s) saved.',
+    ]);
+}
+
+/**
+ * Resets relevant OpenRouter providers back to the canonical 17 defaults (including `meta`).
+ */
+function handleResetOpenRouterProviders(array $data): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+
+    $resetResult = resetOpenRouterProvidersToDefault($db);
+    $providers = getOpenRouterProvidersCatalog($db);
+    $models = enrichAndFilterAdminModels($db, getAdminModelsCatalog($db, false), true);
+
+    jsonResponse([
+        'success'                 => true,
+        'selected_providers'      => $resetResult['selected_providers'],
+        'pruned_model_ids'        => $resetResult['pruned_model_ids'],
+        'preserved_active_models' => $resetResult['preserved_active_models'],
+        'providers'               => $providers,
+        'default_providers'       => getDefaultOpenRouterProviders(),
+        'relevant_providers'      => getAllowedOpenRouterProviders($db),
+        'models'                  => $models,
+        'summary'                 => buildOpenRouterProviderSummary($providers),
+        'message'                 => 'Relevant OpenRouter providers reset to defaults (including meta).',
     ]);
 }
 
