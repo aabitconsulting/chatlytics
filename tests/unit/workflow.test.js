@@ -54,6 +54,7 @@ describe('n8n Universal Worker Workflow & Code Node Unit Tests', () => {
       assert.ok(!rawJson.includes('sk-proj-'), 'Detected leaked OpenAI secret key');
       assert.ok(!rawJson.includes('sk-ant-'), 'Detected leaked Anthropic secret key');
       assert.ok(!rawJson.includes('AIzaSy'), 'Detected leaked Gemini secret key');
+      assert.ok(!rawJson.includes('$env'), 'Workflow must not reference $env (blocked in n8n 2.44.5 by N8N_BLOCK_ENV_ACCESS_IN_NODE)');
     });
   });
 
@@ -138,7 +139,15 @@ describe('n8n Universal Worker Workflow & Code Node Unit Tests', () => {
   // =========================================================================
   // Helper: Sandboxed Execution Runner
   // =========================================================================
-  function executeNodeJsCode(jsCode, inputItems, customEnv = {}, nodeMocks = null) {
+  function createBlockedEnvProxy() {
+    return new Proxy({}, {
+      get(_target, prop) {
+        throw new Error(`ExpressionError: access to env vars denied (N8N_BLOCK_ENV_ACCESS_IN_NODE) when reading $env.${String(prop)}`);
+      }
+    });
+  }
+
+  function executeNodeJsCode(jsCode, inputItems, customEnv = null, nodeMocks = null) {
     const sandbox = {
       $input: {
         all: () => inputItems,
@@ -146,12 +155,7 @@ describe('n8n Universal Worker Workflow & Code Node Unit Tests', () => {
         item: inputItems[0] || { json: {} }
       },
       $: nodeMocks ? (nodeName) => nodeMocks[nodeName] : undefined,
-      $env: {
-        CHATLYTICS_API_BASE_URL: 'http://localhost:8000',
-        CHATLYTICS_INGEST_KEY: 'test_ingest_key',
-        CHATLYTICS_QUEUE_SECRET: 'test_queue_secret',
-        ...customEnv
-      },
+      $env: customEnv ? customEnv : createBlockedEnvProxy(),
       console,
       Date,
       Math,
@@ -577,10 +581,11 @@ SEARCH: true`;
       assert.ok(ingestNode, 'Ingestion HTTP node must exist');
       assert.equal(ingestNode.parameters.method, 'POST');
       assert.ok(
-        ingestNode.parameters.url?.includes('ingest.php') ||
-        ingestNode.parameters.url?.includes('CHATLYTICS_API_BASE_URL'),
+        ingestNode.parameters.url?.includes('ingest.php'),
         'Ingest node must post to ingest.php'
       );
+      assert.equal(ingestNode.parameters.authentication, 'genericCredentialType');
+      assert.equal(ingestNode.parameters.genericAuthType, 'httpHeaderAuth');
     });
   });
 
@@ -592,15 +597,7 @@ SEARCH: true`;
 
     const sandbox = {
       $json: context.$json || context.json || {},
-      $env: {
-        CHATLYTICS_API_BASE_URL: 'http://localhost:8000',
-        CHATLYTICS_INGEST_KEY: 'test_ingest_key_2026_valid',
-        CHATLYTICS_QUEUE_SECRET: 'test_queue_secret_valid',
-        OPENAI_API_KEY: 'test_openai_key',
-        ANTHROPIC_API_KEY: 'test_anthropic_key',
-        GEMINI_API_KEY: 'test_gemini_key',
-        ...(context.$env || {})
-      },
+      $env: context.$env || createBlockedEnvProxy(),
       $credentials: {
         openAiApi: { apiKey: 'test_openai_key' },
         anthropicApi: { apiKey: 'test_anthropic_key' },
@@ -737,20 +734,26 @@ SEARCH: true`;
       assert.equal(parsed.mece_category, '1_DIRECT_WIN');
     });
 
-    it('should evaluate Dispatch Ingest API headers and URL without stray "=" prefixes', () => {
+    it('should evaluate Dispatch Ingest API headers, dynamic api_base_url, and httpHeaderAuth without $env', () => {
       const ingestNode = workflow.nodes.find(n => n.name === 'Dispatch Ingest API');
-      const evalUrl = evaluateN8nExpression(ingestNode.parameters.url, { json: upstreamMetricItem });
+      const evalUrlFallback = evaluateN8nExpression(ingestNode.parameters.url, { json: upstreamMetricItem });
+      assert.equal(evalUrlFallback, 'https://chatlytics.de/api/ingest.php');
 
-      assert.ok(!evalUrl.startsWith('='), 'URL must not start with stray "="');
-      assert.ok(evalUrl.includes('/api/ingest.php'), 'URL must target ingest.php');
+      const evalUrlDynamic = evaluateN8nExpression(ingestNode.parameters.url, {
+        json: { ...upstreamMetricItem, api_base_url: 'https://staging.chatlytics.de/' }
+      });
+      assert.equal(evalUrlDynamic, 'https://staging.chatlytics.de/api/ingest.php');
+
+      assert.equal(ingestNode.parameters.authentication, 'genericCredentialType');
+      assert.equal(ingestNode.parameters.genericAuthType, 'httpHeaderAuth');
+      assert.ok(ingestNode.credentials?.httpHeaderAuth?.name, 'Dispatch Ingest API must reference httpHeaderAuth credential');
+      assert.equal(ingestNode.retryOnFail, true, 'Dispatch Ingest API should retry transient failures');
+      assert.equal(ingestNode.parameters.options?.timeout, 15000);
 
       const headers = ingestNode.parameters.headerParameters?.parameters || [];
-      const authHeader = headers.find(h => h.name === 'X-Chatlytics-Ingest-Key');
-      assert.ok(authHeader, 'X-Chatlytics-Ingest-Key header must exist');
-
-      const evalKey = evaluateN8nExpression(authHeader.value, { json: upstreamMetricItem });
-      assert.ok(!evalKey.startsWith('='), 'Ingest key must not start with stray "="');
-      assert.ok(evalKey.length >= 16, 'Ingest key must be at least 16 characters long');
+      const contentTypeHeader = headers.find(h => h.name === 'Content-Type');
+      assert.equal(contentTypeHeader?.value, 'application/json');
+      assert.ok(!JSON.stringify(ingestNode).includes('$env'), 'Dispatch Ingest API must not reference $env');
     });
 
     it('should evaluate native OpenAI v2.3 Search Enabled and No Search nodes cleanly', () => {
@@ -923,17 +926,181 @@ SEARCH: true`;
       assert.ok(parsed.timestamp);
     });
 
-    it('should verify Poll Backend Queue and Respond Webhook Sync resilience configurations', () => {
+    it('should verify Poll Backend Queue, Anthropic Fallback, Remote Alignment, and Resilience Configs', () => {
       const queueNode = workflow.nodes.find(n => n.name === 'Poll Backend Queue');
       assert.ok(queueNode, 'Poll Backend Queue node must exist');
       const queueUrl = evaluateN8nExpression(queueNode.parameters.url, {});
-      assert.ok(!queueUrl.startsWith('='));
-      assert.ok(queueUrl.includes('/api/n8n_queue.php?action=poll'));
+      assert.equal(queueUrl, 'https://chatlytics.de/api/n8n_queue.php?action=poll');
+      assert.equal(queueNode.parameters.authentication, 'genericCredentialType');
+      assert.equal(queueNode.parameters.genericAuthType, 'httpHeaderAuth');
+      assert.ok(queueNode.credentials?.httpHeaderAuth?.name, 'Poll Backend Queue must reference httpHeaderAuth credential');
+      assert.equal(queueNode.parameters.options?.timeout, 15000);
+      assert.ok(!JSON.stringify(queueNode).includes('$env'), 'Poll Backend Queue must not reference $env');
+
+      const claudeNode = workflow.nodes.find(n => n.name === 'Call Anthropic Claude (Optional Fallback)');
+      assert.equal(claudeNode.parameters.authentication, 'predefinedCredentialType');
+      assert.equal(claudeNode.parameters.nodeCredentialType, 'anthropicApi');
+      assert.ok(!JSON.stringify(claudeNode).includes('$env'), 'Anthropic Fallback must not reference $env');
+
+      // Remote-drift alignment checks
+      const routerNode = workflow.nodes.find(n => n.name === 'Provider Router');
+      assert.equal(routerNode.parameters.mode, 'rules');
+      for (const name of ['Call OpenAI (Search Enabled)', 'Call OpenAI (No Search)']) {
+        const n = workflow.nodes.find(x => x.name === name);
+        assert.equal(n.parameters.images, undefined, name + ' must not contain stray images payload');
+        assert.equal(n.parameters.responses.values[1].role, 'user', name + ' must include role: user');
+      }
+      for (const name of ['Call Google Gemini (Search Enabled)', 'Call Google Gemini (No Search)']) {
+        const n = workflow.nodes.find(x => x.name === name);
+        assert.equal(n.parameters.messages.values[0].role, 'user', name + ' must include role: user');
+      }
 
       const respondSync = workflow.nodes.find(n => n.name === 'Respond Webhook Sync');
       assert.ok(respondSync, 'Respond Webhook Sync must exist');
       assert.equal(respondSync.continueOnFail, true, 'Respond Webhook Sync must have continueOnFail: true');
       assert.equal(respondSync.onError, 'continueRegularOutput', 'Respond Webhook Sync must configure onError: continueRegularOutput');
+    });
+  });
+
+  // =========================================================================
+  // Suite 9: Production Hardening ? Queue Domains, Safe Meta Pairing, No 101 Fallback
+  // =========================================================================
+  describe('Suite 9: Production Hardening & Multi-Tenant Safety', () => {
+    it('Universal Normalizer preserves competitor domains arrays, api_base_url, and drops empty-prompt poll noise', () => {
+      const normalizerNode = workflow.nodes.find(n => n.name === 'Universal Normalizer');
+      const expanded = executeNodeJsCode(normalizerNode.parameters.jsCode, [
+        {
+          json: {
+            status: 'success',
+            api_base_url: 'https://staging.chatlytics.de/',
+            jobs: [
+              {
+                config_id: 222,
+                user_id: 9,
+                brand_name: 'Personio',
+                brand_domains: ['personio.de'],
+                prompt: 'Beste HR Software',
+                competitors: [{ name: 'Workday', domains: ['workday.com', 'workday.de'] }],
+                target_llms: ['openai', 'gemini']
+              }
+            ]
+          }
+        },
+        {
+          json: { statusCode: 502, message: 'Bad Gateway' }
+        },
+        {
+          json: { data: '<html>502 Bad Gateway</html>' }
+        },
+        {
+          json: { status: 'error', error: 'Unauthorized' }
+        },
+        {
+          json: { status: 'success', jobs: [{ config_id: 223, prompt: '' }] }
+        }
+      ]);
+
+      assert.equal(expanded.length, 2, 'Only valid queue job should expand; HTTP 502 & empty prompt must produce zero LLM calls');
+      assert.equal(expanded[0].json.api_base_url, 'https://staging.chatlytics.de');
+      assert.equal(expanded[0].json.competitors[0].domain, 'workday.com');
+      assert.deepEqual(expanded[0].json.competitors[0].domains, ['workday.com', 'workday.de']);
+      assert.match(expanded[0].json.run_id, /^run_\d+_[a-f0-9]+$/);
+    });
+
+    it('Secondary Extractor survives throwing .item getter, isolates multi-branch provider items, and flags competitor domains array', () => {
+      const extractorNode = workflow.nodes.find(n => n.name === 'Secondary Extractor');
+      const allNormalizerOutputs = [
+        {
+          json: {
+            run_id: 'run_1_aaaa1111',
+            api_base_url: 'https://chatlytics.de',
+            config_id: 10,
+            user_id: 2,
+            provider: 'openai',
+            model: 'gpt-6-luna',
+            brand_name: 'Personio',
+            brand_domains: ['personio.de'],
+            competitors: [{ name: 'Workday', domains: ['workday.com', 'workday.de'] }],
+            prompt: 'HR Software OpenAI'
+          }
+        },
+        {
+          json: {
+            run_id: 'run_1_aaaa1111',
+            api_base_url: 'https://chatlytics.de',
+            config_id: 20,
+            user_id: 3,
+            provider: 'gemini',
+            model: 'models/gemini-3.5-flash',
+            brand_name: 'Celonis',
+            brand_domains: ['celonis.com'],
+            competitors: [{ name: 'Signavio', domains: ['signavio.com'] }],
+            prompt: 'Process Mining Gemini'
+          }
+        }
+      ];
+
+      const throwingNormalizerMock = {
+        itemMatching: () => undefined,
+        all: () => allNormalizerOutputs,
+        first: () => allNormalizerOutputs[0]
+      };
+      Object.defineProperty(throwingNormalizerMock, 'item', {
+        get() {
+          throw new Error("Can't use .item here in Run Once for All Items mode");
+        }
+      });
+
+      const geminiBranchPayload = {
+        candidates: [
+          {
+            content: { parts: [{ text: 'Celonis ist stark, siehe Signavio Analyse.' }] },
+            groundingMetadata: {
+              groundingChunks: [
+                { web: { uri: 'https://www.signavio.com/guide', title: 'Signavio' } }
+              ]
+            }
+          }
+        ]
+      };
+
+      const extracted = executeNodeJsCode(
+        extractorNode.parameters.jsCode,
+        [{ json: geminiBranchPayload }],
+        null,
+        { 'Universal Normalizer': throwingNormalizerMock }
+      );
+
+      assert.equal(extracted.length, 1);
+      assert.equal(extracted[0].json.config_id, 20, 'Must match Gemini item (config 20) instead of OpenAI (config 10)');
+      assert.equal(extracted[0].json.brand_name, 'Celonis');
+      assert.equal(extracted[0].json.provider, 'gemini');
+      assert.equal(extracted[0].json.citations[0].is_competitor_domain, true);
+    });
+
+    it('Metric & MECE Calculator does not silently default missing config_id/user_id to 101/5', () => {
+      const metricNode = workflow.nodes.find(n => n.name === 'Metric & MECE Calculator');
+      const ingestNode = workflow.nodes.find(n => n.name === 'Dispatch Ingest API');
+      const out = executeNodeJsCode(metricNode.parameters.jsCode, [
+        {
+          json: {
+            run_id: 'run_chat_test_1',
+            prompt: 'Test Prompt',
+            brand_name: 'Personio',
+            brand_domains: ['personio.de'],
+            competitors: [],
+            citations: [],
+            raw_response_text: 'Personio ist top.'
+          }
+        }
+      ]);
+
+      assert.equal(out[0].json.config_id, null);
+      assert.equal(out[0].json.user_id, null);
+
+      const evaluatedBody = JSON.parse(evaluateN8nExpression(ingestNode.parameters.jsonBody, { json: out[0].json }));
+      assert.equal(evaluatedBody.config_id, null);
+      assert.equal(evaluatedBody.user_id, null);
     });
   });
 });

@@ -62,3 +62,32 @@ test('Feature 19.5: Next run timestamp advancement math', () => {
   assert.equal(advanceSchedule(base, 'daily'), '2026-11-07T12:00:00.000Z');
   assert.equal(advanceSchedule(base, 'weekly'), '2026-11-13T12:00:00.000Z');
 });
+
+test('Feature 19.6: Queue poller preserves competitor domains and api_base_url schema conformity', () => {
+  const queueContent = fs.existsSync(QUEUE_PATH) ? fs.readFileSync(QUEUE_PATH, 'utf8') : '';
+  if (queueContent) {
+    assert.ok(queueContent.includes('normalizeQueueCompetitors'), 'Queue poller must normalize competitors cleanly');
+    assert.ok(queueContent.includes("'api_base_url'"), 'Queue poller must emit api_base_url on jobs');
+    assert.ok(queueContent.includes("'run_id'"), 'Queue poller must emit hex run_id on jobs');
+  }
+
+  assertValidQueueResponse({
+    status: 'success',
+    api_base_url: 'https://chatlytics.de',
+    jobs_count: 1,
+    jobs: [
+      {
+        run_id: 'run_1760000000_abcdef1',
+        api_base_url: 'https://chatlytics.de',
+        config_id: 101,
+        user_id: 5,
+        brand_name: 'Personio',
+        brand_domains: ['personio.de'],
+        prompt: 'Beste HR Software im Mittelstand',
+        competitors: [{ name: 'Workday', domain: 'workday.com', domains: ['workday.com'] }],
+        target_llms: ['openai/gpt-6-luna'],
+        search_enabled: true
+      }
+    ]
+  });
+});

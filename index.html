@@ -533,7 +533,7 @@
 
         <div class="pricing-grid">
           <!-- Tier 1: Free -->
-          <article class="pricing-card">
+          <article class="pricing-card" data-plan-card="free">
             <div class="tier-top-badge">&nbsp;</div>
             <h3 class="tier-name" data-i18n="pricing.free.name">Free</h3>
             <p class="tier-sub" data-i18n="pricing.free.desc">Für den ersten Realitätscheck Ihrer Marke.</p>
@@ -544,7 +544,7 @@
             <ul class="pricing-features">
               <li data-i18n="pricing.free.feat_1">40 Live-Abfragen (Lifetime)</li>
               <li data-i18n="pricing.free.feat_2">1 Marken-Profil</li>
-              <li data-i18n="pricing.free.feat_3">2 Wettbewerber im Direktvergleich (GPT-6.1 Sol &amp; Gemini 3.8 Flash)</li>
+              <li data-i18n="pricing.free.feat_3">Basis Analyse-Set: DACH Basis-Radar inkl. Live-Websuche</li>
               <li data-i18n="pricing.free.feat_4">Basis-Ergebnis nach Empfehlungs-Stufen</li>
               <li data-i18n="pricing.free.feat_5">Zugang über geschäftliche E-Mail-Adresse</li>
             </ul>
@@ -552,7 +552,7 @@
           </article>
 
           <!-- Tier 2: Starter -->
-          <article class="pricing-card">
+          <article class="pricing-card" data-plan-card="starter">
             <div class="tier-top-badge">&nbsp;</div>
             <h3 class="tier-name" data-i18n="pricing.starter.name">Starter</h3>
             <p class="tier-sub" data-i18n="pricing.starter.desc">Für wachsende Marken und SEO-/Content-Teams.</p>
@@ -564,7 +564,7 @@
               <li data-i18n="pricing.starter.feat_1">500 Live-Abfragen pro Monat</li>
               <li data-i18n="pricing.starter.feat_2">3 Marken-Profile oder Produktlinien</li>
               <li data-i18n="pricing.starter.feat_3">Bis zu 5 Wettbewerber pro Profil</li>
-              <li data-i18n="pricing.starter.feat_4">OpenAI GPT-6.1 / 6, Claude 5.5, Gemini, Mistral &amp; GLM 5.3 (ohne Live-Websuche)</li>
+              <li data-i18n="pricing.starter.feat_4">Alle kuratierten Analyse-Sets (Parametrisch, EU-Souveränität &amp; 360° Benchmark)</li>
               <li data-i18n="pricing.starter.feat_5">Volle Ursachen- &amp; Maßnahmen-Matrix</li>
               <li data-i18n="pricing.starter.feat_6">CSV-/JSON-Export für eigenes Reporting</li>
             </ul>
@@ -572,7 +572,7 @@
           </article>
 
           <!-- Tier 3: Growth (Featured) -->
-          <article class="pricing-card pricing-card-featured">
+          <article class="pricing-card pricing-card-featured" data-plan-card="growth">
             <div class="tier-top-badge" data-i18n="pricing.growth.badge">Empfehlung</div>
             <h3 class="tier-name" data-i18n="pricing.growth.name">Growth</h3>
             <p class="tier-sub" data-i18n="pricing.growth.desc">Für ambitionierte D2C-Brands und B2B-Teams.</p>
@@ -584,7 +584,7 @@
               <li data-i18n="pricing.growth.feat_1">2.000 Live-Abfragen pro Monat</li>
               <li data-i18n="pricing.growth.feat_2">10 Marken-Profile / Märkte</li>
               <li data-i18n="pricing.growth.feat_3">Bis zu 10 Wettbewerber pro Profil</li>
-              <li data-i18n="pricing.growth.feat_4">Alle Frontier-Modelle inkl. Google Gemini Search Grounding (Live-Zitate)</li>
+              <li data-i18n="pricing.growth.feat_4">Freie Modellwahl &amp; Websuche-Steuerung (inkl. EU-Hosted &amp; alle Analyse-Sets)</li>
               <li data-i18n="pricing.growth.feat_5">Schreibgeschützte Vorstandsreports per Link</li>
               <li data-i18n="pricing.growth.feat_6">Historischer Sichtbarkeits-Trend über alle Modelle</li>
               <li data-i18n="pricing.growth.feat_7">Priorisierte Content- &amp; Schema.org-Maßnahmen</li>
@@ -593,7 +593,7 @@
           </article>
 
           <!-- Tier 4: Managed GEO & Pipeline Defense (Obsidian Contrast) -->
-          <article class="pricing-card pricing-card-obsidian">
+          <article class="pricing-card pricing-card-obsidian" data-plan-card="enterprise_managed">
             <div class="tier-top-badge" data-i18n="pricing.managed.badge">Full-Service Mandat</div>
             <h3 class="tier-name" data-i18n="pricing.managed.name">Managed GEO &amp; Pipeline Defense</h3>
             <p class="tier-sub" data-i18n="pricing.managed.desc">Wir finden nicht nur Lücken — wir schließen sie gemeinsam mit Ihrem Team.</p>
@@ -890,10 +890,60 @@
     import { auth } from './assets/js/auth.js';
     import { dossierStage } from './assets/js/dossier-stage.js';
 
+    function applyPublicPricingCatalog(plans, lang) {
+      if (!Array.isArray(plans) || plans.length === 0) return;
+      const isEn = lang === 'en';
+      plans.forEach((plan) => {
+        const card = document.querySelector(`[data-plan-card="${plan.tier}"]`);
+        if (!card) return;
+        const nameEl = card.querySelector('.tier-name');
+        const subEl = card.querySelector('.tier-sub');
+        const priceEl = card.querySelector('.tier-price-val');
+        const periodEl = card.querySelector('.tier-price-period');
+        const featList = card.querySelector('.pricing-features');
+        const ctaBtn = card.querySelector('button[data-tier], #btn-open-strategy');
+
+        if (nameEl) nameEl.textContent = isEn ? (plan.name_en || plan.name_de) : (plan.name_de || plan.name_en);
+        if (subEl) subEl.textContent = isEn ? (plan.subtitle_en || plan.subtitle_de) : (plan.subtitle_de || plan.subtitle_en);
+        if (priceEl) priceEl.textContent = isEn ? (plan.price_label_en || plan.price_label_de) : (plan.price_label_de || plan.price_label_en);
+        if (periodEl) periodEl.textContent = isEn ? (plan.billing_period_en || plan.billing_period_de) : (plan.billing_period_de || plan.billing_period_en);
+
+        const feats = isEn ? plan.features_en : plan.features_de;
+        if (featList && Array.isArray(feats) && feats.length > 0) {
+          featList.replaceChildren();
+          feats.forEach((f) => {
+            const li = document.createElement('li');
+            li.textContent = String(f);
+            featList.appendChild(li);
+          });
+        }
+
+        if (ctaBtn && plan.stripe_checkout_url) {
+          ctaBtn.dataset.checkoutUrl = plan.stripe_checkout_url;
+        }
+      });
+    }
+
+    async function hydratePublicPricing() {
+      try {
+        const res = await fetch('api/configs.php?action=public_catalog');
+        if (!res.ok) return;
+        const payload = await res.json();
+        const plans = payload?.data?.plans || payload?.plans || [];
+        const getLang = () => (localStorage.getItem('chatlytics_lang') === 'en' ? 'en' : 'de');
+        applyPublicPricingCatalog(plans, getLang());
+        document.getElementById('btn-lang-de')?.addEventListener('click', () => setTimeout(() => applyPublicPricingCatalog(plans, 'de'), 0));
+        document.getElementById('btn-lang-en')?.addEventListener('click', () => setTimeout(() => applyPublicPricingCatalog(plans, 'en'), 0));
+      } catch (_) {
+        // Offline / static SSR fallback remains active
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       i18n.init();
       auth.initModal();
       dossierStage.init();
+      hydratePublicPricing();
     });
   </script>
 </body>

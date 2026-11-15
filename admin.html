@@ -96,7 +96,24 @@
       </div>
     </section>
 
-    <!-- User Directory Table Section -->
+    <!-- Owner Cockpit v2 Navigation Tabs -->
+    <nav class="admin-tabs-bar" role="tablist" aria-label="Owner Cockpit Bereiche">
+      <button type="button" id="admin-tab-users" class="admin-tab-btn is-active" role="tab" aria-selected="true" data-tab="users" data-i18n="admin.tab_users">
+        Benutzer &amp; Telemetrie
+      </button>
+      <button type="button" id="admin-tab-models" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="models" data-i18n="admin.tab_models">
+        KI-Modelle &amp; Live-Engine Sync
+      </button>
+      <button type="button" id="admin-tab-presets" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="presets" data-i18n="admin.tab_presets">
+        Analyse-Sets (Model Presets)
+      </button>
+      <button type="button" id="admin-tab-plans" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="plans" data-i18n="admin.tab_plans">
+        Tarife &amp; Stripe-Mapping
+      </button>
+    </nav>
+
+    <!-- Tab Panel 1: User Directory Table Section -->
+    <div id="admin-panel-users" class="admin-tab-panel" role="tabpanel" aria-labelledby="admin-tab-users">
     <section class="admin-table-section">
       <div class="section-toolbar">
         <div class="toolbar-title-group">
@@ -131,13 +148,15 @@
           <thead>
             <tr>
               <th scope="col" style="width: 60px;">ID</th>
-              <th scope="col" data-i18n="admin.col_email">E-Mail</th>
-              <th scope="col" data-i18n="admin.col_company">Unternehmen</th>
+              <th scope="col" data-i18n="admin.col_user">E-Mail &amp; Unternehmen</th>
+              <th scope="col" data-i18n="admin.col_created_member">Mitglied seit</th>
+              <th scope="col" data-i18n="admin.col_profiles">Profile</th>
               <th scope="col" data-i18n="admin.col_tier">Tarif</th>
-              <th scope="col" data-i18n="admin.col_credits">Credits</th>
-              <th scope="col" data-i18n="admin.col_runs">Runs</th>
+              <th scope="col" data-i18n="admin.col_credits_runs">Credits / Runs</th>
+              <th scope="col" data-i18n="admin.col_tokens_total">Tokens Gesamt</th>
+              <th scope="col" data-i18n="admin.col_tokens_per_run">Ø Tokens / Run</th>
+              <th scope="col" data-i18n="admin.col_tokens_per_profile">Ø Tokens / Profil</th>
               <th scope="col" data-i18n="admin.col_status">Status</th>
-              <th scope="col" data-i18n="admin.col_created">Registriert</th>
               <th scope="col" class="text-right" data-i18n="admin.col_actions">Aktionen</th>
             </tr>
           </thead>
@@ -171,6 +190,82 @@
         <button id="btn-page-next" class="btn btn-sm btn-outline" disabled data-i18n="pagination.next">Weiter →</button>
       </nav>
     </section>
+    </div><!-- /#admin-panel-users -->
+
+    <!-- Tab Panel 2: Managed AI Models & Live Worker-Engine Credential Discovery -->
+    <div id="admin-panel-models" class="admin-tab-panel" role="tabpanel" aria-labelledby="admin-tab-models" hidden>
+      <section class="admin-table-section">
+        <div class="section-toolbar">
+          <div class="toolbar-title-group">
+            <h2 data-i18n="admin.models_title">KI-Modelle &amp; Engine Credential-Sync</h2>
+            <span id="n8n-sync-status-badge" class="badge badge-secondary" data-i18n="admin.sync_status_idle">Status: Bereit</span>
+          </div>
+          <div class="admin-toolbar-actions">
+            <button type="button" id="btn-sync-n8n-models" class="btn btn-primary btn-sm" data-i18n="admin.btn_sync_n8n">
+              Modelle live aus Worker-Engine abrufen
+            </button>
+            <button type="button" id="btn-new-model" class="btn btn-outline btn-sm" data-i18n="admin.btn_new_model">
+              + Modell manuell anlegen
+            </button>
+          </div>
+        </div>
+
+        <div id="provider-credentials-grid" class="provider-credentials-grid" aria-live="polite"></div>
+
+        <div class="table-responsive">
+          <table class="table users-table" id="models-table">
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="admin.model_col_id">Modell-ID &amp; Provider</th>
+                <th scope="col" data-i18n="admin.model_col_name">Anzeigename</th>
+                <th scope="col" data-i18n="admin.model_col_strategy">Hosting &amp; Strategie</th>
+                <th scope="col" data-i18n="admin.model_col_search">Live-Websuche</th>
+                <th scope="col" data-i18n="admin.model_col_default">Standard</th>
+                <th scope="col" data-i18n="admin.model_col_allowed">Freigegeben</th>
+                <th scope="col" class="text-right" data-i18n="admin.col_actions">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody id="models-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div><!-- /#admin-panel-models -->
+
+    <!-- Tab Panel 3: Analyse-Sets (Model Presets / Cookbooks) -->
+    <div id="admin-panel-presets" class="admin-tab-panel" role="tabpanel" aria-labelledby="admin-tab-presets" hidden>
+      <section class="admin-table-section">
+        <div class="section-toolbar">
+          <div class="toolbar-title-group">
+            <h2 data-i18n="admin.presets_title">Analyse-Sets (Model Presets)</h2>
+            <span id="preset-count-badge" class="badge badge-secondary">0 Analyse-Sets</span>
+          </div>
+          <div class="admin-toolbar-actions">
+            <button type="button" id="btn-new-preset" class="btn btn-primary btn-sm" data-i18n="admin.btn_new_preset">
+              + Neues Analyse-Set anlegen
+            </button>
+          </div>
+        </div>
+        <p class="form-hint" style="margin-bottom: 1rem;" data-i18n="admin.presets_desc">
+          Vordefinierte Recherche- &amp; Benchmarking-Rezepte (Modell-Kombination + Websuche-Steuerung). Für Free &amp; Starter sind ausschließlich freigeschaltete Analyse-Sets wählbar; Growth &amp; Enterprise erhalten zusätzlich volle manuelle Modellfreiheit.
+        </p>
+        <div id="presets-grid" class="admin-presets-grid"></div>
+      </section>
+    </div><!-- /#admin-panel-presets -->
+
+    <!-- Tab Panel 4: Subscription Plans & Stripe Product/Price Mapping -->
+    <div id="admin-panel-plans" class="admin-tab-panel" role="tabpanel" aria-labelledby="admin-tab-plans" hidden>
+      <section class="admin-table-section">
+        <div class="section-toolbar">
+          <div class="toolbar-title-group">
+            <h2 data-i18n="admin.plans_title">Tarife, Kontingente &amp; Stripe-Mapping</h2>
+          </div>
+        </div>
+        <p class="form-hint" style="margin-bottom: 1rem;" data-i18n="admin.plans_desc">
+          Verknüpfen Sie bestehende Tarife direkt mit Stripe Product-/Price-IDs und konfigurieren Sie Kontingente, erlaubte Analyse-Sets, Datenabruf-Frequenzen sowie öffentliche Leistungsmerkmale zentral.
+        </p>
+        <div id="plans-grid" class="admin-plans-grid"></div>
+      </section>
+    </div><!-- /#admin-panel-plans -->
   </main>
 
   <!-- Credit Adjustment Modal Dialog -->
@@ -253,6 +348,229 @@
       <div class="modal-footer">
         <button type="button" id="btn-magic-close" class="btn btn-outline" data-i18n="common.close">Schließen</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Per-User Run & Token Telemetry Inspector Modal -->
+  <div id="run-token-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="run-token-modal-title">
+    <div class="modal-dialog" style="max-width: 980px; width: 95%;">
+      <div class="modal-header">
+        <h3 id="run-token-modal-title" class="modal-title" data-i18n="admin.modal_tokens_title">Runs &amp; Token-Telemetrie (Prompt / Brand-Keyword Paar pro LLM)</h3>
+        <button type="button" class="btn-close" id="btn-run-token-modal-close" aria-label="Schließen">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-info-row" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+          <div>
+            <span class="info-label" data-i18n="admin.modal_user_label">Benutzer:</span>
+            <strong id="run-token-user-email" class="info-value font-mono">—</strong>
+          </div>
+          <div>
+            <span class="info-label">Physische Tabelle:</span>
+            <code id="run-token-table-name" class="badge badge-secondary font-mono">user_results_0</code>
+          </div>
+        </div>
+
+        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="card kpi-card" style="padding: 0.75rem 1rem;">
+            <span class="kpi-title">Gesamt-Runs</span>
+            <div class="kpi-value font-mono" id="run-token-total-runs" style="font-size: 1.35rem;">0</div>
+          </div>
+          <div class="card kpi-card" style="padding: 0.75rem 1rem;">
+            <span class="kpi-title">Input Tokens (Gesamt)</span>
+            <div class="kpi-value font-mono" id="run-token-total-input" style="font-size: 1.35rem;">0</div>
+          </div>
+          <div class="card kpi-card" style="padding: 0.75rem 1rem;">
+            <span class="kpi-title">Output Tokens (Gesamt)</span>
+            <div class="kpi-value font-mono" id="run-token-total-output" style="font-size: 1.35rem;">0</div>
+          </div>
+          <div class="card kpi-card" style="padding: 0.75rem 1rem;">
+            <span class="kpi-title">Cached Input Tokens</span>
+            <div class="kpi-value font-mono" id="run-token-total-cached" style="font-size: 1.35rem;">0</div>
+          </div>
+        </div>
+
+        <div class="table-responsive" style="max-height: 440px; overflow-y: auto;">
+          <table class="data-table" id="run-token-table">
+            <thead>
+              <tr>
+                <th>Zeitpunkt</th>
+                <th>Konfiguration</th>
+                <th>Marke &amp; Prompt</th>
+                <th>LLM / Strategie</th>
+                <th class="text-right">Input Tokens</th>
+                <th class="text-right">Output Tokens</th>
+                <th class="text-right">Cached Tokens</th>
+              </tr>
+            </thead>
+            <tbody id="run-token-tbody">
+              <tr>
+                <td colspan="7" class="text-center text-muted">Keine Run-Daten geladen.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-run-token-close" class="btn btn-outline" data-i18n="common.close">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change User Tier / Plan Modal -->
+  <div id="tier-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="tier-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="tier-modal-title" class="modal-title" data-i18n="admin.modal_tier_title">Mandanten-Tarif ändern</h3>
+        <button type="button" class="btn-close" id="btn-tier-modal-close" aria-label="Schließen">✕</button>
+      </div>
+      <form id="form-update-tier" class="modal-body">
+        <div class="form-info-row">
+          <span class="info-label" data-i18n="admin.modal_user_label">Benutzer:</span>
+          <strong id="tier-user-email" class="info-value font-mono">—</strong>
+        </div>
+        <div class="form-group">
+          <label for="tier-select" class="form-label" data-i18n="admin.modal_tier_label">Ziel-Tarif</label>
+          <select id="tier-select" class="form-control">
+            <option value="free">Free</option>
+            <option value="starter">Starter</option>
+            <option value="growth">Growth</option>
+            <option value="enterprise_managed">Managed GEO &amp; Pipeline Defense</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-checkbox-row">
+            <input type="checkbox" id="tier-apply-credits" checked>
+            <span data-i18n="admin.modal_tier_apply_credits">Inklusiv-Credits des Tarifs gutschreiben / setzen</span>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-tier-cancel" class="btn btn-outline" data-i18n="common.cancel">Abbrechen</button>
+          <button type="submit" id="btn-tier-save" class="btn btn-primary" data-i18n="common.save">Speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create / Edit Managed AI Model Modal -->
+  <div id="model-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="model-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="model-modal-title" class="modal-title" data-i18n="admin.modal_model_title">KI-Modell konfigurieren</h3>
+        <button type="button" class="btn-close" id="btn-model-modal-close" aria-label="Schließen">✕</button>
+      </div>
+      <form id="form-save-model" class="modal-body">
+        <div class="form-group">
+          <label for="model-id" class="form-label">Kanonische Modell-ID</label>
+          <input type="text" id="model-id" class="form-input font-mono" placeholder="z.B. openai/gpt-6-luna" required>
+        </div>
+        <div class="admin-form-grid-2">
+          <div class="form-group">
+            <label for="model-provider" class="form-label">Provider</label>
+            <select id="model-provider" class="form-control">
+              <option value="openai">openai</option>
+              <option value="gemini">gemini</option>
+              <option value="mistral">mistral</option>
+              <option value="anthropic">anthropic</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="model-name" class="form-label">API Modellname</label>
+            <input type="text" id="model-name" class="form-input font-mono" placeholder="z.B. gpt-6-luna" required>
+          </div>
+        </div>
+        <div class="admin-form-grid-2">
+          <div class="form-group">
+            <label for="model-display-name" class="form-label">Anzeigename (UI)</label>
+            <input type="text" id="model-display-name" class="form-input" placeholder="OpenAI · GPT-6 Luna" required>
+          </div>
+          <div class="form-group">
+            <label for="model-strategy" class="form-label">Ausführungsstrategie</label>
+            <select id="model-strategy" class="form-control">
+              <option value="prompt_caching">prompt_caching</option>
+              <option value="batch_api">batch_api</option>
+              <option value="regular">regular</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-form-grid-2">
+          <label class="form-checkbox-row"><input type="checkbox" id="model-eu-hosted"><span>EU-Hosted</span></label>
+          <label class="form-checkbox-row"><input type="checkbox" id="model-supports-search"><span>Live-Websuche fähig</span></label>
+          <label class="form-checkbox-row"><input type="checkbox" id="model-is-allowed" checked><span>Für Kunden freigegeben</span></label>
+          <label class="form-checkbox-row"><input type="checkbox" id="model-is-default"><span>Standard-Auswahl</span></label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-model-cancel" class="btn btn-outline" data-i18n="common.cancel">Abbrechen</button>
+          <button type="submit" id="btn-model-save" class="btn btn-primary" data-i18n="common.save">Speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create / Edit Analyse-Set (Model Preset) Modal -->
+  <div id="preset-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="preset-modal-title">
+    <div class="modal-dialog" style="max-width: 720px; width: 95%;">
+      <div class="modal-header">
+        <h3 id="preset-modal-title" class="modal-title" data-i18n="admin.modal_preset_title">Analyse-Set bearbeiten</h3>
+        <button type="button" class="btn-close" id="btn-preset-modal-close" aria-label="Schließen">✕</button>
+      </div>
+      <form id="form-save-preset" class="modal-body">
+        <div class="admin-form-grid-2">
+          <div class="form-group">
+            <label for="preset-id" class="form-label">Slug / ID</label>
+            <input type="text" id="preset-id" class="form-input font-mono" placeholder="z.B. dach_core_baseline" required>
+          </div>
+          <div class="form-group">
+            <label for="preset-sort-order" class="form-label">Sortierung</label>
+            <input type="number" id="preset-sort-order" class="form-input font-mono" value="50" min="1">
+          </div>
+        </div>
+        <div class="admin-form-grid-2">
+          <div class="form-group">
+            <label for="preset-name-de" class="form-label">Titel (DE)</label>
+            <input type="text" id="preset-name-de" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label for="preset-name-en" class="form-label">Title (EN)</label>
+            <input type="text" id="preset-name-en" class="form-input" required>
+          </div>
+        </div>
+        <div class="admin-form-grid-2">
+          <div class="form-group">
+            <label for="preset-badge-de" class="form-label">Badge (DE)</label>
+            <input type="text" id="preset-badge-de" class="form-input" placeholder="Standard">
+          </div>
+          <div class="form-group">
+            <label for="preset-badge-en" class="form-label">Badge (EN)</label>
+            <input type="text" id="preset-badge-en" class="form-input" placeholder="Default">
+          </div>
+        </div>
+        <div class="admin-form-grid-2">
+          <div class="form-group">
+            <label for="preset-desc-de" class="form-label">Beschreibung (DE)</label>
+            <textarea id="preset-desc-de" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="preset-desc-en" class="form-label">Description (EN)</label>
+            <textarea id="preset-desc-en" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="form-group">
+          <span class="form-label">Enthaltene KI-Modelle</span>
+          <div id="preset-models-list" class="admin-checkbox-grid"></div>
+        </div>
+        <div class="admin-form-grid-2">
+          <label class="form-checkbox-row"><input type="checkbox" id="preset-search-enabled" checked><span>Live-Websuche aktiviert</span></label>
+          <label class="form-checkbox-row"><input type="checkbox" id="preset-is-active" checked><span>Analyse-Set aktiv</span></label>
+        </div>
+        <div class="form-group" style="margin-top: 0.75rem;">
+          <span class="form-label">Freigeschaltete Tarife</span>
+          <div id="preset-tiers-list" class="admin-checkbox-grid"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-preset-cancel" class="btn btn-outline" data-i18n="common.cancel">Abbrechen</button>
+          <button type="submit" id="btn-preset-save" class="btn btn-primary" data-i18n="common.save">Speichern</button>
+        </div>
+      </form>
     </div>
   </div>
 
