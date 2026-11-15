@@ -138,7 +138,7 @@ function buildSvgLinePath(points) {
   return points.map((pt, idx) => `${idx === 0 ? 'M' : 'L'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`).join(' ');
 }
 
-const MODEL_SERIES_PALETTE = ['#2563eb', '#d97706', '#9333ea', '#0891b2', '#e11d48', '#4f46e5', '#0d9488'];
+const MODEL_SERIES_PALETTE = ['#D97706', '#0D9488', '#475569', '#E11D48', '#84CC16', '#78716C', '#0891B2'];
 
 /**
  * Groups the flat per-model daily rows from reports.php (`model_timeline`) into
@@ -240,6 +240,7 @@ class DashboardController {
       const user = auth.getUser();
       if (user?.role === 'admin') {
         const adminNav = document.getElementById('admin-nav');
+        document.getElementById('account-admin-row')?.classList?.remove('hidden');
         if (adminNav) adminNav.classList.remove('hidden');
       }
     }
@@ -254,6 +255,7 @@ class DashboardController {
 
     // 4. Setup Event Listeners
     this.setupEventListeners();
+    this.initCockpitUi?.();
 
     // 5. Initial Data Load
     await this.loadDashboard();
@@ -302,6 +304,16 @@ class DashboardController {
       '#btn-share-audit',
       '#btn-logout'
     ];
+
+    if (typeof document.querySelectorAll === 'function') {
+      document.querySelectorAll('[data-audit-hide="1"]')?.forEach(el => {
+        el.classList?.add('hidden');
+        if (el.style) el.style.display = 'none';
+      });
+    }
+    if (this.activeView === 'profiles' || this.activeView === 'account') {
+      this.setActiveView?.('overview');
+    }
 
     for (const selector of elementsToHide) {
       const el = document.querySelector(selector);
@@ -369,6 +381,7 @@ class DashboardController {
     const stopBtn = document.getElementById('btn-stop-config');
     const archiveBtn = document.getElementById('btn-archive-config');
     const deleteBtn = document.getElementById('btn-delete-config');
+    if (typeof Promise !== 'undefined') Promise.resolve().then(() => this.syncProfileSummaryCard?.());
     const scheduleBadge = document.getElementById('config-schedule-badge');
 
     const status = cfg?.status || 'active';
@@ -1569,7 +1582,7 @@ class DashboardController {
             { balance, required: breakdown.expectedRuns }
           )
         : '',
-      warningLinkHref: insufficient ? 'billing.html' : '',
+      warningLinkHref: insufficient ? 'index.html#preise' : '',
       warningLinkLabel: insufficient ? this.tMsg('run.insufficient_link', 'Zu den Paketen & Credits') : '',
       confirmLabel: this.tMsg('run.confirm_cta', '{credits} Credits einlösen & starten', {
         credits: breakdown.expectedRuns
@@ -1842,6 +1855,7 @@ class DashboardController {
         rangeLabelEl.textContent = currentText;
       }
     }
+    this.syncMobileRangeDisplay?.(data);
 
     if (primaryLegendEl) {
       const base = i18n.t('timeline.legend_primary', 'Gewählter Zeitraum');
@@ -1914,9 +1928,12 @@ class DashboardController {
       return;
     }
 
-    const W = 920;
-    const H = 290;
-    const pad = { top: 20, right: 24, bottom: 38, left: 48 };
+    const isNarrowViewport = (wrap?.clientWidth && wrap.clientWidth < 520) || (typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < 520);
+    const W = isNarrowViewport ? 360 : 920;
+    const H = isNarrowViewport ? 220 : 290;
+    const pad = isNarrowViewport
+      ? { top: 14, right: 12, bottom: 28, left: 32 }
+      : { top: 20, right: 24, bottom: 38, left: 48 };
     const plotW = W - pad.left - pad.right;
     const plotH = H - pad.top - pad.bottom;
     const slotCount = aligned.length;
@@ -1932,17 +1949,10 @@ class DashboardController {
       'aria-label': i18n.t('timeline.title', 'Entwicklung über Zeitverlauf & Vergleich')
     });
 
-    const defs = this.createSvgEl('defs');
-    const grad = this.createSvgEl('linearGradient', { id: 'timeline-primary-grad', x1: '0', y1: '0', x2: '0', y2: '1' });
-    grad.append(
-      this.createSvgEl('stop', { offset: '0%', 'stop-color': '#059669', 'stop-opacity': '0.18' }),
-      this.createSvgEl('stop', { offset: '100%', 'stop-color': '#059669', 'stop-opacity': '0.0' })
-    );
-    defs.appendChild(grad);
-    svg.appendChild(defs);
+    // Clean Tufte SVG: zero decorative area gradients
 
     // Y-axis grid & tick labels (0..100%)
-    [0, 25, 50, 75, 100].forEach(tick => {
+    (isNarrowViewport ? [0, 50, 100] : [0, 25, 50, 75, 100]).forEach(tick => {
       const y = yForVal(tick);
       svg.appendChild(this.createSvgEl('line', {
         x1: pad.left,
@@ -1985,7 +1995,7 @@ class DashboardController {
       svg.appendChild(this.createSvgEl('circle', {
         cx: pt.x.toFixed(2),
         cy: pt.y.toFixed(2),
-        r: '3.5',
+        r: isNarrowViewport && slotCount > 14 ? '1.75' : '3.5',
         class: 'timeline-dot-compare'
       }));
     });
@@ -2006,7 +2016,7 @@ class DashboardController {
         svg.appendChild(this.createSvgEl('circle', {
           cx: pt.x.toFixed(2),
           cy: pt.y.toFixed(2),
-          r: '3',
+          r: isNarrowViewport && slotCount > 14 ? '1.75' : '3',
           class: 'timeline-dot-model',
           fill: series.color
         }));
@@ -2015,14 +2025,6 @@ class DashboardController {
 
     // Primary area & line
     if (primaryPoints.length >= 2) {
-      const firstPt = primaryPoints[0];
-      const lastPt = primaryPoints[primaryPoints.length - 1];
-      const baseY = (pad.top + plotH).toFixed(2);
-      const areaD = `${buildSvgLinePath(primaryPoints)} L ${lastPt.x.toFixed(2)} ${baseY} L ${firstPt.x.toFixed(2)} ${baseY} Z`;
-      svg.appendChild(this.createSvgEl('path', {
-        d: areaD,
-        fill: 'url(#timeline-primary-grad)'
-      }));
       svg.appendChild(this.createSvgEl('path', {
         d: buildSvgLinePath(primaryPoints),
         class: 'timeline-line-primary'
@@ -2032,13 +2034,13 @@ class DashboardController {
       svg.appendChild(this.createSvgEl('circle', {
         cx: pt.x.toFixed(2),
         cy: pt.y.toFixed(2),
-        r: primaryPoints.length === 1 ? '6' : '4.25',
+        r: primaryPoints.length === 1 ? '6' : (isNarrowViewport && slotCount > 14 ? '2.25' : '4.25'),
         class: 'timeline-dot-primary'
       }));
     });
 
     // X-axis labels (up to 7 evenly distributed ticks)
-    const maxTicks = 7;
+    const maxTicks = isNarrowViewport ? 4 : 7;
     const tickIndices = new Set();
     if (slotCount <= maxTicks) {
       for (let i = 0; i < slotCount; i++) tickIndices.add(i);
@@ -2185,9 +2187,16 @@ class DashboardController {
       const relX = Math.max(12, Math.min(wrapRect.width - 12, clientX - wrapRect.left));
       const relY = Math.max(12, Math.min(wrapRect.height - 20, clientY - wrapRect.top));
       const placeLeft = relX > wrapRect.width * 0.62;
-      tooltip.style.left = placeLeft ? 'auto' : `${Math.round(relX + 14)}px`;
-      tooltip.style.right = placeLeft ? `${Math.round(wrapRect.width - relX + 14)}px` : 'auto';
-      tooltip.style.top = `${Math.max(8, Math.round(relY - 40))}px`;
+      if (wrapRect.width < 480) {
+        const clampedLeft = Math.max(8, Math.min(Math.max(8, wrapRect.width - 216), Math.round(relX - 90)));
+        tooltip.style.left = `${clampedLeft}px`;
+        tooltip.style.right = 'auto';
+        tooltip.style.top = `${Math.max(6, Math.round(relY - 76))}px`;
+      } else {
+        tooltip.style.left = placeLeft ? 'auto' : `${Math.round(relX + 14)}px`;
+        tooltip.style.right = placeLeft ? `${Math.round(wrapRect.width - relX + 14)}px` : 'auto';
+        tooltip.style.top = `${Math.max(8, Math.round(relY - 40))}px`;
+      }
     };
 
     const handlePointerMove = (clientX, clientY) => {
@@ -2202,6 +2211,8 @@ class DashboardController {
     };
 
     hitRect.addEventListener('mousemove', (e) => handlePointerMove(e.clientX, e.clientY));
+    hitRect.addEventListener('pointerdown', (e) => handlePointerMove(e.clientX, e.clientY));
+    hitRect.addEventListener('pointermove', (e) => { if (e.buttons > 0 || e.pointerType !== 'mouse') handlePointerMove(e.clientX, e.clientY); });
     hitRect.addEventListener('touchstart', (e) => {
       if (e.touches && e.touches[0]) handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
     }, { passive: true });
@@ -2394,7 +2405,10 @@ class DashboardController {
     modelName.className = 'font-mono text-sm';
     modelName.textContent = r.model ? `${r.model} (${r.provider})` : String(r.provider || '—');
     const strategy = String(r.execution_strategy || 'regular');
-    modelCell.append(modelName, badge(this.getStrategyLabel(strategy), `strategy-badge strategy-${strategy}`));
+    const stratText = document.createElement('div');
+    stratText.className = 'text-xs text-muted';
+    stratText.textContent = this.getStrategyLabel(strategy);
+    modelCell.append(modelName, stratText);
     if (isAdminViewer) {
       modelCell.append(
         ' ',
@@ -2410,10 +2424,18 @@ class DashboardController {
       tierCell.appendChild(badge(this.tMsg('results.status_failed', 'Fehlgeschlagen'), 'badge-inactive'));
     } else {
       const tier = String(r.mece_category || '4_GENERIC');
-      const tierClass = tier === '1_DIRECT_WIN' ? 'badge-success'
-        : tier === '2_BRAND_HALO' ? 'badge-primary'
-          : tier === '3_COMPETITOR_TAKEOVER' ? 'badge-warning' : 'badge-neutral';
-      tierCell.appendChild(badge(i18n.t(tier, tier), tierClass));
+      const dotClass = tier === '1_DIRECT_WIN' ? 'dot-win'
+        : tier === '2_BRAND_HALO' ? 'dot-halo'
+          : tier === '3_COMPETITOR_TAKEOVER' ? 'dot-takeover' : 'dot-generic';
+      const dotWrap = document.createElement('span');
+      dotWrap.className = 'mece-legend-label-wrap';
+      const dot = document.createElement('span');
+      dot.className = `mece-dot ${dotClass}`;
+      dot.setAttribute('aria-hidden', 'true');
+      const txtSpan = document.createElement('span');
+      txtSpan.textContent = i18n.t(tier, tier);
+      dotWrap.append(dot, txtSpan);
+      tierCell.appendChild(dotWrap);
     }
 
     const posCell = td('text-right font-mono', i18n.t('results.col_position', 'Position & Quellen'));
@@ -2543,6 +2565,11 @@ class DashboardController {
 
     const onToggle = (e) => {
       if (e?.target?.closest?.('a')) return;
+      const isMobileDrawer = typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < 768 && document.getElementById('result-detail-sheet');
+      if (isMobileDrawer) {
+        this.openResultDetailSheet(r, grid.cloneNode(true));
+        return;
+      }
       this.toggleAccordionRow(rowId);
     };
     summary.addEventListener('click', onToggle);
@@ -2598,7 +2625,7 @@ class DashboardController {
     // 4. Runs
     const runs = Number(metrics.total_runs || 0);
     document.getElementById('kpi-runs').textContent = String(runs);
-    this.setDeltaBadge('kpi-runs-delta', pop.runs_delta);
+    this.setDeltaBadge('kpi-runs-delta', pop.runs_delta, false, false);
 
     // 5. Citations Share
     const citShare = Number(metrics.citation_share || 0).toFixed(1);
@@ -2611,7 +2638,7 @@ class DashboardController {
     this.updateCreditBadge(creds);
   }
 
-  setDeltaBadge(elementId, deltaVal, invertPositive = false) {
+  setDeltaBadge(elementId, deltaVal, invertPositive = false, isPercent = true) {
     const el = document.getElementById(elementId);
     if (!el) return;
 
@@ -2622,7 +2649,9 @@ class DashboardController {
     }
 
     const num = Number(deltaVal);
-    const formatted = (num > 0 ? `+${num.toFixed(1)}` : num.toFixed(1)) + '%';
+    const formatted = isPercent
+      ? (num > 0 ? `+${num.toFixed(1)}` : num.toFixed(1)) + '%'
+      : (num > 0 ? `+${Math.round(num)}` : String(Math.round(num)));
     el.textContent = formatted;
 
     const isGood = invertPositive ? num < 0 : num > 0;
@@ -2790,8 +2819,8 @@ class DashboardController {
       const isBrand = Boolean(d.is_brand_domain);
 
       const badgeHtml = isBrand
-        ? '<span class="badge badge-success">Brand Domain</span>'
-        : '<span class="badge badge-neutral">Third Party</span>';
+        ? `<span class="citation-type is-own">${escapeHtml(this.tMsg('table.type_own', 'Eigene Domain'))}</span>`
+        : `<span class="citation-type is-external">${escapeHtml(this.tMsg('table.type_external', 'Extern'))}</span>`;
 
       row.innerHTML = `
         <td data-label="Quell-Domain" class="font-mono">${escapeHtml(domain)}</td>
@@ -2800,6 +2829,284 @@ class DashboardController {
       `;
       tbody.appendChild(row);
     });
+  }
+
+  initCockpitUi() {
+    if (typeof document === 'undefined') return;
+    this.activeView = 'overview';
+    this.initTheme();
+    this.syncAccountIdentity();
+    this.syncProfileSummaryCard();
+    this.syncMobileRangeDisplay(this.lastReportsData || {});
+
+    if (typeof document.querySelectorAll === 'function') {
+      document.querySelectorAll('[data-cockpit-nav], [data-cockpit-jump]')?.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-cockpit-nav') || btn.getAttribute('data-cockpit-jump');
+          if (target) this.setActiveView(target);
+        });
+      });
+
+      document.querySelectorAll('[data-theme-choice]')?.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const choice = btn.getAttribute('data-theme-choice');
+          if (choice) this.applyTheme(choice);
+        });
+      });
+    }
+
+    document.getElementById('btn-theme-toggle')?.addEventListener('click', () => {
+      const current = document.documentElement?.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      this.applyTheme(current === 'dark' ? 'light' : 'dark');
+    });
+
+    document.getElementById('btn-mobile-period-trigger')?.addEventListener('click', () => this.openPeriodSheet());
+    document.getElementById('btn-mobile-range-summary')?.addEventListener('click', () => this.openPeriodSheet());
+    document.getElementById('btn-close-period-sheet')?.addEventListener('click', () => this.closePeriodSheet());
+    document.getElementById('period-sheet-backdrop')?.addEventListener('click', () => this.closePeriodSheet());
+
+    document.getElementById('period-filter')?.querySelectorAll?.('.segment-btn')?.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = btn.getAttribute('data-period');
+        if (p && p !== 'custom') {
+          this.closePeriodSheet();
+        }
+      });
+    });
+
+    document.getElementById('btn-apply-date-filters')?.addEventListener('click', () => {
+      if (this.validateDateInputs()) {
+        this.closePeriodSheet();
+      }
+    });
+
+    document.getElementById('result-detail-close')?.addEventListener('click', () => this.closeResultDetailSheet());
+    document.getElementById('result-detail-backdrop')?.addEventListener('click', () => this.closeResultDetailSheet());
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener?.('keydown', (e) => {
+        if (e.key === 'Escape') {
+          this.closePeriodSheet();
+          this.closeResultDetailSheet();
+        }
+      });
+
+      const resolveHashView = () => {
+        const raw = String(window.location?.hash || '').replace(/^#/, '').toLowerCase();
+        if (raw === 'billing' || raw === 'settings' || raw === 'account') return 'account';
+        if (raw === 'analysis' || raw === 'results' || raw === 'profiles' || raw === 'overview') return raw;
+        return null;
+      };
+      const initialHashView = resolveHashView();
+      if (initialHashView) {
+        this.setActiveView(initialHashView);
+      }
+
+      window.addEventListener?.('hashchange', () => {
+        const nextView = resolveHashView();
+        if (nextView) this.setActiveView(nextView);
+      });
+
+      window.addEventListener?.('languageChanged', () => {
+        this.syncMobileRangeDisplay(this.lastReportsData || {});
+        this.syncProfileSummaryCard();
+      });
+
+      let wasNarrow = window.innerWidth > 0 && window.innerWidth < 520;
+      let resizeTimer = null;
+      window.addEventListener?.('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          const isNarrowNow = window.innerWidth > 0 && window.innerWidth < 520;
+          if (isNarrowNow !== wasNarrow && this.lastReportsData && this.activeView === 'overview') {
+            wasNarrow = isNarrowNow;
+            this.renderTimelineChart(this.lastReportsData);
+          } else {
+            wasNarrow = isNarrowNow;
+          }
+        }, 160);
+      });
+    }
+  }
+
+  setActiveView(viewName) {
+    if (typeof document === 'undefined') return;
+    const valid = new Set(['overview', 'analysis', 'results', 'profiles', 'account']);
+    let next = valid.has(viewName) ? viewName : 'overview';
+    if (this.isAuditMode && (next === 'profiles' || next === 'account')) {
+      next = 'overview';
+    }
+    this.activeView = next;
+    this.closePeriodSheet();
+    this.closeResultDetailSheet();
+
+    if (typeof document.querySelectorAll === 'function') {
+      document.querySelectorAll('.cockpit-view[data-view]')?.forEach(sec => {
+        const match = sec.getAttribute('data-view') === next;
+        sec.classList?.toggle('is-active', match);
+      });
+
+      document.querySelectorAll('[data-cockpit-nav]')?.forEach(btn => {
+        const match = btn.getAttribute('data-cockpit-nav') === next;
+        btn.classList?.toggle('is-active', match);
+        if (match) btn.setAttribute('aria-current', 'page');
+        else btn.removeAttribute('aria-current');
+      });
+    }
+
+    if (next === 'overview' && this.lastReportsData && typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this.renderTimelineChart(this.lastReportsData));
+    }
+
+    if (typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < 768) {
+      window.scrollTo?.({ top: 0, behavior: 'auto' });
+    }
+  }
+
+  initTheme() {
+    if (typeof document === 'undefined') return;
+    let stored = 'light';
+    try {
+      const val = localStorage.getItem('chatlytics_theme');
+      if (val === 'dark' || val === 'light') stored = val;
+    } catch (_) {}
+    this.applyTheme(stored, false);
+  }
+
+  applyTheme(theme, persist = true) {
+    if (typeof document === 'undefined') return;
+    const next = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement?.setAttribute?.('data-theme', next);
+    if (persist) {
+      try { localStorage.setItem('chatlytics_theme', next); } catch (_) {}
+    }
+    if (typeof document.querySelectorAll === 'function') {
+      document.querySelectorAll('[data-theme-choice]')?.forEach(btn => {
+        const active = btn.getAttribute('data-theme-choice') === next;
+        btn.classList?.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    }
+    const toggleBtn = document.getElementById('btn-theme-toggle');
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+    }
+  }
+
+  openPeriodSheet() {
+    if (typeof document === 'undefined') return;
+    document.getElementById('period-comparison-bar')?.classList?.add('is-sheet-open');
+    document.getElementById('period-sheet-backdrop')?.classList?.add('is-open');
+  }
+
+  closePeriodSheet() {
+    if (typeof document === 'undefined') return;
+    document.getElementById('period-comparison-bar')?.classList?.remove('is-sheet-open');
+    document.getElementById('period-sheet-backdrop')?.classList?.remove('is-open');
+  }
+
+  openResultDetailSheet(row, contentEl) {
+    if (typeof document === 'undefined') return;
+    const overlay = document.getElementById('result-detail-sheet');
+    const body = document.getElementById('result-detail-sheet-body');
+    const titleEl = document.getElementById('result-detail-sheet-title');
+    if (!overlay || !body) return;
+    if (titleEl) {
+      const modelLabel = [row?.provider, row?.model].filter(Boolean).join(' · ') || 'Detail';
+      titleEl.textContent = modelLabel;
+    }
+    body.replaceChildren(contentEl);
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.getElementById('result-detail-close')?.focus();
+  }
+
+  closeResultDetailSheet() {
+    if (typeof document === 'undefined') return;
+    const overlay = document.getElementById('result-detail-sheet');
+    if (!overlay || overlay.classList?.contains('hidden')) return;
+    overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  syncMobileRangeDisplay(data) {
+    if (typeof document === 'undefined') return;
+    const pillEl = document.getElementById('mobile-period-pill-label');
+    const summaryEl = document.getElementById('mobile-range-summary-text');
+    const isDe = typeof i18n !== 'undefined' && i18n.getLanguage?.() === 'de';
+    const periodMap = {
+      '7d': isDe ? '7T' : '7d',
+      '14d': isDe ? '14T' : '14d',
+      '30d': isDe ? '30T' : '30d',
+      '90d': isDe ? '90T' : '90d',
+      'all': isDe ? 'Alle' : 'All',
+      'custom': isDe ? 'Datum' : 'Custom'
+    };
+    const pShort = periodMap[this.selectedPeriod] || (isDe ? '30T' : '30d');
+    if (pillEl) pillEl.textContent = pShort;
+
+    const rangeText = document.getElementById('active-range-label')?.textContent?.trim();
+    if (summaryEl) {
+      summaryEl.textContent = rangeText || pShort;
+    }
+  }
+
+  syncProfileSummaryCard() {
+    if (typeof document === 'undefined') return;
+    const cfg = this.getSelectedConfigObject();
+    const nameEl = document.getElementById('profile-summary-name');
+    const brandEl = document.getElementById('profile-summary-brand');
+    const domEl = document.getElementById('profile-summary-domains');
+    const promptsEl = document.getElementById('profile-summary-prompts');
+    const modelsEl = document.getElementById('profile-summary-models');
+    const schedEl = document.getElementById('profile-summary-schedule');
+    const pillEl = document.getElementById('profile-status-pill');
+
+    if (!cfg) {
+      if (nameEl) nameEl.textContent = typeof i18n !== 'undefined' ? i18n.t('dashboard.all_configs', 'Alle Tracking-Profile') : 'Alle Tracking-Profile';
+      if (brandEl) brandEl.textContent = '—';
+      if (domEl) domEl.textContent = '—';
+      if (promptsEl) promptsEl.textContent = String(typeof configs !== 'undefined' ? (configs?.configs?.length || 0) : 0);
+      if (modelsEl) modelsEl.textContent = '—';
+      if (schedEl) schedEl.textContent = '—';
+      if (pillEl) pillEl.classList?.add('hidden');
+      return;
+    }
+
+    if (nameEl) nameEl.textContent = cfg.name || cfg.brand_name || 'Tracking-Profil';
+    if (brandEl) brandEl.textContent = cfg.brand_name || '—';
+    const domains = Array.isArray(cfg.brand_domains) ? cfg.brand_domains : [];
+    if (domEl) domEl.textContent = domains.length ? domains.join(', ') : '—';
+    const prompts = Array.isArray(cfg.keywords_prompts || cfg.prompts) ? (cfg.keywords_prompts || cfg.prompts) : [];
+    if (promptsEl) promptsEl.textContent = String(prompts.length);
+    const llms = Array.isArray(cfg.target_llms) ? cfg.target_llms : [];
+    if (modelsEl) modelsEl.textContent = llms.length ? String(llms.length) : '—';
+    if (schedEl) {
+      const ivKey = cfg.schedule_interval || 'every_120m';
+      schedEl.textContent = typeof i18n !== 'undefined' ? i18n.t(`interval.${ivKey}`, ivKey) : ivKey;
+    }
+    if (pillEl) {
+      const srcBadge = document.getElementById('config-schedule-badge');
+      if (srcBadge && !srcBadge.classList?.contains('hidden')) {
+        pillEl.className = srcBadge.className;
+        pillEl.textContent = srcBadge.textContent;
+      } else {
+        pillEl.classList?.add('hidden');
+      }
+    }
+  }
+
+  syncAccountIdentity() {
+    if (typeof document === 'undefined') return;
+    const user = typeof auth !== 'undefined' ? auth.getUser?.() : null;
+    const emailEl = document.getElementById('account-user-email');
+    const tierEl = document.getElementById('account-tier-label');
+    if (emailEl && user?.email) {
+      emailEl.textContent = user.email;
+    }
+    if (tierEl && user?.tier) {
+      tierEl.textContent = String(user.tier).toUpperCase();
+    }
   }
 }
 
