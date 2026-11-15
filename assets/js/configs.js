@@ -4,7 +4,7 @@
  *
  * Handles:
  * - 4 Data Mining Accuracy tiers (12, 24, 48, 96 datasets/day per LLM)
- * - 3-Tier Provider Cost-Optimization metadata (prompt_caching -> batch_api -> regular)
+ * - Unified OpenRouter Gateway & Batch-API metadata (batch_api <-> regular)
  * - Flow B Lifecycle: One-Time Test Run before Full Start, Post-Start Prompt Immutability
  * - Sanitizing brand and competitor domain inputs (RFC URL parsing & protocol stripping)
  * - CRUD operations via apiClient
@@ -126,12 +126,12 @@ export function getScheduleLabel(interval) {
 }
 
 export const LLM_CATALOG = [
-  { id: 'openai/gpt-6-luna', provider: 'openai', model: 'gpt-6-luna', label: 'OpenAI · GPT-6 Luna', euHosted: false, defaultChecked: true, executionStrategy: 'prompt_caching' },
-  { id: 'gemini/models/gemini-3.5-flash', provider: 'gemini', model: 'models/gemini-3.5-flash', label: 'Google · Gemini 3.5 Flash', euHosted: false, defaultChecked: true, executionStrategy: 'prompt_caching' },
-  { id: 'mistral/mistral-medium-latest', provider: 'mistral', model: 'mistral-medium-latest', label: 'Mistral Medium Latest', euHosted: true, defaultChecked: true, executionStrategy: 'prompt_caching' },
-  { id: 'mistral/mistral-large-latest', provider: 'mistral', model: 'mistral-large-latest', label: 'Mistral Large Latest', euHosted: true, defaultChecked: false, executionStrategy: 'prompt_caching' },
-  { id: 'mistral/zai-glm-5-3', provider: 'mistral', model: 'zai-glm-5-3', label: 'Z.ai GLM 5.3 (Mistral EU)', euHosted: true, defaultChecked: true, executionStrategy: 'regular' },
-  { id: 'mistral/zai-glm-5-3-flash', provider: 'mistral', model: 'zai-glm-5-3-flash', label: 'Z.ai GLM 5.3 Flash (Mistral EU)', euHosted: true, defaultChecked: false, executionStrategy: 'regular' }
+  { id: 'openai/gpt-6-luna', provider: 'openai', model: 'gpt-6-luna', label: 'OpenAI · GPT-6 Luna', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'google/gemini-3.5-flash', provider: 'google', model: 'gemini-3.5-flash', label: 'Google · Gemini 3.5 Flash', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'mistralai/mistral-medium-3-5', provider: 'mistralai', model: 'mistral-medium-3-5', label: 'Mistral · Medium 3.5', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'mistralai/mistral-large-4-0', provider: 'mistralai', model: 'mistral-large-4-0', label: 'Mistral · Large 4.0', euHosted: false, defaultChecked: false, supportsBatchApi: false, supportsTools: true, executionStrategy: 'regular' },
+  { id: 'z-ai/glm-5.3', provider: 'z-ai', model: 'glm-5.3', label: 'Z.ai · GLM 5.3', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'z-ai/glm-5.3-flash', provider: 'z-ai', model: 'glm-5.3-flash', label: 'Z.ai · GLM 5.3 Flash', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' }
 ];
 
 export const DEFAULT_PRESETS = [
@@ -139,11 +139,11 @@ export const DEFAULT_PRESETS = [
     id: 'dach_core_baseline',
     name_de: 'DACH Basis-Radar (Live-Suche)',
     name_en: 'DACH Core Radar (Live Search)',
-    description_de: 'Direktvergleich über OpenAI GPT-6 Luna und Google Gemini 3.5 Flash inkl. Live-Websuche & Quellenzitaten.',
-    description_en: 'Head-to-head benchmark across OpenAI GPT-6 Luna and Google Gemini 3.5 Flash with live web search & citations.',
+    description_de: 'Direktvergleich über OpenAI GPT-6 Luna und Google Gemini 3.5 Flash via OpenRouter inkl. Live-Websuche & Quellenzitaten.',
+    description_en: 'Head-to-head benchmark across OpenAI GPT-6 Luna and Google Gemini 3.5 Flash via OpenRouter with live web search & citations.',
     badge_de: 'Standard',
     badge_en: 'Default',
-    target_llms: ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'],
+    target_llms: ['openai/gpt-6-luna', 'google/gemini-3.5-flash'],
     search_enabled: true,
     allowed_tiers: ['free', 'starter', 'growth', 'enterprise_managed'],
     is_default: true,
@@ -151,13 +151,13 @@ export const DEFAULT_PRESETS = [
   },
   {
     id: 'parametric_brand_memory',
-    name_de: 'Parametrisches Marken-Gedächtnis (Ohne Websuche)',
-    name_en: 'Parametric Brand Memory (No Web Search)',
-    description_de: 'Prüft das reine Modellwissen über OpenAI, Gemini und Mistral EU ohne Beeinflussung durch Live-Suchergebnisse.',
-    description_en: 'Evaluates pure parametric training memory across OpenAI, Gemini, and Mistral EU without live web search.',
+    name_de: 'Parametrisches Marken-Gedächtnis (Batch-API)',
+    name_en: 'Parametric Brand Memory (Batch API)',
+    description_de: 'Prüft das reine Modellwissen über OpenAI, Google Gemini und Mistral via OpenRouter Batch-API ohne Websuche.',
+    description_en: 'Evaluates pure parametric training memory across OpenAI, Google Gemini, and Mistral via OpenRouter Batch API without web search.',
     badge_de: 'Starter & höher',
     badge_en: 'Starter+',
-    target_llms: ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash', 'mistral/mistral-medium-latest'],
+    target_llms: ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5'],
     search_enabled: false,
     allowed_tiers: ['starter', 'growth', 'enterprise_managed'],
     is_default: false,
@@ -165,13 +165,13 @@ export const DEFAULT_PRESETS = [
   },
   {
     id: 'eu_sovereign_dsgvo',
-    name_de: 'EU-Souveränitäts-Set (Mistral & GLM EU)',
-    name_en: 'EU Sovereign Suite (Mistral & GLM EU)',
-    description_de: '100 % europäische Inferenz auf dem Frankfurter/EU-Endpunkt (Mistral Medium, Mistral Large & Z.ai GLM 5.3).',
-    description_en: '100% European inference on Mistral EU endpoints (Mistral Medium, Mistral Large & Z.ai GLM 5.3).',
-    badge_de: 'EU-Hosted',
-    badge_en: 'EU-Hosted',
-    target_llms: ['mistral/mistral-medium-latest', 'mistral/mistral-large-latest', 'mistral/zai-glm-5-3'],
+    name_de: 'Europäische & Open-Weight Modelle (Mistral & GLM)',
+    name_en: 'European & Open-Weight Suite (Mistral & GLM)',
+    description_de: 'Modell-Mix aus Mistral Medium 3.5, Mistral Large 4.0 und Z.ai GLM 5.3 über das OpenRouter-Gateway.',
+    description_en: 'Balanced comparison across Mistral Medium 3.5, Mistral Large 4.0, and Z.ai GLM 5.3 via OpenRouter.',
+    badge_de: 'EU & GLM',
+    badge_en: 'EU & GLM',
+    target_llms: ['mistralai/mistral-medium-3-5', 'mistralai/mistral-large-4-0', 'z-ai/glm-5.3'],
     search_enabled: false,
     allowed_tiers: ['starter', 'growth', 'enterprise_managed'],
     is_default: false,
@@ -181,11 +181,11 @@ export const DEFAULT_PRESETS = [
     id: 'executive_full_spectrum',
     name_de: '360° Vorstands-Benchmark (Alle Kernmodelle + Suche)',
     name_en: '360° Executive Benchmark (All Core Models + Search)',
-    description_de: 'Umfassende Multi-LLM-Abdeckung über US-Frontier-Modelle (mit Live-Grounding) und europäische Sprachmodelle.',
-    description_en: 'Complete multi-LLM coverage combining US frontier models (with live grounding) and European models.',
+    description_de: 'Umfassende Multi-LLM-Abdeckung über OpenAI, Google Gemini, Mistral und Z.ai GLM inkl. Live-Websuche.',
+    description_en: 'Complete multi-LLM coverage combining OpenAI, Google Gemini, Mistral, and Z.ai GLM with live web search.',
     badge_de: 'Vollabdeckung',
     badge_en: 'Full Coverage',
-    target_llms: ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash', 'mistral/mistral-medium-latest', 'mistral/zai-glm-5-3'],
+    target_llms: ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5', 'z-ai/glm-5.3'],
     search_enabled: true,
     allowed_tiers: ['starter', 'growth', 'enterprise_managed'],
     is_default: false,
@@ -193,7 +193,7 @@ export const DEFAULT_PRESETS = [
   }
 ];
 
-const DEFAULT_FALLBACK_LLMS = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'];
+const DEFAULT_FALLBACK_LLMS = ['openai/gpt-6-luna', 'google/gemini-3.5-flash'];
 
 function parseConfigArray(val) {
   if (Array.isArray(val)) return val;
@@ -232,21 +232,23 @@ const DEFAULT_SELECTED_LLMS = LLM_CATALOG.filter(m => m.defaultChecked).map(m =>
 export function mapSavedTokenToCatalogId(token) {
   const clean = String(token || '').trim().toLowerCase();
   if (!clean) return '';
-  if (clean === 'openai' || clean.startsWith('openai/')) return 'openai/gpt-6-luna';
-  if (clean === 'gemini' || clean === 'google' || clean.startsWith('gemini/') || clean.startsWith('google/') || clean.startsWith('models/gemini')) {
-    return 'gemini/models/gemini-3.5-flash';
+  if (clean === 'openai') return 'openai/gpt-6-luna';
+  if (clean === 'gemini' || clean === 'google' || clean === 'gemini/models/gemini-3.5-flash' || clean === 'models/gemini-3.5-flash') {
+    return 'google/gemini-3.5-flash';
   }
+  if (clean.startsWith('gemini/models/')) return 'google/' + clean.slice(14);
+  if (clean.startsWith('gemini/')) return 'google/' + clean.slice(7);
   if (clean === 'mistral' || clean === 'mistral/mistral-medium-latest' || clean === 'mistral-medium-latest') {
-    return 'mistral/mistral-medium-latest';
+    return 'mistralai/mistral-medium-3-5';
   }
   if (clean === 'mistral/mistral-large-latest' || clean === 'mistral-large-latest') {
-    return 'mistral/mistral-large-latest';
+    return 'mistralai/mistral-large-4-0';
   }
   if (clean === 'glm' || clean === 'mistral/zai-glm-5-3' || clean === 'zai-glm-5-3') {
-    return 'mistral/zai-glm-5-3';
+    return 'z-ai/glm-5.3';
   }
   if (clean === 'mistral/zai-glm-5-3-flash' || clean === 'zai-glm-5-3-flash') {
-    return 'mistral/zai-glm-5-3-flash';
+    return 'z-ai/glm-5.3-flash';
   }
   return clean;
 }
@@ -319,7 +321,7 @@ export class ConfigManager {
     this.configs = [];
     this.selectedConfigId = null;
     this.catalog = {
-      allowed_models: LLM_CATALOG.map(m => ({ ...m, display_name: m.label, supports_web_search: m.provider === 'openai' || m.provider === 'gemini', eu_hosted: m.euHosted })),
+      allowed_models: LLM_CATALOG.map(m => ({ ...m, display_name: m.label, supports_web_search: true, supports_batch_api: Boolean(m.supportsBatchApi), supports_tools: m.supportsTools !== false, eu_hosted: false })),
       presets: DEFAULT_PRESETS,
       user_plan: null
     };
@@ -387,12 +389,14 @@ export class ConfigManager {
 
     if (!formData.promptsLocked) {
       payload.keywords_prompts = Array.isArray(formData.prompts) ? formData.prompts : parsePrompts(formData.prompts || '');
+      payload.market_region = formData.market_region || null;
     }
 
     if (configId) {
       return await apiClient.updateConfig(configId, payload);
     } else {
       payload.keywords_prompts = Array.isArray(formData.prompts) ? formData.prompts : parsePrompts(formData.prompts || '');
+      payload.market_region = formData.market_region || null;
       return await apiClient.createConfig(payload);
     }
   }
@@ -569,16 +573,17 @@ export class ConfigManager {
         titleEl.textContent = m.display_name || m.label || m.id;
         const metaEl = document.createElement('span');
         metaEl.className = 'llm-option-meta';
-        metaEl.textContent = `${m.id} · ${m.execution_strategy || m.executionStrategy || 'prompt_caching'}`;
+        const isBatchCapable = Boolean(m.supports_batch_api || m.supportsBatchApi || m.execution_strategy === 'batch_api' || m.executionStrategy === 'batch_api');
+        metaEl.textContent = `${m.id} · ${isBatchCapable ? 'OpenRouter Batch-API' : 'OpenRouter Standard'}`;
         textWrap.append(titleEl, metaEl);
         main.append(cb, textWrap);
         label.appendChild(main);
 
-        if (m.eu_hosted || m.euHosted) {
-          const euBadge = document.createElement('span');
-          euBadge.className = 'badge badge-eu';
-          euBadge.textContent = i18n.t('config.eu_hosted_badge', 'EU-Hosted');
-          label.appendChild(euBadge);
+        if (isBatchCapable) {
+          const batchBadge = document.createElement('span');
+          batchBadge.className = 'badge badge-secondary';
+          batchBadge.textContent = ':batch';
+          label.appendChild(batchBadge);
         }
         container.appendChild(label);
       });
@@ -751,7 +756,7 @@ export class ConfigManager {
       header.className = 'cfg-credit-preview-header';
       const titleSpan = document.createElement('span');
       titleSpan.className = 'cfg-credit-preview-title';
-      titleSpan.textContent = i18n.t('config.credit_preview_title', 'Geschätzter Credit-Verbrauch (Prompt-Caching & Batch optimiert)');
+      titleSpan.textContent = i18n.t('config.credit_preview_title', 'Geschätzter Credit-Verbrauch (OpenRouter Batch optimiert)');
       const formulaSpan = document.createElement('span');
       formulaSpan.className = 'cfg-credit-preview-formula font-mono';
       formulaSpan.textContent = `${prompts.length} × ${llmCount} × ${est.runsPerDay}/d`;
@@ -819,6 +824,28 @@ export class ConfigManager {
     const showModal = (config = null) => {
       if (errBox) errBox.textContent = '';
       const promptsEl = document.getElementById('cfg-prompts');
+      const regionSelectEl = document.getElementById('cfg-market-region');
+      const regionCustomEl = document.getElementById('cfg-market-region-custom');
+      const regionLockHintEl = document.getElementById('cfg-market-region-lock-hint');
+      const applyMarketRegionFields = (rawRegion, locked) => {
+        if (!regionSelectEl) return;
+        const cleanReg = rawRegion ? String(rawRegion).trim() : '';
+        const hasPresetOpt = Array.from(regionSelectEl.options).some(o => o.value && o.value !== '__custom__' && o.value === cleanReg);
+        if (!cleanReg) {
+          regionSelectEl.value = '';
+          if (regionCustomEl) { regionCustomEl.value = ''; regionCustomEl.classList.add('hidden'); }
+        } else if (hasPresetOpt) {
+          regionSelectEl.value = cleanReg;
+          if (regionCustomEl) { regionCustomEl.value = ''; regionCustomEl.classList.add('hidden'); }
+        } else {
+          regionSelectEl.value = '__custom__';
+          if (regionCustomEl) { regionCustomEl.value = cleanReg; regionCustomEl.classList.remove('hidden'); }
+        }
+        regionSelectEl.disabled = Boolean(locked);
+        if (regionCustomEl) regionCustomEl.disabled = Boolean(locked);
+        if (regionLockHintEl) regionLockHintEl.classList.toggle('hidden', !locked);
+      };
+
       renderCustomModelsList();
       if (config) {
         if (titleEl) titleEl.textContent = i18n.t('config.modal_edit_title', 'Tracking-Konfiguration bearbeiten');
@@ -837,6 +864,7 @@ export class ConfigManager {
           if (isLocked) promptsLockHint.classList.remove('hidden');
           else promptsLockHint.classList.add('hidden');
         }
+        applyMarketRegionFields(config.market_region || null, isLocked);
         document.getElementById('cfg-competitors').value = (config.competitors || []).map(c => c.name || c).join(', ');
         ensureIntervalOption(config.schedule_interval || 'every_120m');
         const savedLlms = Array.isArray(config.target_llms) && config.target_llms.length > 0
@@ -851,6 +879,7 @@ export class ConfigManager {
         form.reset();
         if (promptsEl) promptsEl.disabled = false;
         if (promptsLockHint) promptsLockHint.classList.add('hidden');
+        applyMarketRegionFields(null, false);
         ensureIntervalOption('every_120m');
         applyModelAndSearchFields(DEFAULT_SELECTED_LLMS, true);
       }
@@ -878,6 +907,13 @@ export class ConfigManager {
     cancelBtn?.addEventListener('click', hideModal);
 
     document.getElementById('cfg-prompts')?.addEventListener('input', updateCreditPreview);
+    document.getElementById('cfg-market-region')?.addEventListener('change', (e) => {
+      const customInput = document.getElementById('cfg-market-region-custom');
+      if (!customInput) return;
+      const showCustom = e.target?.value === '__custom__';
+      customInput.classList.toggle('hidden', !showCustom);
+      if (showCustom) customInput.focus();
+    });
     const clearActivePresetOnManualEdit = () => {
       const currentUser = auth.getUser();
       const userPlan = getEffectivePlan(currentUser);
@@ -957,11 +993,18 @@ export class ConfigManager {
 
       try {
         setButtonLoading(submitBtn, true, i18n ? i18n.t('config.btn_saving', 'Wird gespeichert…') : 'Wird gespeichert…');
+        const regionSelVal = document.getElementById('cfg-market-region')?.value || '';
+        const regionCustomVal = document.getElementById('cfg-market-region-custom')?.value.trim() || '';
+        const marketRegion = regionSelVal === '__custom__'
+          ? (regionCustomVal || null)
+          : (regionSelVal || null);
+
         const saved = await this.saveConfig({
           name,
           brand_name: brandName,
           brand_domains: domains,
           prompts,
+          market_region: marketRegion,
           promptsLocked,
           competitors: rawCompetitors,
           preset_id: document.getElementById('cfg-preset-id')?.value || null,

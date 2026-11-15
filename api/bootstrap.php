@@ -553,19 +553,57 @@ function requireWritePermission(?array $user = null): void
 // -----------------------------------------------------------------------------
 
 /**
- * Resolves any bare provider alias, model name, or canonical provider/model token
- * into structured routing metadata while preserving distinct models per provider
- * and computing the 3-tier execution strategy cascade:
- *   1. 'prompt_caching' (Provider-Native Input Token Caching)
- *   2. 'batch_api'      (Provider Batch API fallback)
- *   3. 'regular'        (Standard synchronous inference fallback)
+ * Returns the 15 whitelisted OpenRouter provider namespaces (including canonical alias variants)
+ * used to filter live model discovery and catalog administration.
+ *
+ * @return array<int, string>
+ */
+function getAllowedOpenRouterProviders(): array
+{
+    return [
+        'openai',
+        'google',
+        'anthropic',
+        'mistralai',
+        'x-ai',
+        'deepseek',
+        'qwen',
+        'xiaomi',
+        'z-ai',
+        'zhipu',
+        'meta-llama',
+        'nvidia',
+        'azure',
+        'microsoft',
+        'perplexity',
+        'moonshotai',
+        'moonshot',
+        'minimax',
+    ];
+}
+
+/**
+ * Resolves any bare provider alias, legacy Chatlytics slug, or canonical OpenRouter `provider/model`
+ * token into unified OpenRouter routing metadata without prompt caching:
+ *   - 'batch_api': Scheduled execution without live web search on batch-capable OpenRouter models
+ *   - 'regular':   Immediate execution (`search_enabled = true`, `is_test_run = true`, or no batch support)
  *
  * @param string $rawToken
  * @param string $scheduleInterval
- * @return array{id:string,provider:string,model:string,eu_hosted:bool,supports_prompt_caching:bool,supports_batch_api:bool,execution_strategy:string}
+ * @param bool $searchEnabled
+ * @param bool $isTestRun
+ * @param bool|null $supportsBatchOverride
+ * @param bool|null $supportsToolsOverride
+ * @return array{id:string,provider:string,model:string,eu_hosted:bool,supports_prompt_caching:bool,supports_batch_api:bool,supports_tools:bool,execution_strategy:string}
  */
-function resolveTargetLlmSpec(string $rawToken, string $scheduleInterval = 'every_120m'): array
-{
+function resolveTargetLlmSpec(
+    string $rawToken,
+    string $scheduleInterval = 'every_120m',
+    bool $searchEnabled = false,
+    bool $isTestRun = false,
+    ?bool $supportsBatchOverride = null,
+    ?bool $supportsToolsOverride = null
+): array {
     $clean = trim($rawToken);
     if ($clean === '') {
         return [
@@ -575,8 +613,17 @@ function resolveTargetLlmSpec(string $rawToken, string $scheduleInterval = 'ever
             'eu_hosted'               => false,
             'supports_prompt_caching' => false,
             'supports_batch_api'      => false,
+            'supports_tools'          => false,
             'execution_strategy'      => 'regular',
         ];
+    }
+
+    $hasBatchSuffix = false;
+    if (str_ends_with(strtolower($clean), ':batch')) {
+        $hasBatchSuffix = true;
+        $clean = substr($clean, 0, -6);
+    } elseif (str_ends_with(strtolower($clean), ':online')) {
+        $clean = substr($clean, 0, -7);
     }
 
     $lower = strtolower($clean);
@@ -587,31 +634,51 @@ function resolveTargetLlmSpec(string $rawToken, string $scheduleInterval = 'ever
         [$rawProv, $rawModel] = explode('/', $clean, 2);
         $provLower = strtolower(trim($rawProv));
         $modelTrim = trim($rawModel);
+        $modelTrimLower = strtolower($modelTrim);
 
-        if ($provLower === 'models' && str_starts_with(strtolower($modelTrim), 'gemini')) {
-            $provider = 'gemini';
-            $model = 'models/' . $modelTrim;
+        if ($provLower === 'models' && str_starts_with($modelTrimLower, 'gemini')) {
+            $provider = 'google';
+            $model = $modelTrim;
         } elseif ($provLower === 'gemini' || $provLower === 'google') {
-            $provider = 'gemini';
-            if ($modelTrim === '') {
-                $model = 'models/gemini-3.5-flash';
-            } else {
-                $model = str_starts_with(strtolower($modelTrim), 'models/')
-                    ? 'models/' . substr($modelTrim, 7)
-                    : 'models/' . $modelTrim;
-            }
+            $provider = 'google';
+            $stripped = str_starts_with($modelTrimLower, 'models/') ? substr($modelTrim, 7) : $modelTrim;
+            $model = $stripped !== '' ? $stripped : 'gemini-3.5-flash';
         } elseif ($provLower === 'openai') {
             $provider = 'openai';
             $model = $modelTrim !== '' ? $modelTrim : 'gpt-6-luna';
         } elseif ($provLower === 'mistral' || $provLower === 'mistralai' || $provLower === 'eu-mistral') {
-            $provider = 'mistral';
-            $model = $modelTrim !== '' ? $modelTrim : 'mistral-medium-latest';
-        } elseif ($provLower === 'glm' || $provLower === 'zai' || $provLower === 'z.ai') {
-            $provider = 'mistral';
-            $model = $modelTrim !== '' ? $modelTrim : 'zai-glm-5-3';
+            if ($modelTrimLower === 'mistral-medium-latest' || $modelTrim === '') {
+                $provider = 'mistralai';
+                $model = 'mistral-medium-3-5';
+            } elseif ($modelTrimLower === 'mistral-large-latest') {
+                $provider = 'mistralai';
+                $model = 'mistral-large-4-0';
+            } elseif ($modelTrimLower === 'zai-glm-5-3') {
+                $provider = 'z-ai';
+                $model = 'glm-5.3';
+            } elseif ($modelTrimLower === 'zai-glm-5-3-flash') {
+                $provider = 'z-ai';
+                $model = 'glm-5.3-flash';
+            } else {
+                $provider = 'mistralai';
+                $model = $modelTrim;
+            }
+        } elseif ($provLower === 'glm' || $provLower === 'zai' || $provLower === 'z.ai' || $provLower === 'z-ai') {
+            $provider = 'z-ai';
+            if ($modelTrim === '' || $modelTrimLower === 'zai-glm-5-3' || $modelTrimLower === 'glm-5-3') {
+                $model = 'glm-5.3';
+            } elseif ($modelTrimLower === 'zai-glm-5-3-flash' || $modelTrimLower === 'glm-5-3-flash') {
+                $model = 'glm-5.3-flash';
+            } else {
+                $model = $modelTrim;
+            }
         } elseif ($provLower === 'anthropic') {
             $provider = 'anthropic';
-            $model = $modelTrim !== '' ? $modelTrim : 'claude-3-5-sonnet-20241022';
+            if ($modelTrim === '' || $modelTrimLower === 'claude-3-5-sonnet-20241022') {
+                $model = 'claude-sonnet-5.5';
+            } else {
+                $model = $modelTrim;
+            }
         } else {
             $provider = $provLower;
             $model = $modelTrim;
@@ -624,36 +691,52 @@ function resolveTargetLlmSpec(string $rawToken, string $scheduleInterval = 'ever
             $provider = 'openai';
             $model = $clean;
         } elseif ($lower === 'gemini' || $lower === 'google') {
-            $provider = 'gemini';
-            $model = 'models/gemini-3.5-flash';
+            $provider = 'google';
+            $model = 'gemini-3.5-flash';
         } elseif (str_starts_with($lower, 'gemini-')) {
-            $provider = 'gemini';
-            $model = 'models/' . $clean;
-        } elseif ($lower === 'mistral' || $lower === 'mistralai') {
-            $provider = 'mistral';
-            $model = 'mistral-medium-latest';
+            $provider = 'google';
+            $model = $clean;
+        } elseif ($lower === 'mistral' || $lower === 'mistralai' || $lower === 'mistral-medium-latest') {
+            $provider = 'mistralai';
+            $model = 'mistral-medium-3-5';
+        } elseif ($lower === 'mistral-large-latest') {
+            $provider = 'mistralai';
+            $model = 'mistral-large-4-0';
         } elseif (
             str_starts_with($lower, 'mistral-')
             || str_starts_with($lower, 'pixtral-')
             || str_starts_with($lower, 'codestral-')
             || str_starts_with($lower, 'ministral-')
+            || str_starts_with($lower, 'devstral-')
         ) {
-            $provider = 'mistral';
+            $provider = 'mistralai';
             $model = $clean;
-        } elseif ($lower === 'glm' || $lower === 'glm-5-3') {
-            $provider = 'mistral';
-            $model = 'zai-glm-5-3';
-        } elseif ($lower === 'glm-5-3-flash') {
-            $provider = 'mistral';
-            $model = 'zai-glm-5-3-flash';
+        } elseif ($lower === 'glm' || $lower === 'glm-5-3' || $lower === 'zai-glm-5-3') {
+            $provider = 'z-ai';
+            $model = 'glm-5.3';
+        } elseif ($lower === 'glm-5-3-flash' || $lower === 'zai-glm-5-3-flash') {
+            $provider = 'z-ai';
+            $model = 'glm-5.3-flash';
         } elseif (str_starts_with($lower, 'zai-glm') || str_starts_with($lower, 'glm-')) {
-            $provider = 'mistral';
-            $model = $clean;
-        } elseif ($lower === 'anthropic') {
+            $provider = 'z-ai';
+            $model = str_starts_with($lower, 'zai-') ? substr($clean, 4) : $clean;
+        } elseif ($lower === 'anthropic' || $lower === 'claude-3-5-sonnet-20241022') {
             $provider = 'anthropic';
-            $model = 'claude-3-5-sonnet-20241022';
+            $model = 'claude-sonnet-5.5';
         } elseif (str_starts_with($lower, 'claude-')) {
             $provider = 'anthropic';
+            $model = $clean;
+        } elseif (str_starts_with($lower, 'grok-')) {
+            $provider = 'x-ai';
+            $model = $clean;
+        } elseif (str_starts_with($lower, 'deepseek-')) {
+            $provider = 'deepseek';
+            $model = $clean;
+        } elseif (str_starts_with($lower, 'qwen')) {
+            $provider = 'qwen';
+            $model = $clean;
+        } elseif (str_starts_with($lower, 'sonar')) {
+            $provider = 'perplexity';
             $model = $clean;
         } else {
             $provider = $lower;
@@ -664,143 +747,86 @@ function resolveTargetLlmSpec(string $rawToken, string $scheduleInterval = 'ever
     $canonicalId = $model !== '' ? ($provider . '/' . $model) : $provider;
     $modelLower = strtolower($model);
     $canonicalSchedule = normalizeScheduleInterval($scheduleInterval);
+    unset($canonicalSchedule);
 
-    // 3-Tier Provider Cost-Optimization Cascade: prompt_caching -> batch_api -> regular
-    $supportsPromptCaching = false;
-    $supportsBatchApi = false;
-    $executionStrategy = 'regular';
-
-    if ($provider === 'openai') {
-        // OpenAI supports prompt_cache_key + prompt_cache_retention="24h" and /v1/batches fallback
-        $supportsPromptCaching = true;
+    if ($supportsBatchOverride !== null) {
+        $supportsBatchApi = $supportsBatchOverride;
+    } elseif ($hasBatchSuffix) {
         $supportsBatchApi = true;
-        $executionStrategy = 'prompt_caching';
-    } elseif ($provider === 'gemini') {
-        // Google Gemini supports Implicit Context Caching + Explicit cachedContents (ttl="86400s")
-        $supportsPromptCaching = true;
-        $supportsBatchApi = true;
-        $executionStrategy = 'prompt_caching';
-    } elseif ($provider === 'anthropic') {
-        // Anthropic Claude supports cache_control={"type":"ephemeral","ttl":"1h"} and /v1/messages/batches
-        $supportsPromptCaching = true;
-        $supportsBatchApi = true;
-        // On every_120m (2h gap), Claude's 1h maximum cache TTL expires between runs -> route via Batch API
-        $executionStrategy = ($canonicalSchedule === 'every_120m') ? 'batch_api' : 'prompt_caching';
-    } elseif ($provider === 'mistral') {
-        if (str_starts_with($modelLower, 'zai-glm') || str_starts_with($modelLower, 'glm-')) {
-            // Third-party hosted Z.ai GLM weights on Mistral EU do not expose prompt caching or batching
-            $supportsPromptCaching = false;
-            $supportsBatchApi = false;
-            $executionStrategy = 'regular';
-        } else {
-            // Native Mistral models support prompt_cache_key (90% cached token discount) and /v1/batch/jobs
-            $supportsPromptCaching = true;
-            $supportsBatchApi = true;
-            $executionStrategy = 'prompt_caching';
-        }
+    } else {
+        $knownBatchModels = [
+            'openai/gpt-6-luna',
+            'google/gemini-3.5-flash',
+            'mistralai/mistral-medium-3-5',
+            'z-ai/glm-5.3',
+            'z-ai/glm-5.3-flash',
+            'anthropic/claude-sonnet-5.5',
+        ];
+        $supportsBatchApi = in_array($canonicalId, $knownBatchModels, true)
+            || (in_array($provider, ['openai', 'google', 'anthropic'], true)
+                && !str_contains($modelLower, 'image')
+                && !str_contains($modelLower, 'preview-customtools'));
     }
+
+    $supportsTools = ($supportsToolsOverride !== null)
+        ? $supportsToolsOverride
+        : ($provider !== 'perplexity');
+
+    $executionStrategy = (!$isTestRun && !$searchEnabled && $supportsBatchApi)
+        ? 'batch_api'
+        : 'regular';
 
     return [
         'id'                      => $canonicalId,
         'provider'                => $provider,
         'model'                   => $model,
-        'eu_hosted'               => ($provider === 'mistral'),
-        'supports_prompt_caching' => $supportsPromptCaching,
+        'eu_hosted'               => false,
+        'supports_prompt_caching' => false,
         'supports_batch_api'      => $supportsBatchApi,
+        'supports_tools'          => $supportsTools,
         'execution_strategy'      => $executionStrategy,
     ];
 }
 
 /**
- * Generates a deterministic, privacy-safe provider `prompt_cache_key` for a given
- * configuration ID, prompt text, and model. Contains no secrets or PII.
- *
- * @param int $configId
- * @param string $prompt
- * @param string $model
- * @return string
+ * Input Prompt Caching has been retired; always returns null so no cache keys are created or attached.
  */
-function buildPromptCacheKey(int $configId, string $prompt, string $model = ''): string
+function buildPromptCacheKey(int $configId, string $prompt, string $model = ''): ?string
 {
-    $hashInput = trim($prompt) . '|' . strtolower(trim($model));
-    $hash = substr(hash('sha256', $hashInput), 0, 24);
-    return sprintf('cl_cfg_%d_p_%s', max(0, $configId), $hash);
+    return null;
 }
 
 /**
- * Builds the provider-specific native input prompt caching configuration object
- * according to OpenAI, Google Gemini, Anthropic Claude, and Mistral AI API docs.
+ * Returns non-caching OpenRouter execution metadata for the given model and execution mode.
  *
- * @param string $provider
- * @param string $model
- * @param string $promptCacheKey
- * @param string $scheduleInterval
  * @return array<string, mixed>
  */
-function buildProviderCachingConfig(string $provider, string $model, string $promptCacheKey, string $scheduleInterval = 'every_120m'): array
-{
-    $prov = strtolower(trim($provider));
-    $modelLower = strtolower(trim($model));
-    $canonicalSchedule = normalizeScheduleInterval($scheduleInterval);
-
-    if ($prov === 'openai') {
-        return [
-            'strategy'                => 'prompt_caching',
-            'prompt_cache_key'        => $promptCacheKey,
-            'prompt_cache_retention'  => '24h',
-            'min_cache_tokens'        => 1024,
-            'batch_fallback_endpoint' => '/v1/batches',
-            'telemetry_field'         => 'usage.prompt_tokens_details.cached_tokens',
-        ];
-    }
-
-    if ($prov === 'gemini' || $prov === 'google') {
-        return [
-            'strategy'                => 'prompt_caching',
-            'implicit_caching'        => true,
-            'explicit_cache_endpoint' => 'v1beta/cachedContents',
-            'explicit_ttl'            => '86400s',
-            'min_cache_tokens'        => 2048,
-            'telemetry_field'         => 'usageMetadata.cachedContentTokenCount',
-        ];
-    }
-
-    if ($prov === 'anthropic') {
-        if ($canonicalSchedule === 'every_120m') {
-            return [
-                'strategy'       => 'batch_api',
-                'batch_endpoint' => '/v1/messages/batches',
-                'reason'         => 'interval_120m_exceeds_claude_1h_max_cache_ttl',
-            ];
-        }
-        return [
-            'strategy'                => 'prompt_caching',
-            'cache_control'           => ['type' => 'ephemeral', 'ttl' => '1h'],
-            'min_cache_tokens'        => 1024,
-            'batch_fallback_endpoint' => '/v1/messages/batches',
-            'telemetry_field'         => 'usage.cache_read_input_tokens',
-        ];
-    }
-
-    if ($prov === 'mistral') {
-        if (str_starts_with($modelLower, 'zai-glm') || str_starts_with($modelLower, 'glm-')) {
-            return [
-                'strategy'         => 'regular',
-                'prompt_cache_key' => null,
-            ];
-        }
-        return [
-            'strategy'                => 'prompt_caching',
-            'prompt_cache_key'        => $promptCacheKey,
-            'discount_pct'            => 90,
-            'batch_fallback_endpoint' => '/v1/batch/jobs',
-            'telemetry_field'         => 'usage.prompt_tokens_details.cached_tokens',
-        ];
-    }
+function buildProviderCachingConfig(
+    string $provider,
+    string $model,
+    ?string $promptCacheKey = null,
+    string $scheduleInterval = 'every_120m',
+    bool $searchEnabled = false,
+    bool $isTestRun = false,
+    ?bool $supportsBatchOverride = null,
+    ?bool $supportsToolsOverride = null
+): array {
+    $spec = resolveTargetLlmSpec(
+        $provider . '/' . $model,
+        $scheduleInterval,
+        $searchEnabled,
+        $isTestRun,
+        $supportsBatchOverride,
+        $supportsToolsOverride
+    );
 
     return [
-        'strategy'         => 'regular',
-        'prompt_cache_key' => null,
+        'gateway'            => 'openrouter',
+        'strategy'           => $spec['execution_strategy'],
+        'prompt_cache_key'   => null,
+        'supports_batch_api' => $spec['supports_batch_api'],
+        'supports_tools'     => $spec['supports_tools'],
+        'endpoint'           => $spec['execution_strategy'] === 'batch_api' ? '/api/v1/batches' : '/api/v1/chat/completions',
     ];
 }
 
@@ -819,7 +845,7 @@ function normalizeTargetLlmToken(string $rawToken): string
  * @param array<int, string> $fallback
  * @return array<int, string>
  */
-function normalizeTargetLlmsList($rawTargetLlms, array $fallback = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash']): array
+function normalizeTargetLlmsList($rawTargetLlms, array $fallback = ['openai/gpt-6-luna', 'google/gemini-3.5-flash']): array
 {
     if (is_string($rawTargetLlms)) {
         $rawTargetLlms = explode(',', $rawTargetLlms);

@@ -102,9 +102,14 @@ $brandDomains = json_decode($config['brand_domains'] ?: '[]', true) ?? [];
 $competitors = json_decode($config['competitors'] ?: '[]', true) ?? [];
 $scheduleInterval = normalizeScheduleInterval((string)($config['schedule_interval'] ?? 'every_120m'));
 
-// Resolve target LLMs while preserving per-model granularity (including Mistral vs Z.ai GLM)
+// Resolve target LLMs & optional market_region while preserving per-model capabilities
 $rawTargetLLMs = $requestData['target_llms'] ?? json_decode($config['target_llms'] ?: '[]', true);
 $targetLLMs = normalizeTargetLlmsList($rawTargetLLMs);
+$rawMarketRegion = $requestData['market_region'] ?? ($config['market_region'] ?? null);
+$marketRegion = (is_string($rawMarketRegion) && trim($rawMarketRegion) !== '' && !in_array(strtolower(trim($rawMarketRegion)), ['auto', 'default', 'none', 'null'], true))
+    ? mb_substr(trim($rawMarketRegion), 0, 100)
+    : null;
+$modelCaps = getLlmModelCapabilitiesMap($db);
 
 // Resolve search grounding enabled
 if (isset($requestData['search_enabled'])) {
@@ -202,14 +207,14 @@ $customIds = [];
 $insBatchReq = $db->prepare("
     INSERT INTO batch_requests (
         custom_id, prompt_cache_key, execution_strategy,
-        user_id, config_id, prompt, provider, model,
+        user_id, config_id, prompt, market_region, provider, model,
         brand_name, brand_domains, competitors,
-        search_enabled, is_test_run, status, scheduled_for, submitted_at
+        search_enabled, supports_tools, is_test_run, status, scheduled_for, submitted_at
     ) VALUES (
         :custom_id, :prompt_cache_key, :execution_strategy,
-        :user_id, :config_id, :prompt, :provider, :model,
+        :user_id, :config_id, :prompt, :market_region, :provider, :model,
         :brand_name, :brand_domains, :competitors,
-        :search_enabled, 1, 'submitted', NOW(), NOW()
+        :search_enabled, :supports_tools, 1, 'submitted', NOW(), NOW()
     )
 ");
 
@@ -218,36 +223,59 @@ $competitorsJson = json_encode($competitors, JSON_UNESCAPED_UNICODE | JSON_UNESC
 
 foreach ($prompts as $promptText) {
     foreach ($targetLLMs as $llmToken) {
-        $spec = resolveTargetLlmSpec((string)$llmToken, $scheduleInterval);
+        $baseSpec = resolveTargetLlmSpec((string)$llmToken, $scheduleInterval, $searchEnabled, true);
+        $caps = $modelCaps[$baseSpec['id']] ?? [];
+        $spec = resolveTargetLlmSpec(
+            (string)$llmToken,
+            $scheduleInterval,
+            $searchEnabled,
+            true,
+            array_key_exists('supports_batch_api', $caps) ? (bool)$caps['supports_batch_api'] : null,
+            array_key_exists('supports_tools', $caps) ? (bool)$caps['supports_tools'] : null
+        );
         $customId = sprintf('cl_u%d_c%d_%d_%s', $userId, $configId, time(), substr(bin2hex(random_bytes(4)), 0, 8));
-        $promptCacheKey = buildPromptCacheKey($configId, $promptText, $spec['id']);
-        $providerCachingConfig = buildProviderCachingConfig($spec['provider'], $spec['model'], $promptCacheKey, $scheduleInterval);
+        $promptCacheKey = null;
+        $providerCachingConfig = buildProviderCachingConfig(
+            $spec['provider'],
+            $spec['model'],
+            null,
+            $scheduleInterval,
+            $searchEnabled,
+            true,
+            $spec['supports_batch_api'],
+            $spec['supports_tools']
+        );
 
         $insBatchReq->execute([
             ':custom_id'          => $customId,
-            ':prompt_cache_key'   => $promptCacheKey,
-            ':execution_strategy' => $spec['execution_strategy'],
+            ':prompt_cache_key'   => null,
+            ':execution_strategy' => 'regular',
             ':user_id'            => $userId,
             ':config_id'          => $configId,
             ':prompt'             => $promptText,
+            ':market_region'      => $marketRegion,
             ':provider'           => $spec['provider'],
             ':model'              => $spec['model'],
             ':brand_name'         => $brandName,
             ':brand_domains'      => $domainsJson,
             ':competitors'        => $competitorsJson,
             ':search_enabled'     => $searchEnabled ? 1 : 0,
+            ':supports_tools'     => $spec['supports_tools'] ? 1 : 0,
         ]);
 
         $customIds[] = $customId;
         $batchItems[] = [
             'custom_id'               => $customId,
-            'prompt_cache_key'        => $promptCacheKey,
-            'execution_strategy'      => $spec['execution_strategy'],
+            'prompt_cache_key'        => null,
+            'execution_strategy'      => 'regular',
             'provider_caching_config' => $providerCachingConfig,
             'prompt'                  => $promptText,
+            'market_region'           => $marketRegion,
             'provider'                => $spec['provider'],
             'model'                   => $spec['model'],
             'target_llm'              => $spec['id'],
+            'supports_tools'          => $spec['supports_tools'],
+            'supports_batch_api'      => $spec['supports_batch_api'],
             'is_test_run'             => true,
         ];
     }
@@ -257,8 +285,8 @@ $firstItem = $batchItems[0] ?? [];
 $webhookPayload = [
     'run_id'                  => $runId,
     'custom_id'               => $firstItem['custom_id'] ?? null,
-    'prompt_cache_key'        => $firstItem['prompt_cache_key'] ?? null,
-    'execution_strategy'      => $firstItem['execution_strategy'] ?? 'prompt_caching',
+    'prompt_cache_key'        => null,
+    'execution_strategy'      => 'regular',
     'provider_caching_config' => $firstItem['provider_caching_config'] ?? null,
     'is_test_run'             => true,
     'batch_items'             => $batchItems,
@@ -269,10 +297,12 @@ $webhookPayload = [
     'brand_domains'           => $brandDomains,
     'prompt'                  => $prompts[0],
     'prompts'                 => $prompts,
+    'market_region'           => $marketRegion,
     'competitors'             => $competitors,
     'target_llms'             => $targetLLMs,
     'schedule_interval'       => $scheduleInterval,
     'search_enabled'          => $searchEnabled,
+    'supports_tools'          => $firstItem['supports_tools'] ?? true,
     'response_mode'           => $mode,
     'created_at'              => date('Y-m-d\TH:i:s\Z'),
 ];

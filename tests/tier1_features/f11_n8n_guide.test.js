@@ -29,12 +29,15 @@ test('Feature 11.1: PoC Guide file structure and sections', () => {
   }
 });
 
-test('Feature 11.2: Credentials configuration documentation for all 3 LLMs', () => {
+test('Feature 11.2: Credentials configuration documentation covers unified OpenRouter gateway and provider families', () => {
   if (fs.existsSync(GUIDE_PATH)) {
     const text = fs.readFileSync(GUIDE_PATH, 'utf8');
-    assert.ok(text.includes('OpenAI'));
-    assert.ok(text.includes('Anthropic'));
-    assert.ok(text.includes('Gemini'));
+    assert.ok(text.includes('OpenRouter'));
+    assert.ok(text.includes('tjmYBMIQa9Fo3kYL'));
+    assert.ok(text.includes('openRouterApi'));
+    assert.match(text, /openai/i);
+    assert.match(text, /anthropic/i);
+    assert.match(text, /google/i);
   } else {
     assert.ok(true);
   }

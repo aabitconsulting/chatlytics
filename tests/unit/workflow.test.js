@@ -71,7 +71,8 @@ describe('n8n Universal Worker Workflow & Code Node Unit Tests', () => {
       const requiredTypes = [
         'n8n-nodes-base.webhook',
         'n8n-nodes-base.scheduleTrigger',
-        'n8n-nodes-base.switch',
+        'n8n-nodes-base.if',
+        'n8n-nodes-base.set',
         'n8n-nodes-base.httpRequest',
         'n8n-nodes-base.code',
         'n8n-nodes-base.respondToWebhook'
@@ -222,8 +223,12 @@ SEARCH: true`;
       assert.equal(item1.provider, 'openai');
       assert.equal(item1.search_enabled, true);
 
+      assert.equal(item1.eu_hosted, false);
+      assert.equal(item1.prompt_cache_key, null);
+      assert.equal(item1.execution_strategy, 'regular');
       const item2 = result[1].json;
-      assert.equal(item2.provider, 'gemini');
+      assert.equal(item2.provider, 'google');
+      assert.equal(item2.model_key, 'google/gemini-3.5-flash');
     });
 
     it('should parse raw JSON chat input matching universal normalizer schema', () => {
@@ -315,7 +320,8 @@ SEARCH: true`;
 
       assert.equal(result.length, 1);
       assert.equal(result[0].json.brand_name, 'SparseBrand');
-      assert.equal(result[0].json.provider, 'gemini');
+      assert.equal(result[0].json.provider, 'google');
+      assert.equal(result[0].json.model, 'gemini-3.5-flash');
     });
   });
 
@@ -756,69 +762,97 @@ SEARCH: true`;
       assert.ok(!JSON.stringify(ingestNode).includes('$env'), 'Dispatch Ingest API must not reference $env');
     });
 
-    it('should evaluate native OpenAI v2.3 Search Enabled and No Search nodes cleanly', () => {
-      const openAiSearchNode = workflow.nodes.find(n => n.name === 'Call OpenAI (Search Enabled)');
-      const openAiNoSearchNode = workflow.nodes.find(n => n.name === 'Call OpenAI (No Search)');
-      assert.ok(openAiSearchNode, 'Call OpenAI (Search Enabled) node must exist');
-      assert.ok(openAiNoSearchNode, 'Call OpenAI (No Search) node must exist');
-      assert.equal(openAiSearchNode.type, '@n8n/n8n-nodes-langchain.openAi');
-      assert.equal(openAiSearchNode.typeVersion, 2.3);
-      assert.equal(openAiSearchNode.parameters.simplify, false);
-      assert.equal(openAiSearchNode.onError, 'continueRegularOutput');
-      assert.ok(openAiSearchNode.parameters.builtInTools?.webSearch, 'Search variant must enable builtInTools.webSearch');
-      assert.deepEqual(openAiNoSearchNode.parameters.builtInTools, {}, 'No-search variant must have empty builtInTools');
+    it('should evaluate unified Call OpenRouter Chat HTTP node cleanly (zero system prompts, zero caching, dynamic search tools/plugins)', () => {
+      const chatNode = workflow.nodes.find(n => n.name === 'Call OpenRouter Chat');
+      assert.ok(chatNode, 'Call OpenRouter Chat node must exist');
+      assert.equal(chatNode.type, 'n8n-nodes-base.httpRequest');
+      assert.equal(chatNode.parameters.url, 'https://openrouter.ai/api/v1/chat/completions');
+      assert.equal(chatNode.parameters.authentication, 'predefinedCredentialType');
+      assert.equal(chatNode.parameters.nodeCredentialType, 'openRouterApi');
+      assert.equal(chatNode.credentials?.openRouterApi?.id, 'tjmYBMIQa9Fo3kYL');
+      assert.equal(chatNode.credentials?.openRouterApi?.name, 'OpenRouter - Chatlytics - Chatlytics-dev-1');
+      assert.equal(chatNode.parameters.options?.response?.response?.neverError, true);
+      assert.equal(chatNode.onError, 'continueRegularOutput');
 
-      const evalModel = evaluateN8nExpression(openAiSearchNode.parameters.modelId.value, { json: { model: 'gpt-6-luna' } });
-      assert.equal(evalModel, 'gpt-6-luna');
-      const evalPrompt = evaluateN8nExpression(openAiSearchNode.parameters.responses.values[1].content, { json: { prompt: 'Beste Software' } });
-      assert.equal(evalPrompt, 'Beste Software');
+      // With search + tools supported -> openrouter:web_search tool & ONLY user prompt
+      const bodyWithTools = JSON.parse(evaluateN8nExpression(chatNode.parameters.jsonBody, {
+        json: {
+          model_key: 'openai/gpt-6-luna',
+          prompt: 'Beste Software',
+          llm_prompt: 'Beste Software\nBeziehe deine Antwort speziell auf den Markt/die Region: DACH.',
+          search_enabled: true,
+          supports_tools: true
+        }
+      }));
+      assert.equal(bodyWithTools.model, 'openai/gpt-6-luna');
+      assert.equal(bodyWithTools.messages.length, 1);
+      assert.equal(bodyWithTools.messages[0].role, 'user');
+      assert.ok(bodyWithTools.messages[0].content.includes('DACH'));
+      assert.equal(bodyWithTools.messages.some(m => m.role === 'system'), false);
+      assert.equal(bodyWithTools.prompt_cache_key, undefined);
+      assert.deepEqual(bodyWithTools.tools, [{ type: 'openrouter:web_search' }]);
+      assert.equal(bodyWithTools.plugins, undefined);
+
+      // Without tools support + search ON -> plugins: [{ id: 'web' }]
+      const bodyWithPlugin = JSON.parse(evaluateN8nExpression(chatNode.parameters.jsonBody, {
+        json: { model_key: 'qwen/qwen3-max', prompt: 'Best CRM?', search_enabled: true, supports_tools: false }
+      }));
+      assert.equal(bodyWithPlugin.tools, undefined);
+      assert.deepEqual(bodyWithPlugin.plugins, [{ id: 'web' }]);
+
+      // Perplexity -> native web search without extra tools/plugins
+      const bodyPplx = JSON.parse(evaluateN8nExpression(chatNode.parameters.jsonBody, {
+        json: { model_key: 'perplexity/sonar-pro', prompt: 'Best ERP?', search_enabled: true, supports_tools: false }
+      }));
+      assert.equal(bodyPplx.tools, undefined);
+      assert.equal(bodyPplx.plugins, undefined);
     });
 
-    it('should evaluate native Gemini v1.2, Mistral EU HTTP, and Optional Anthropic Fallback nodes cleanly', () => {
-      const geminiSearchNode = workflow.nodes.find(n => n.name === 'Call Google Gemini (Search Enabled)');
-      const geminiNoSearchNode = workflow.nodes.find(n => n.name === 'Call Google Gemini (No Search)');
-      assert.ok(geminiSearchNode && geminiNoSearchNode, 'Both Gemini Search and No-Search nodes must exist');
-      assert.equal(geminiSearchNode.type, '@n8n/n8n-nodes-langchain.googleGemini');
-      assert.equal(geminiSearchNode.typeVersion, 1.2);
-      assert.equal(geminiSearchNode.parameters.simplify, false);
-      assert.equal(geminiSearchNode.onError, 'continueRegularOutput');
-      assert.ok(geminiSearchNode.parameters.builtInTools?.googleSearch !== undefined, 'Gemini Search must configure googleSearch');
-      assert.deepEqual(geminiNoSearchNode.parameters.builtInTools, {}, 'Gemini No-Search must leave builtInTools empty');
+    it('should evaluate OpenRouter Batch API nodes and Live Model Discovery nodes with tjmYBMIQa9Fo3kYL', () => {
+      for (const nodeName of ['Discover OpenRouter Models', 'Submit OpenRouter Batch', 'Fetch OpenRouter Batch Status']) {
+        const n = workflow.nodes.find(x => x.name === nodeName);
+        assert.ok(n, nodeName + ' node must exist');
+        assert.equal(n.type, 'n8n-nodes-base.httpRequest');
+        assert.equal(n.parameters.authentication, 'predefinedCredentialType');
+        assert.equal(n.parameters.nodeCredentialType, 'openRouterApi');
+        assert.equal(n.credentials?.openRouterApi?.id, 'tjmYBMIQa9Fo3kYL');
+        assert.ok(!JSON.stringify(n).includes('$env'), nodeName + ' must not reference $env');
+      }
 
-      const evalGemModelNoPrefix = evaluateN8nExpression(geminiSearchNode.parameters.modelId.value, { json: { model: 'gemini-3.5-flash' } });
-      assert.equal(evalGemModelNoPrefix, 'models/gemini-3.5-flash');
-      const evalGemModelWithPrefix = evaluateN8nExpression(geminiSearchNode.parameters.modelId.value, { json: { model: 'models/gemini-3.5-flash' } });
-      assert.equal(evalGemModelWithPrefix, 'models/gemini-3.5-flash');
+      const fetchBatchNode = workflow.nodes.find(n => n.name === 'Fetch OpenRouter Batch Status');
+      assert.equal(
+        evaluateN8nExpression(fetchBatchNode.parameters.url, { json: { provider_batch_id: 'batch_abc_123' } }),
+        'https://openrouter.ai/api/v1/batches/batch_abc_123'
+      );
 
-      const mistralNode = workflow.nodes.find(n => n.name === 'Call Mistral EU (Mistral & GLM)');
-      assert.ok(mistralNode, 'Call Mistral EU node must exist');
-      assert.equal(mistralNode.type, 'n8n-nodes-base.httpRequest');
-      assert.equal(mistralNode.parameters.url, 'https://api.eu.mistral.ai/v1/chat/completions');
-      assert.equal(mistralNode.parameters.authentication, 'predefinedCredentialType');
-      assert.equal(mistralNode.parameters.nodeCredentialType, 'mistralCloudApi');
-      assert.equal(mistralNode.parameters.options?.response?.response?.neverError, true);
-      const mistralBody = evaluateN8nExpression(mistralNode.parameters.jsonBody, { json: { prompt: 'GLM EU Test', model: 'zai-glm-5-3' } });
-      const parsedMistral = JSON.parse(mistralBody);
-      assert.equal(parsedMistral.model, 'zai-glm-5-3');
-      assert.equal(parsedMistral.messages[1].content, 'GLM EU Test');
-
-      const claudeFallback = workflow.nodes.find(n => n.name === 'Call Anthropic Claude (Optional Fallback)');
-      assert.ok(claudeFallback, 'Optional Anthropic fallback node must exist');
-      assert.equal(claudeFallback.disabled, true, 'Optional Anthropic fallback route must be disabled by default');
+      for (const backendNodeName of ['Poll Open Batches', 'Register OpenRouter Batch', 'Fail OpenRouter Batch']) {
+        const bn = workflow.nodes.find(x => x.name === backendNodeName);
+        assert.ok(bn, backendNodeName + ' must exist');
+        assert.equal(bn.parameters.authentication, 'genericCredentialType');
+        assert.equal(bn.parameters.genericAuthType, 'httpHeaderAuth');
+        assert.ok(!JSON.stringify(bn).includes('$env'), backendNodeName + ' must not reference $env');
+      }
     });
 
-    it('should evaluate Dispatch Ingest API updated payload fields including run_id, status, eu_hosted, and cost_credits', () => {
+    it('should evaluate Dispatch Ingest API updated payload fields including run_id, status, geo metrics, and cost_credits', () => {
       const ingestNode = workflow.nodes.find(n => n.name === 'Dispatch Ingest API');
       const evalBody = evaluateN8nExpression(ingestNode.parameters.jsonBody, {
         json: {
-          run_id: 'run_eu_1',
+          run_id: 'run_or_1',
           config_id: 101,
           user_id: 5,
           prompt: 'EU Mistral Test',
-          provider: 'mistral',
-          model: 'zai-glm-5-3',
-          eu_hosted: true,
-          search_enabled: true,
+          market_region: 'FR',
+          prompt_language: 'de',
+          inferred_region: 'DACH',
+          effective_region: 'FR',
+          region_source: 'user_setting',
+          regional_citation_count: 1,
+          regional_citation_ratio: 100,
+          provider: 'mistralai',
+          model: 'mistral-medium-3-5',
+          execution_strategy: 'batch_api',
+          search_enabled: false,
           status: 'failed',
           error_message: 'Model unavailable',
           cost_credits: 0,
@@ -830,16 +864,21 @@ SEARCH: true`;
         }
       });
       const parsed = JSON.parse(evalBody);
-      assert.equal(parsed.run_id, 'run_eu_1');
-      assert.equal(parsed.provider, 'mistral');
-      assert.equal(parsed.model, 'zai-glm-5-3');
-      assert.equal(parsed.eu_hosted, true);
+      assert.equal(parsed.run_id, 'run_or_1');
+      assert.equal(parsed.provider, 'mistralai');
+      assert.equal(parsed.model, 'mistral-medium-3-5');
+      assert.equal(parsed.eu_hosted, false);
+      assert.equal(parsed.prompt_cache_key, null);
+      assert.equal(parsed.execution_strategy, 'batch_api');
+      assert.equal(parsed.market_region, 'FR');
+      assert.equal(parsed.effective_region, 'FR');
+      assert.equal(parsed.region_source, 'user_setting');
       assert.equal(parsed.status, 'failed');
       assert.equal(parsed.error_message, 'Model unavailable');
       assert.equal(parsed.cost_credits, 0);
     });
 
-    it('should expand Mistral + GLM models with eu_hosted flag, multi-prompts, and extract OpenAI Responses citations & error states cleanly', () => {
+    it('should normalize legacy Mistral/GLM/Gemini aliases onto OpenRouter slugs and extract Annotations & error states cleanly', () => {
       const normalizer = workflow.nodes.find(n => n.name === 'Universal Normalizer');
       const extractor = workflow.nodes.find(n => n.name === 'Secondary Extractor');
       const calc = workflow.nodes.find(n => n.name === 'Metric & MECE Calculator');
@@ -856,14 +895,16 @@ SEARCH: true`;
           }
         }
       }]);
-      // Notice 'glm' resolves cleanly to 'mistral/zai-glm-5-3' and deduplicates against explicit 'mistral/zai-glm-5-3' -> 4 unique models * 2 prompts = 8 items
+      // 'glm' resolves to 'z-ai/glm-5.3' and deduplicates against 'mistral/zai-glm-5-3' -> 4 unique models * 2 prompts = 8 items
       assert.equal(normItems.length, 8);
-      const glmItems = normItems.filter(it => it.json.model === 'zai-glm-5-3');
+      const glmItems = normItems.filter(it => it.json.model_key === 'z-ai/glm-5.3');
       assert.equal(glmItems.length, 2);
-      assert.equal(glmItems[0].json.provider, 'mistral');
-      assert.equal(glmItems[0].json.eu_hosted, true);
+      assert.equal(glmItems[0].json.provider, 'z-ai');
+      assert.equal(glmItems[0].json.model, 'glm-5.3');
+      assert.equal(glmItems[0].json.eu_hosted, false);
+      assert.equal(glmItems[0].json.prompt_cache_key, null);
 
-      // Extract native OpenAI Responses API payload with url_citation annotations
+      // Extract OpenAI Responses / Annotations citation payload cleanly
       const respApiItem = executeNodeJsCode(extractor.parameters.jsCode, [{
         json: {
           output: [
@@ -888,15 +929,15 @@ SEARCH: true`;
       assert.ok(respApiItem[0].json.raw_response_text.includes('Personio'));
       assert.equal(respApiItem[0].json.citations.length, 1);
       assert.equal(respApiItem[0].json.citations[0].is_brand_domain, true);
-      assert.equal(respApiItem[0].json.citations[0].source_type, 'openai_web_search');
+      assert.equal(respApiItem[0].json.citations[0].source_type, 'openrouter_web_search');
 
-      // Extract Mistral error object -> status: 'failed' -> Calculator preserves failed status & 0 credits
+      // Extract error object -> status: 'failed' -> Calculator preserves failed status & 0 credits
       const failedExt = executeNodeJsCode(extractor.parameters.jsCode, [{
         json: { object: 'error', message: 'Invalid model: zai-glm-unknown', type: 'invalid_request_error' }
       }], {}, {
         'Universal Normalizer': {
-          first: () => ({ json: { provider: 'mistral', model: 'zai-glm-5-3', brand_name: 'Personio', eu_hosted: true } }),
-          itemMatching: () => ({ json: { provider: 'mistral', model: 'zai-glm-5-3', brand_name: 'Personio', eu_hosted: true } })
+          first: () => ({ json: { provider: 'z-ai', model: 'glm-5.3', brand_name: 'Personio', eu_hosted: false } }),
+          itemMatching: () => ({ json: { provider: 'z-ai', model: 'glm-5.3', brand_name: 'Personio', eu_hosted: false } })
         }
       });
       assert.equal(failedExt[0].json.status, 'failed');
@@ -909,7 +950,7 @@ SEARCH: true`;
       assert.equal(failedCalc[0].json.mece_category, '4_GENERIC');
 
       const formattedFail = executeNodeJsCode(formatter.parameters.jsCode, failedCalc);
-      assert.ok(formattedFail[0].json.output.includes('EU-Hosted'));
+      assert.ok(formattedFail[0].json.output.includes('OpenRouter'));
       assert.ok(formattedFail[0].json.output.includes('failed'));
     });
 
@@ -926,7 +967,7 @@ SEARCH: true`;
       assert.ok(parsed.timestamp);
     });
 
-    it('should verify Poll Backend Queue, Anthropic Fallback, Remote Alignment, and Resilience Configs', () => {
+    it('should verify Poll Backend Queue, Strategy Routers, Zero $env / Zero System Prompt / Zero Cache Control', () => {
       const queueNode = workflow.nodes.find(n => n.name === 'Poll Backend Queue');
       assert.ok(queueNode, 'Poll Backend Queue node must exist');
       const queueUrl = evaluateN8nExpression(queueNode.parameters.url, {});
@@ -935,25 +976,17 @@ SEARCH: true`;
       assert.equal(queueNode.parameters.genericAuthType, 'httpHeaderAuth');
       assert.ok(queueNode.credentials?.httpHeaderAuth?.name, 'Poll Backend Queue must reference httpHeaderAuth credential');
       assert.equal(queueNode.parameters.options?.timeout, 15000);
-      assert.ok(!JSON.stringify(queueNode).includes('$env'), 'Poll Backend Queue must not reference $env');
 
-      const claudeNode = workflow.nodes.find(n => n.name === 'Call Anthropic Claude (Optional Fallback)');
-      assert.equal(claudeNode.parameters.authentication, 'predefinedCredentialType');
-      assert.equal(claudeNode.parameters.nodeCredentialType, 'anthropicApi');
-      assert.ok(!JSON.stringify(claudeNode).includes('$env'), 'Anthropic Fallback must not reference $env');
+      for (const ifName of ['Execution Strategy Router', 'Route Batch Outcome', 'Route Discover Models', 'Check Async Mode', 'Check Batch Submit Success']) {
+        const ifNode = workflow.nodes.find(n => n.name === ifName);
+        assert.ok(ifNode, ifName + ' must exist');
+        assert.equal(ifNode.type, 'n8n-nodes-base.if');
+      }
 
-      // Remote-drift alignment checks
-      const routerNode = workflow.nodes.find(n => n.name === 'Provider Router');
-      assert.equal(routerNode.parameters.mode, 'rules');
-      for (const name of ['Call OpenAI (Search Enabled)', 'Call OpenAI (No Search)']) {
-        const n = workflow.nodes.find(x => x.name === name);
-        assert.equal(n.parameters.images, undefined, name + ' must not contain stray images payload');
-        assert.equal(n.parameters.responses.values[1].role, 'user', name + ' must include role: user');
-      }
-      for (const name of ['Call Google Gemini (Search Enabled)', 'Call Google Gemini (No Search)']) {
-        const n = workflow.nodes.find(x => x.name === name);
-        assert.equal(n.parameters.messages.values[0].role, 'user', name + ' must include role: user');
-      }
+      const rawWorkflow = JSON.stringify(workflow);
+      assert.equal(rawWorkflow.includes('$env'), false, 'Workflow must never reference $env');
+      assert.equal(rawWorkflow.includes('cache_control'), false, 'Workflow must not configure input prompt cache_control');
+      assert.equal(rawWorkflow.includes('systemMessage'), false, 'Workflow must not configure systemMessage');
 
       const respondSync = workflow.nodes.find(n => n.name === 'Respond Webhook Sync');
       assert.ok(respondSync, 'Respond Webhook Sync must exist');
@@ -1101,6 +1134,154 @@ SEARCH: true`;
       const evaluatedBody = JSON.parse(evaluateN8nExpression(ingestNode.parameters.jsonBody, { json: out[0].json }));
       assert.equal(evaluatedBody.config_id, null);
       assert.equal(evaluatedBody.user_id, null);
+    });
+  });
+
+  // =========================================================================
+  // Suite 10: OpenRouter Gateway, 36-Language Set Node, Batch Lifecycle & Admin Regression Guards
+  // =========================================================================
+  describe('Suite 10: 36-Language Set Node, OpenRouter Batches & Admin Regression Guards', () => {
+    it('Market & Region Language Templates Set node contains all 36 languages (24 EU + 12 global)', () => {
+      const setNode = workflow.nodes.find(n => n.name === 'Market & Region Language Templates');
+      assert.ok(setNode, 'Market & Region Language Templates Set node must exist');
+      assert.equal(setNode.type, 'n8n-nodes-base.set');
+      const assignments = setNode.parameters?.assignments?.assignments || [];
+      assert.equal(assignments.length, 36, 'Must contain exactly 36 language template assignments');
+
+      const expectedLangs = [
+        'bg', 'hr', 'cs', 'da', 'nl', 'en', 'et', 'fi', 'fr', 'de', 'el', 'hu',
+        'ga', 'it', 'lv', 'lt', 'mt', 'pl', 'pt', 'ro', 'sk', 'sl', 'es', 'sv',
+        'zh', 'hi', 'ar', 'bn', 'ru', 'ja', 'ko', 'tr', 'vi', 'id', 'th', 'uk'
+      ];
+      const byName = new Map(assignments.map(a => [a.name, a]));
+      for (const lang of expectedLangs) {
+        const entry = byName.get('tpl_' + lang);
+        assert.ok(entry, 'Missing Set assignment tpl_' + lang);
+        assert.ok(String(entry.value).includes('{region}'), 'tpl_' + lang + ' must include {region} placeholder');
+      }
+    });
+
+    it('Apply Localized Market Extension appends localized sentence into llm_prompt without mutating raw prompt', () => {
+      const setNode = workflow.nodes.find(n => n.name === 'Market & Region Language Templates');
+      const extNode = workflow.nodes.find(n => n.name === 'Apply Localized Market Extension');
+      assert.ok(extNode, 'Apply Localized Market Extension Code node must exist');
+
+      const tplObj = {};
+      for (const a of (setNode.parameters?.assignments?.assignments || [])) {
+        tplObj[a.name] = a.value;
+      }
+
+      // 1. market_region = 'FR' on German prompt -> appends French extension
+      const withRegion = executeNodeJsCode(extNode.parameters.jsCode, [{
+        json: { ...tplObj, prompt: 'Welche HR Software empfiehlst du?', market_region: 'FR', provider: 'openai', model: 'gpt-6-luna' }
+      }])[0].json;
+      assert.equal(withRegion.prompt, 'Welche HR Software empfiehlst du?');
+      assert.ok(withRegion.llm_prompt.startsWith('Welche HR Software empfiehlst du?\n'));
+      assert.ok(withRegion.llm_prompt.includes('Adapte ta réponse'));
+      assert.ok(withRegion.llm_prompt.includes('FR'));
+      assert.equal(withRegion.prompt_language, 'de');
+      assert.equal(withRegion.effective_region, 'FR');
+      assert.equal(withRegion.region_source, 'user_setting');
+      assert.equal(withRegion.extension_language, 'fr');
+
+      // 2. market_region = null on Japanese prompt -> raw prompt untouched, region inferred JP
+      const autoJapan = executeNodeJsCode(extNode.parameters.jsCode, [{
+        json: { ...tplObj, prompt: '中小企業向けの最適な人事ソフトウェアは何ですか？', market_region: null }
+      }])[0].json;
+      assert.equal(autoJapan.llm_prompt, autoJapan.prompt);
+      assert.equal(autoJapan.prompt_language, 'ja');
+      assert.equal(autoJapan.effective_region, 'JP');
+      assert.equal(autoJapan.region_source, 'prompt_language');
+      assert.equal(autoJapan.extension_language, null);
+    });
+
+    it('OpenRouter Batch nodes prepare, deduplicate, and correlate completed & failed batches', () => {
+      const prepNode = workflow.nodes.find(n => n.name === 'Prepare OpenRouter Batches');
+      const dedupeNode = workflow.nodes.find(n => n.name === 'Deduplicate OpenRouter Batches');
+      const corrNode = workflow.nodes.find(n => n.name === 'Correlate OpenRouter Batch Results');
+
+      const prepared = executeNodeJsCode(prepNode.parameters.jsCode, [
+        { json: { model_key: 'openai/gpt-6-luna', custom_id: 'cid_1', prompt: 'Q1', llm_prompt: 'Q1\nTailor: US', execution_strategy: 'batch_api' } },
+        { json: { model_key: 'openai/gpt-6-luna', custom_id: 'cid_2', prompt: 'Q2', llm_prompt: 'Q2\nTailor: US', execution_strategy: 'batch_api' } },
+        { json: { model_key: 'anthropic/claude-sonnet-5.5', custom_id: 'cid_3', prompt: 'Q3', llm_prompt: 'Q3', execution_strategy: 'batch_api' } }
+      ]);
+      assert.equal(prepared.length, 2, 'Requests must group by OpenRouter model slug');
+      assert.equal(prepared[0].json.request_body.endpoint, '/v1/chat/completions');
+      assert.equal(prepared[0].json.request_body.model, 'openai/gpt-6-luna');
+      const oaiReq = prepared[0].json.request_body.requests;
+      assert.equal(oaiReq.length, 2);
+      assert.equal(oaiReq[0].custom_id, 'cid_1');
+      assert.deepEqual(oaiReq[0].body.messages, [{ role: 'user', content: 'Q1\nTailor: US' }]);
+
+      const deduped = executeNodeJsCode(dedupeNode.parameters.jsCode, [{
+        json: {
+          open_batches: [
+            { provider_batch_id: 'batch_1', custom_id: 'cid_1', api_base_url: 'https://chatlytics.de' },
+            { provider_batch_id: 'batch_1', custom_id: 'cid_2', api_base_url: 'https://chatlytics.de' },
+            { provider_batch_id: null, custom_id: 'cid_no_id' }
+          ]
+        }
+      }]);
+      assert.equal(deduped.length, 1);
+      assert.equal(deduped[0].json.pending_items.length, 2);
+
+      const correlated = executeNodeJsCode(corrNode.parameters.jsCode, [{
+        json: {
+          id: 'batch_1',
+          status: 'completed',
+          results: [
+            { custom_id: 'cid_1', response: { status_code: 200, body: { choices: [{ message: { content: 'Personio leads.' } }] } } }
+          ]
+        }
+      }], null, {
+        'Deduplicate OpenRouter Batches': {
+          itemMatching: () => ({ json: deduped[0].json }),
+          all: () => deduped
+        }
+      });
+      assert.equal(correlated.length, 1);
+      assert.equal(correlated[0].json._batch_route, 'completed');
+      assert.equal(correlated[0].json.custom_id, 'cid_1');
+      assert.equal(correlated[0].json.execution_strategy, 'batch_api');
+      assert.equal(correlated[0].json.prompt_cache_key, null);
+
+      const failedCorr = executeNodeJsCode(corrNode.parameters.jsCode, [{
+        json: { id: 'batch_1', status: 'expired', error: { message: '24h batch window expired' } }
+      }], null, {
+        'Deduplicate OpenRouter Batches': {
+          itemMatching: () => ({ json: deduped[0].json }),
+          all: () => deduped
+        }
+      });
+      assert.equal(failedCorr.length, 1);
+      assert.equal(failedCorr[0].json._batch_route, 'failed');
+      assert.deepEqual(failedCorr[0].json.custom_ids, ['cid_1', 'cid_2']);
+    });
+
+    it('Filter & Normalize OpenRouter Models collapses :batch suffix and filters 15-provider whitelist + modalities', () => {
+      const filterNode = workflow.nodes.find(n => n.name === 'Filter & Normalize OpenRouter Models');
+      const res = executeNodeJsCode(filterNode.parameters.jsCode, [{
+        json: {
+          data: [
+            { id: 'openai/gpt-6-luna', name: 'GPT-6 Luna', supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+            { id: 'openai/gpt-6-luna:batch', name: 'GPT-6 Luna (Batch)', supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+            { id: 'openai/gpt-image-1', name: 'Image Model', architecture: { input_modalities: ['text'], output_modalities: ['image'] } },
+            { id: 'cohere/command-a', name: 'Cohere Model', architecture: { input_modalities: ['text'], output_modalities: ['text'] } }
+          ]
+        }
+      }]);
+      assert.equal(res[0].json.status, 'ok');
+      assert.equal(res[0].json.models.length, 1);
+      assert.equal(res[0].json.models[0].id, 'openai/gpt-6-luna');
+      assert.equal(res[0].json.models[0].supports_batch_api, true);
+      assert.equal(res[0].json.models[0].supports_tools, true);
+      assert.equal(res[0].json.models[0].is_allowed, false);
+    });
+
+    it('Regression guard: assets/js/admin.js has zero bare setButtonLoading(...) calls so live sync never throws ReferenceError', () => {
+      const adminJs = fs.readFileSync(path.resolve(__dirname, '../../assets/js/admin.js'), 'utf8');
+      const bareCalls = adminJs.match(/(?<![A-Za-z0-9_.])setButtonLoading\s*\(/g) || [];
+      assert.equal(bareCalls.length, 0, 'assets/js/admin.js must only invoke setAdminButtonLoading or ChatlyticsNotify?.setButtonLoading');
     });
   });
 });

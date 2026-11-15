@@ -548,7 +548,7 @@
             <span id="user-results-total-badge" class="badge badge-success font-mono">0</span>
           </div>
           <p class="card-hint" data-i18n="results.subtitle">
-            Jede Zeile kann aufgeklappt werden, um das exakte Prompt-Antwort-Paar, Quellen, Wettbewerber und Token-Caching-Details Ihrer dedizierten Benutzertabelle einzusehen.
+            Jede Zeile kann aufgeklappt werden, um das exakte Prompt-Antwort-Paar, Quellen, Region-Auswertung und Telemetrie-Details Ihrer dedizierten Benutzertabelle einzusehen.
           </p>
         </div>
 
@@ -645,8 +645,31 @@
           <label for="cfg-prompts" class="form-label">Prompts / Suchanfragen (eine pro Zeile) *</label>
           <textarea id="cfg-prompts" class="form-control form-textarea" rows="4" placeholder="Welche HR-Software eignet sich für den Mittelstand?" required></textarea>
           <p id="cfg-prompts-lock-hint" class="cfg-tier-hint hidden" data-i18n="config.prompts_locked_hint">
-            Hinweis: Nach Aktivierung von Full Start sind die Prompts gesperrt, um konsistente Zeitreihen und Provider-Prompt-Caching zu gewährleisten.
+            Hinweis: Nach Aktivierung von Full Start sind die Prompts und der Ziel-Markt gesperrt, um konsistente Zeitreihen zu gewährleisten.
           </p>
+        </div>
+
+        <div class="form-group">
+          <label for="cfg-market-region" class="form-label" data-i18n="config.market_region_label">Ziel-Markt / Region (optional)</label>
+          <select id="cfg-market-region" class="form-control form-select">
+            <option value="" data-i18n="config.market_region_auto">Auto (aus Prompt-Sprache ableiten)</option>
+            <option value="DACH">DACH (DE / AT / CH)</option>
+            <option value="DE">Deutschland (DE)</option>
+            <option value="AT">Österreich (AT)</option>
+            <option value="CH">Schweiz (CH)</option>
+            <option value="FR">Frankreich (FR)</option>
+            <option value="ES">Spanien (ES)</option>
+            <option value="IT">Italien (IT)</option>
+            <option value="NL">Niederlande (NL)</option>
+            <option value="UK">Vereinigtes Königreich (UK)</option>
+            <option value="US">USA (US)</option>
+            <option value="EU">Europäische Union (EU)</option>
+            <option value="GLOBAL">Global</option>
+            <option value="__custom__" data-i18n="config.market_region_custom_opt">Benutzerdefiniert…</option>
+          </select>
+          <input type="text" id="cfg-market-region-custom" class="form-control hidden" style="margin-top: 0.5rem;" maxlength="64" placeholder="z.B. Benelux, Nordics, Bayern" data-i18n-placeholder="config.market_region_custom_placeholder">
+          <p class="form-hint" data-i18n="config.market_region_hint">Leer lassen für automatische Region-Erkennung anhand der Prompt-Sprache. Wenn gesetzt, wird eine kurze Marktvorgabe in der Zielsprache an den User-Prompt angehängt.</p>
+          <p id="cfg-market-region-lock-hint" class="cfg-tier-hint hidden" data-i18n="config.market_region_locked_hint">Hinweis: Nach Full Start ist die Ziel-Region gemeinsam mit den Prompts gesperrt.</p>
         </div>
 
         <div class="form-group">
@@ -683,71 +706,67 @@
 
         <div id="cfg-custom-models-section">
         <div class="form-group">
-          <span class="form-label" data-i18n="config.llms_label">Ziel-KI-Modelle (Multi-LLM)</span>
-          <p class="form-hint" data-i18n="config.llms_hint">Wählen Sie mindestens ein Modell. Mistral- und GLM-5.3-Modelle laufen streng auf Mistrals EU-Endpunkt (api.eu.mistral.ai).</p>
+          <span class="form-label" data-i18n="config.llms_label">Ziel-KI-Modelle (Multi-LLM via OpenRouter)</span>
+          <p class="form-hint" data-i18n="config.llms_hint">Wählen Sie mindestens ein Modell. Alle Modelle werden einheitlich über OpenRouter ausgeführt (ohne System-Prompts, mit Batch-API bei deaktivierter Suche).</p>
           <div id="cfg-llms-list" class="llm-selector-grid">
             <label class="llm-option-card">
               <span class="llm-option-main">
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="openai/gpt-6-luna" checked>
                 <span>
                   <span class="llm-option-title">OpenAI · GPT-6 Luna</span>
-                  <span class="llm-option-meta">openai/gpt-6-luna · 24h Prompt-Cache</span>
+                  <span class="llm-option-meta">openai/gpt-6-luna · OpenRouter Batch-API</span>
                 </span>
               </span>
             </label>
 
             <label class="llm-option-card">
               <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="gemini/models/gemini-3.5-flash" checked>
+                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="google/gemini-3.5-flash" checked>
                 <span>
                   <span class="llm-option-title">Google · Gemini 3.5 Flash</span>
-                  <span class="llm-option-meta">models/gemini-3.5-flash · Context-Cache</span>
+                  <span class="llm-option-meta">google/gemini-3.5-flash · OpenRouter Batch-API</span>
                 </span>
               </span>
             </label>
 
             <label class="llm-option-card">
               <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistral/mistral-medium-latest" checked>
+                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistralai/mistral-medium-3-5" checked>
                 <span>
-                  <span class="llm-option-title">Mistral Medium Latest</span>
-                  <span class="llm-option-meta">mistral-medium-latest · 90% Prompt-Cache</span>
+                  <span class="llm-option-title">Mistral · Medium 3.5</span>
+                  <span class="llm-option-meta">mistralai/mistral-medium-3-5 · OpenRouter Batch-API</span>
                 </span>
               </span>
-              <span class="badge badge-eu" data-i18n="config.eu_hosted_badge">EU-Hosted</span>
             </label>
 
             <label class="llm-option-card">
               <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistral/mistral-large-latest">
+                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistralai/mistral-large-4-0">
                 <span>
-                  <span class="llm-option-title">Mistral Large Latest</span>
-                  <span class="llm-option-meta">mistral-large-latest · 90% Prompt-Cache</span>
+                  <span class="llm-option-title">Mistral · Large 4.0</span>
+                  <span class="llm-option-meta">mistralai/mistral-large-4-0 · OpenRouter Standard</span>
                 </span>
               </span>
-              <span class="badge badge-eu" data-i18n="config.eu_hosted_badge">EU-Hosted</span>
             </label>
 
             <label class="llm-option-card">
               <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistral/zai-glm-5-3" checked>
+                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="z-ai/glm-5.3" checked>
                 <span>
-                  <span class="llm-option-title">Z.ai GLM 5.3 (Mistral EU)</span>
-                  <span class="llm-option-meta">zai-glm-5-3 · Standard-Inferenz</span>
+                  <span class="llm-option-title">Z.ai · GLM 5.3</span>
+                  <span class="llm-option-meta">z-ai/glm-5.3 · OpenRouter Batch-API</span>
                 </span>
               </span>
-              <span class="badge badge-eu" data-i18n="config.eu_hosted_badge">EU-Hosted</span>
             </label>
 
             <label class="llm-option-card">
               <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistral/zai-glm-5-3-flash">
+                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="z-ai/glm-5.3-flash">
                 <span>
-                  <span class="llm-option-title">Z.ai GLM 5.3 Flash (Mistral EU)</span>
-                  <span class="llm-option-meta">zai-glm-5-3-flash · Standard-Inferenz</span>
+                  <span class="llm-option-title">Z.ai · GLM 5.3 Flash</span>
+                  <span class="llm-option-meta">z-ai/glm-5.3-flash · OpenRouter Batch-API</span>
                 </span>
               </span>
-              <span class="badge badge-eu" data-i18n="config.eu_hosted_badge">EU-Hosted</span>
             </label>
           </div>
         </div>
@@ -757,7 +776,7 @@
             <input type="checkbox" id="cfg-search-enabled" checked>
             <span>
               <span class="llm-option-title" data-i18n="config.search_label">Live-Websuche / Search Grounding aktivieren</span>
-              <span class="llm-option-meta" data-i18n="config.search_hint">OpenAI (Web Search) &amp; Google Gemini (Google Search Grounding) nutzen Live-Suche wenn aktiviert; Mistral EU nutzt Standard-Inferenz.</span>
+              <span class="llm-option-meta" data-i18n="config.search_hint">Nutzt OpenRouter Web-Search Tool / Web-Plugin für aktuelle Quellenzitate (Sofort-Ausführung; ohne Websuche läuft Batch-API automatisch).</span>
             </span>
           </label>
         </div>

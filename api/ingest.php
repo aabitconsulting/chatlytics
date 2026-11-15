@@ -140,7 +140,7 @@ if (!in_array($geoQuadrant, $validGeo, true)) {
 $db = $resolveDb();
 
 // Resolve user_id and brand_name from tracking_configs / batch_requests
-$cfgStmt = $db->prepare("SELECT id, user_id, brand_name, schedule_interval FROM tracking_configs WHERE id = :id LIMIT 1");
+$cfgStmt = $db->prepare("SELECT id, user_id, brand_name, market_region, schedule_interval FROM tracking_configs WHERE id = :id LIMIT 1");
 $cfgStmt->execute([':id' => $configId]);
 $cfgRecord = $cfgStmt->fetch();
 if (!$cfgRecord) {
@@ -156,14 +156,29 @@ $scheduleInterval = normalizeScheduleInterval((string)($cfgRecord['schedule_inte
 
 // Resolve execution_strategy, prompt_cache_key, batch_id, cached_tokens, and is_test_run
 $spec = resolveTargetLlmSpec($provider . '/' . $model, $scheduleInterval);
-$executionStrategy = trim((string)($payload['execution_strategy'] ?? ($batchRecord['execution_strategy'] ?? $spec['execution_strategy'])));
+$executionStrategy = trim((string)($payload['execution_strategy'] ?? ($batchRecord['execution_strategy'] ?? 'regular')));
 if (!in_array($executionStrategy, ['prompt_caching', 'batch_api', 'regular'], true)) {
-    $executionStrategy = $spec['execution_strategy'];
+    $executionStrategy = 'regular';
 }
 
 $promptCacheKey = isset($payload['prompt_cache_key']) && trim((string)$payload['prompt_cache_key']) !== ''
     ? trim((string)$payload['prompt_cache_key'])
-    : ($batchRecord['prompt_cache_key'] ?? buildPromptCacheKey($configId, $prompt, $spec['id']));
+    : ($batchRecord['prompt_cache_key'] ?? null);
+
+$rawMarketRegion = $payload['market_region'] ?? ($batchRecord['market_region'] ?? ($cfgRecord['market_region'] ?? null));
+$marketRegion = (is_string($rawMarketRegion) && trim($rawMarketRegion) !== '' && !in_array(strtolower(trim($rawMarketRegion)), ['auto', 'default', 'none', 'null'], true))
+    ? mb_substr(trim($rawMarketRegion), 0, 100)
+    : null;
+$promptLanguage = isset($payload['prompt_language']) && trim((string)$payload['prompt_language']) !== ''
+    ? mb_substr(strtolower(trim((string)$payload['prompt_language'])), 0, 16)
+    : null;
+$rawEffectiveRegion = $payload['effective_region'] ?? $marketRegion ?? null;
+$effectiveRegion = (is_string($rawEffectiveRegion) && trim($rawEffectiveRegion) !== '')
+    ? mb_substr(trim($rawEffectiveRegion), 0, 100)
+    : null;
+$regionSource = isset($payload['region_source']) && trim((string)$payload['region_source']) !== ''
+    ? mb_substr(trim((string)$payload['region_source']), 0, 32)
+    : ($marketRegion !== null ? 'user_setting' : ($effectiveRegion !== null ? 'prompt_language' : null));
 
 $batchId = isset($payload['batch_id']) && trim((string)$payload['batch_id']) !== ''
     ? trim((string)$payload['batch_id'])
@@ -309,9 +324,30 @@ $brandCited = ($runStatus === 'completed' && (!empty($payload['brand_cited']) ||
 $competitorCited = ($runStatus === 'completed' && !empty($payload['competitor_cited'])) ? 1 : 0;
 $runDurationMs = isset($payload['run_duration_ms']) ? (int)$payload['run_duration_ms'] : null;
 $costCredits = isset($payload['cost_credits']) ? (int)$payload['cost_credits'] : ($runStatus === 'failed' ? 0 : 1);
-$euHosted = isset($payload['eu_hosted'])
-    ? (bool)$payload['eu_hosted']
-    : (strtolower($provider) === 'mistral' || str_contains(strtolower($model), 'zai-glm'));
+$euHosted = isset($payload['eu_hosted']) ? (bool)$payload['eu_hosted'] : false;
+
+$competitors = ($runStatus === 'completed' && is_array($payload['competitors'] ?? null)) ? $payload['competitors'] : [];
+$citations = ($runStatus === 'completed' && is_array($payload['citations'] ?? null)) ? $payload['citations'] : [];
+
+$computedRegionalCount = 0;
+foreach ($citations as $citItem) {
+    if (is_array($citItem) && !empty($citItem['is_regional_tld'])) {
+        $computedRegionalCount++;
+    }
+}
+$regionalCitationCount = ($runStatus === 'completed')
+    ? (isset($payload['regional_citation_count']) && is_numeric($payload['regional_citation_count'])
+        ? max(0, (int)$payload['regional_citation_count'])
+        : $computedRegionalCount)
+    : 0;
+$regionalCitationRatio = null;
+if ($runStatus === 'completed') {
+    if (isset($payload['regional_citation_ratio']) && is_numeric($payload['regional_citation_ratio'])) {
+        $regionalCitationRatio = round((float)$payload['regional_citation_ratio'], 2);
+    } elseif (count($citations) > 0) {
+        $regionalCitationRatio = round(($regionalCitationCount / count($citations)) * 100, 2);
+    }
+}
 
 $promptPayload = json_encode(array_merge($payload, [
     'run_id'             => $externalRunId ?? ('run_' . time()),
@@ -323,23 +359,30 @@ $promptPayload = json_encode(array_merge($payload, [
     'cached_tokens'      => $cachedTokens,
     'is_test_run'        => (bool)$isTestRun,
     'eu_hosted'          => $euHosted,
+    'market_region'      => $marketRegion,
+    'prompt_language'    => $promptLanguage,
+    'effective_region'   => $effectiveRegion,
+    'region_source'      => $regionSource,
 ]), JSON_UNESCAPED_UNICODE);
 
 $responsePayload = json_encode([
-    'response_text'      => $rawResponseText,
-    'mece_category'      => $meceCategory,
-    'geo_quadrant'       => $geoQuadrant,
-    'status'             => $runStatus,
-    'error_message'      => $errorMessage,
-    'execution_strategy' => $executionStrategy,
-    'input_tokens'       => $inputTokens,
-    'output_tokens'      => $outputTokens,
-    'cached_tokens'      => $cachedTokens,
-    'eu_hosted'          => $euHosted,
+    'response_text'           => $rawResponseText,
+    'mece_category'           => $meceCategory,
+    'geo_quadrant'            => $geoQuadrant,
+    'status'                  => $runStatus,
+    'error_message'           => $errorMessage,
+    'execution_strategy'      => $executionStrategy,
+    'input_tokens'            => $inputTokens,
+    'output_tokens'           => $outputTokens,
+    'cached_tokens'           => $cachedTokens,
+    'eu_hosted'               => $euHosted,
+    'market_region'           => $marketRegion,
+    'prompt_language'         => $promptLanguage,
+    'effective_region'        => $effectiveRegion,
+    'region_source'           => $regionSource,
+    'regional_citation_count' => $regionalCitationCount,
+    'regional_citation_ratio' => $regionalCitationRatio,
 ], JSON_UNESCAPED_UNICODE);
-
-$competitors = ($runStatus === 'completed' && is_array($payload['competitors'] ?? null)) ? $payload['competitors'] : [];
-$citations = ($runStatus === 'completed' && is_array($payload['citations'] ?? null)) ? $payload['citations'] : [];
 
 // Provision physical per-user result table BEFORE starting transaction
 // (MySQL CREATE TABLE IF NOT EXISTS causes an implicit commit if run inside a transaction)
@@ -353,18 +396,22 @@ try {
         INSERT INTO llm_runs (
             config_id, user_id, custom_id, batch_id, execution_strategy,
             prompt_cache_key, input_tokens, output_tokens, cached_tokens, is_test_run,
-            prompt, provider, model, brand_name, status, error_message,
+            prompt, market_region, prompt_language, effective_region, region_source,
+            provider, model, brand_name, status, error_message,
             brand_mentioned, brand_prominence_rank, char_earliness, word_earliness,
             relative_position_pct, total_chars, total_words, mece_category, geo_quadrant,
-            has_citations, brand_cited, competitor_cited, raw_prompt_payload,
+            has_citations, brand_cited, competitor_cited, regional_citation_count,
+            regional_citation_ratio, raw_prompt_payload,
             raw_response_text, raw_response_payload, run_duration_ms, cost_credits, created_at
         ) VALUES (
             :config_id, :user_id, :custom_id, :batch_id, :execution_strategy,
             :prompt_cache_key, :input_tokens, :output_tokens, :cached_tokens, :is_test_run,
-            :prompt, :provider, :model, :brand_name, :status, :error_message,
+            :prompt, :market_region, :prompt_language, :effective_region, :region_source,
+            :provider, :model, :brand_name, :status, :error_message,
             :brand_mentioned, :brand_prominence_rank, :char_earliness, :word_earliness,
             :relative_position_pct, :total_chars, :total_words, :mece_category, :geo_quadrant,
-            :has_citations, :brand_cited, :competitor_cited, :raw_prompt_payload,
+            :has_citations, :brand_cited, :competitor_cited, :regional_citation_count,
+            :regional_citation_ratio, :raw_prompt_payload,
             :raw_response_text, :raw_response_payload, :run_duration_ms, :cost_credits, NOW()
         )
     ");
@@ -380,6 +427,10 @@ try {
         ':cached_tokens'          => $cachedTokens,
         ':is_test_run'            => $isTestRun,
         ':prompt'                 => $prompt,
+        ':market_region'          => $marketRegion,
+        ':prompt_language'        => $promptLanguage,
+        ':effective_region'       => $effectiveRegion,
+        ':region_source'          => $regionSource,
         ':provider'               => $provider,
         ':model'                  => $model,
         ':brand_name'             => $brandName,
@@ -397,6 +448,8 @@ try {
         ':has_citations'          => $hasCitations,
         ':brand_cited'            => $brandCited,
         ':competitor_cited'       => $competitorCited,
+        ':regional_citation_count'=> $regionalCitationCount,
+        ':regional_citation_ratio'=> $regionalCitationRatio,
         ':raw_prompt_payload'     => $promptPayload,
         ':raw_response_text'      => $rawResponseText,
         ':raw_response_payload'   => $responsePayload,
@@ -456,9 +509,9 @@ try {
         $insCit = $db->prepare("
             INSERT INTO run_citations (
                 run_id, citation_url, citation_domain, citation_title, is_brand_domain,
-                is_competitor_domain, citation_index, created_at
+                is_competitor_domain, is_regional_tld, citation_index, created_at
             ) VALUES (
-                :run_id, :url, :domain, :title, :is_brand, :is_comp, :cit_idx, NOW()
+                :run_id, :url, :domain, :title, :is_brand, :is_comp, :is_reg, :cit_idx, NOW()
             )
         ");
         $idx = 1;
@@ -472,6 +525,7 @@ try {
                 'citation_title'       => $cit['citation_title'] ?? $cit['title'] ?? null,
                 'is_brand_domain'      => !empty($cit['is_brand_domain']) ? 1 : 0,
                 'is_competitor_domain' => !empty($cit['is_competitor_domain']) ? 1 : 0,
+                'is_regional_tld'      => !empty($cit['is_regional_tld']) ? 1 : 0,
                 'citation_index'       => (int)($cit['citation_index'] ?? $idx++),
             ];
             $normalizedCitations[] = $citRow;
@@ -482,6 +536,7 @@ try {
                 ':title'    => $citRow['citation_title'],
                 ':is_brand' => $citRow['is_brand_domain'],
                 ':is_comp'  => $citRow['is_competitor_domain'],
+                ':is_reg'   => $citRow['is_regional_tld'],
                 ':cit_idx'  => $citRow['citation_index'],
             ]);
         }
@@ -489,37 +544,43 @@ try {
 
     // 5.4 Insert into user's physical table `user_results_<user_id>`
     $userResultId = insertUserResultRow($db, $userId, [
-        'run_id'                => $insertedRunId,
-        'config_id'             => $configId,
-        'custom_id'             => $customId,
-        'batch_id'              => $batchId,
-        'execution_strategy'    => $executionStrategy,
-        'prompt_cache_key'      => $promptCacheKey,
-        'input_tokens'          => $inputTokens,
-        'output_tokens'         => $outputTokens,
-        'cached_tokens'         => $cachedTokens,
-        'trigger_source'        => $triggerSource,
-        'is_test_run'           => $isTestRun,
-        'prompt'                => $prompt,
-        'llm_answer'            => $rawResponseText,
-        'provider'              => $provider,
-        'model'                 => $model,
-        'brand_name'            => $brandName,
-        'status'                => $runStatus,
-        'brand_mentioned'       => $brandMentioned,
-        'char_earliness'        => $charEarliness,
-        'word_earliness'        => $wordEarliness,
-        'relative_position_pct' => $relativePos,
-        'total_chars'           => $totalChars,
-        'total_words'           => $totalWords,
-        'mece_category'         => $meceCategory,
-        'geo_quadrant'          => $geoQuadrant,
-        'brand_cited'           => $brandCited,
-        'competitor_cited'      => $competitorCited,
-        'competitors_json'      => $normalizedCompetitors,
-        'citations_json'        => $normalizedCitations,
-        'error_message'         => $errorMessage,
-        'scheduled_at'          => $scheduledAt,
+        'run_id'                  => $insertedRunId,
+        'config_id'               => $configId,
+        'custom_id'               => $customId,
+        'batch_id'                => $batchId,
+        'execution_strategy'      => $executionStrategy,
+        'prompt_cache_key'        => $promptCacheKey,
+        'input_tokens'            => $inputTokens,
+        'output_tokens'           => $outputTokens,
+        'cached_tokens'           => $cachedTokens,
+        'trigger_source'          => $triggerSource,
+        'is_test_run'             => $isTestRun,
+        'prompt'                  => $prompt,
+        'market_region'           => $marketRegion,
+        'prompt_language'         => $promptLanguage,
+        'effective_region'        => $effectiveRegion,
+        'region_source'           => $regionSource,
+        'llm_answer'              => $rawResponseText,
+        'provider'                => $provider,
+        'model'                   => $model,
+        'brand_name'              => $brandName,
+        'status'                  => $runStatus,
+        'brand_mentioned'         => $brandMentioned,
+        'char_earliness'          => $charEarliness,
+        'word_earliness'          => $wordEarliness,
+        'relative_position_pct'   => $relativePos,
+        'total_chars'             => $totalChars,
+        'total_words'             => $totalWords,
+        'mece_category'           => $meceCategory,
+        'geo_quadrant'            => $geoQuadrant,
+        'brand_cited'             => $brandCited,
+        'competitor_cited'        => $competitorCited,
+        'regional_citation_count' => $regionalCitationCount,
+        'regional_citation_ratio' => $regionalCitationRatio,
+        'competitors_json'        => $normalizedCompetitors,
+        'citations_json'          => $normalizedCitations,
+        'error_message'           => $errorMessage,
+        'scheduled_at'            => $scheduledAt,
     ]);
 
     // 5.5 Update batch_requests correlation row if custom_id was matched
@@ -558,8 +619,14 @@ try {
         'is_test_run'        => (bool)$isTestRun,
         'provider'           => $provider,
         'model'              => $model,
-        'eu_hosted'          => $euHosted,
-        'status'             => $runStatus,
+        'eu_hosted'               => $euHosted,
+        'market_region'           => $marketRegion,
+        'prompt_language'         => $promptLanguage,
+        'effective_region'        => $effectiveRegion,
+        'region_source'           => $regionSource,
+        'regional_citation_count' => $regionalCitationCount,
+        'regional_citation_ratio' => $regionalCitationRatio,
+        'status'                  => $runStatus,
         'error_message'      => $errorMessage,
         'mece_category'      => $meceCategory,
         'geo_quadrant'       => $geoQuadrant,

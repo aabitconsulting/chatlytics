@@ -2335,8 +2335,8 @@ class DashboardController {
   }
 
   getStrategyLabel(strategy) {
-    if (strategy === 'prompt_caching') return this.tMsg('results.strategy_prompt_caching', 'Prompt-Caching');
     if (strategy === 'batch_api') return this.tMsg('results.strategy_batch_api', 'Batch-API');
+    if (strategy === 'prompt_caching') return this.tMsg('results.strategy_prompt_caching_legacy', 'Prompt-Caching (Legacy)');
     return this.tMsg('results.strategy_regular', 'Standard-Abfrage');
   }
 
@@ -2458,11 +2458,21 @@ class DashboardController {
       : String(r.llm_answer || '—');
     block(i18n.t('results.detail_answer', 'Vollständige KI-Antwort'), true).appendChild(pre(answerText));
 
-    const telemetry = block(i18n.t('results.detail_telemetry', 'Provider-Korrelation & Token-Caching'));
+    const telemetry = block(i18n.t('results.detail_telemetry', 'Gateway-Korrelation & Region'));
     const dl = document.createElement('dl');
     dl.className = 'accordion-telemetry';
+    const regionSourceText = r.region_source === 'user_setting'
+      ? this.tMsg('results.region_source_user', 'User-Setting')
+      : (r.region_source === 'prompt_language' ? this.tMsg('results.region_source_lang', 'Auto: Sprache') : this.tMsg('results.region_source_fallback', 'Fallback'));
+    const regCount = Number(r.regional_citation_count || 0);
+    const regRatioStr = (r.regional_citation_ratio !== null && r.regional_citation_ratio !== undefined)
+      ? `${regCount} (${Math.round(Number(r.regional_citation_ratio) * 100)}%)`
+      : '—';
     const telemetryPairs = [
       [this.tMsg('results.label_strategy', 'Ausführung'), this.getStrategyLabel(strategy)],
+      [this.tMsg('results.label_prompt_language', 'Prompt-Sprache'), (r.prompt_language && r.prompt_language !== 'unknown') ? String(r.prompt_language).toUpperCase() : '—'],
+      [this.tMsg('results.label_effective_region', 'Effektive Region'), `${r.effective_region || 'GLOBAL'} (${regionSourceText})`],
+      [this.tMsg('results.label_regional_citations', 'Regionale Quellen'), regRatioStr],
     ];
     if (isAdminViewer) {
       telemetryPairs.push(
@@ -2471,9 +2481,7 @@ class DashboardController {
       );
     }
     telemetryPairs.push(
-      [this.tMsg('results.label_cached_tokens', 'Gecachte Input-Tokens'), String(Number(r.cached_tokens || 0))],
       ['custom_id', r.custom_id || '—'],
-      ['prompt_cache_key', r.prompt_cache_key || '—'],
       ['batch_id', r.batch_id || '—']
     );
     telemetryPairs.forEach(([k, v]) => {
@@ -2521,6 +2529,9 @@ class DashboardController {
           li.appendChild(a);
         } else {
           li.textContent = url || domain || '—';
+        }
+        if (c && c.is_regional_tld) {
+          li.append(' ', badge(this.tMsg('results.regional_tld_badge', 'Regional'), 'badge-success'));
         }
         ul.appendChild(li);
       });

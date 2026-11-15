@@ -19,7 +19,8 @@ const REQUIRED_CANVAS_FIELDS = ['name', 'nodes', 'connections'];
 const REQUIRED_NODE_TYPES = [
   'n8n-nodes-base.webhook',
   'n8n-nodes-base.scheduleTrigger',
-  'n8n-nodes-base.switch',
+  'n8n-nodes-base.if',
+  'n8n-nodes-base.set',
   'n8n-nodes-base.httpRequest',
   'n8n-nodes-base.code',
   'n8n-nodes-base.respondToWebhook'

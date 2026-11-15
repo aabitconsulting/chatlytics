@@ -24,7 +24,12 @@ const {
   countChars,
   buildGermanRegex,
   matchesDomain,
-  extractDomainFromUrl
+  extractDomainFromUrl,
+  detectPromptLanguage,
+  inferRegionFromLanguage,
+  resolveGeographicContext,
+  shouldUseGermanTransliteration,
+  isRegionalCitationDomain
 } = require(metricsEnginePath);
 
 describe('Chatlytics Metric Engine & MECE Logic Unit Tests', () => {
@@ -492,6 +497,84 @@ describe('Chatlytics Metric Engine & MECE Logic Unit Tests', () => {
       assert.strictEqual(cit.domain, cit.citation_domain);
       assert.strictEqual(typeof cit.is_brand_domain, 'boolean');
       assert.strictEqual(typeof cit.is_competitor_domain, 'boolean');
+    });
+  });
+
+  // =========================================================================
+  // Suite 8: Geographic Language Inference, Market Region & DIN 5007-2 Gating
+  // =========================================================================
+  describe('Suite 8: Market Region, Language Inference & DIN 5007-2 Gating', () => {
+    it('should detect prompt language accurately across German, English, French, Spanish, Japanese, Korean & Arabic', () => {
+      assert.strictEqual(detectPromptLanguage('Welche HR-Software eignet sich für den Mittelstand in Deutschland?'), 'de');
+      assert.strictEqual(detectPromptLanguage('What is the best payroll software for scaling startups?'), 'en');
+      assert.strictEqual(detectPromptLanguage('Quel logiciel RH recommandez-vous pour une PME en France ?'), 'fr');
+      assert.strictEqual(detectPromptLanguage('¿Cuál es el mejor software de recursos humanos para empresas?'), 'es');
+      assert.strictEqual(detectPromptLanguage('中小企業向けの最適な人事ソフトウェアは何ですか？'), 'ja');
+      assert.strictEqual(detectPromptLanguage('스타트업에 가장 적합한 인사 관리 소프트웨어는 무엇인가요?'), 'ko');
+      assert.strictEqual(detectPromptLanguage('ما هو أفضل برنامج لإدارة الموارد البشرية للشركات؟'), 'ar');
+    });
+
+    it('should infer region when market_region is unset and honor user_setting precedence when set', () => {
+      const inferred = resolveGeographicContext('Welche HR-Software ist für den Mittelstand geeignet?', null);
+      assert.strictEqual(inferred.prompt_language, 'de');
+      assert.strictEqual(inferred.inferred_region, 'DACH');
+      assert.strictEqual(inferred.effective_region, 'DACH');
+      assert.strictEqual(inferred.region_source, 'prompt_language');
+
+      const userOverride = resolveGeographicContext('Welche HR-Software ist für den Mittelstand geeignet?', 'FR');
+      assert.strictEqual(userOverride.prompt_language, 'de');
+      assert.strictEqual(userOverride.market_region, 'FR');
+      assert.strictEqual(userOverride.effective_region, 'FR');
+      assert.strictEqual(userOverride.region_source, 'user_setting');
+    });
+
+    it('should gate DIN 5007-2 transliteration (ae/oe/ue/ss) to German/DACH context while retaining Unicode NFD folding globally', () => {
+      assert.strictEqual(shouldUseGermanTransliteration({ prompt_language: 'de', effective_region: 'DACH', market_region: null }), true);
+      assert.strictEqual(shouldUseGermanTransliteration({ prompt_language: 'fr', effective_region: 'FR', market_region: 'FR' }), false);
+
+      const enMetrics = calculateMetrics({
+        text: 'Mueller Group provides cloud analytics, while Müller Dairy stays local.',
+        brand_name: 'Müller',
+        prompt: 'Compare enterprise cloud software providers in France',
+        market_region: 'FR'
+      });
+      // Non-German FR context preserves exact accented "Müller" match without DIN transliterating "Mueller"
+      assert.strictEqual(enMetrics.german_transliteration_used, false);
+      assert.strictEqual(enMetrics.brand_mentioned, true);
+      assert.strictEqual(enMetrics.char_earliness, 46);
+
+      const deMetrics = calculateMetrics({
+        text: 'Mueller Group ist bekannt.',
+        brand_name: 'Müller',
+        prompt: 'Welche Anbieter sind in Deutschland bekannt?'
+      });
+      assert.strictEqual(deMetrics.german_transliteration_used, true);
+      assert.strictEqual(deMetrics.brand_mentioned, true);
+      assert.strictEqual(deMetrics.char_earliness, 0);
+    });
+
+    it('should compute regional ccTLD fit (is_regional_tld, regional_citation_count, regional_citation_ratio)', () => {
+      assert.strictEqual(isRegionalCitationDomain('personio.de', 'DACH'), true);
+      assert.strictEqual(isRegionalCitationDomain('jobs.ch', 'DACH'), true);
+      assert.strictEqual(isRegionalCitationDomain('lemonde.fr', 'DACH'), false);
+      assert.strictEqual(isRegionalCitationDomain('lemonde.fr', 'FR'), true);
+
+      const res = calculateMetrics({
+        text: 'Personio und Workday werden häufig genannt.',
+        brand_name: 'Personio',
+        brand_domains: ['personio.de'],
+        prompt: 'Welche HR Software empfiehlst du?',
+        market_region: 'DACH',
+        citations: [
+          { citation_url: 'https://www.personio.de/hr', citation_domain: 'personio.de' },
+          { citation_url: 'https://news.ycombinator.com/item?id=1', citation_domain: 'news.ycombinator.com' }
+        ]
+      });
+      assert.strictEqual(res.effective_region, 'DACH');
+      assert.strictEqual(res.regional_citation_count, 1);
+      assert.strictEqual(res.regional_citation_ratio, 0.5);
+      assert.strictEqual(res.citations[0].is_regional_tld, true);
+      assert.strictEqual(res.citations[1].is_regional_tld, false);
     });
   });
 });

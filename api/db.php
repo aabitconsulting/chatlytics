@@ -154,7 +154,7 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 `config_id` INTEGER NULL DEFAULT NULL,
                 `custom_id` TEXT NULL DEFAULT NULL,
                 `batch_id` TEXT NULL DEFAULT NULL,
-                `execution_strategy` TEXT NOT NULL DEFAULT 'prompt_caching',
+                `execution_strategy` TEXT NOT NULL DEFAULT 'regular',
                 `prompt_cache_key` TEXT NULL DEFAULT NULL,
                 `input_tokens` INTEGER NOT NULL DEFAULT 0,
                 `output_tokens` INTEGER NOT NULL DEFAULT 0,
@@ -162,6 +162,10 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 `trigger_source` TEXT NOT NULL DEFAULT 'batch_queue',
                 `is_test_run` INTEGER NOT NULL DEFAULT 0,
                 `prompt` TEXT NOT NULL,
+                `market_region` TEXT NULL DEFAULT NULL,
+                `prompt_language` TEXT NULL DEFAULT NULL,
+                `effective_region` TEXT NULL DEFAULT NULL,
+                `region_source` TEXT NULL DEFAULT NULL,
                 `llm_answer` TEXT NULL DEFAULT NULL,
                 `provider` TEXT NOT NULL,
                 `model` TEXT NOT NULL,
@@ -177,6 +181,8 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 `geo_quadrant` TEXT NOT NULL DEFAULT 'NONE',
                 `brand_cited` INTEGER NOT NULL DEFAULT 0,
                 `competitor_cited` INTEGER NOT NULL DEFAULT 0,
+                `regional_citation_count` INTEGER NOT NULL DEFAULT 0,
+                `regional_citation_ratio` REAL NULL DEFAULT NULL,
                 `competitors_json` TEXT NULL DEFAULT NULL,
                 `citations_json` TEXT NULL DEFAULT NULL,
                 `error_message` TEXT NULL DEFAULT NULL,
@@ -197,6 +203,24 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 if (!in_array('output_tokens', $urCols, true)) {
                     $db->exec("ALTER TABLE `{$table}` ADD COLUMN `output_tokens` INTEGER NOT NULL DEFAULT 0");
                 }
+                if (!in_array('market_region', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `market_region` TEXT NULL DEFAULT NULL");
+                }
+                if (!in_array('prompt_language', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `prompt_language` TEXT NULL DEFAULT NULL");
+                }
+                if (!in_array('effective_region', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `effective_region` TEXT NULL DEFAULT NULL");
+                }
+                if (!in_array('region_source', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `region_source` TEXT NULL DEFAULT NULL");
+                }
+                if (!in_array('regional_citation_count', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `regional_citation_count` INTEGER NOT NULL DEFAULT 0");
+                }
+                if (!in_array('regional_citation_ratio', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `regional_citation_ratio` REAL NULL DEFAULT NULL");
+                }
             }
         } catch (Throwable $e) {
             // Ignore column upgrade failure on mock drivers
@@ -209,7 +233,7 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 `config_id` BIGINT UNSIGNED NULL DEFAULT NULL,
                 `custom_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
                 `batch_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-                `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prompt_caching',
+                `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'regular',
                 `prompt_cache_key` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
                 `input_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
                 `output_tokens` INT UNSIGNED NOT NULL DEFAULT 0,
@@ -217,6 +241,10 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 `trigger_source` VARCHAR(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'batch_queue',
                 `is_test_run` TINYINT(1) NOT NULL DEFAULT 0,
                 `prompt` TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
+                `market_region` VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+                `prompt_language` VARCHAR(16) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+                `effective_region` VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+                `region_source` VARCHAR(32) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
                 `llm_answer` MEDIUMTEXT COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
                 `provider` VARCHAR(64) COLLATE utf8mb4_unicode_ci NOT NULL,
                 `model` VARCHAR(128) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -232,6 +260,8 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 `geo_quadrant` ENUM('1_CITATION_HIJACK', '2_PARAMETRIC_BLINDSPOT', '3_BRAND_HALO_TRAP', '4_BURIED_WINNER', 'NONE') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'NONE',
                 `brand_cited` TINYINT(1) NOT NULL DEFAULT 0,
                 `competitor_cited` TINYINT(1) NOT NULL DEFAULT 0,
+                `regional_citation_count` INT UNSIGNED NOT NULL DEFAULT 0,
+                `regional_citation_ratio` DECIMAL(5,2) NULL DEFAULT NULL,
                 `competitors_json` JSON NULL DEFAULT NULL,
                 `citations_json` JSON NULL DEFAULT NULL,
                 `error_message` TEXT COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
@@ -253,6 +283,24 @@ function ensureUserResultsTable(PDO $db, int $userId): string
                 }
                 if (!in_array('output_tokens', $urCols, true)) {
                     $db->exec("ALTER TABLE `{$table}` ADD COLUMN `output_tokens` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `input_tokens`");
+                }
+                if (!in_array('market_region', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `market_region` VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `prompt`");
+                }
+                if (!in_array('prompt_language', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `prompt_language` VARCHAR(16) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `market_region`");
+                }
+                if (!in_array('effective_region', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `effective_region` VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `prompt_language`");
+                }
+                if (!in_array('region_source', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `region_source` VARCHAR(32) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `effective_region`");
+                }
+                if (!in_array('regional_citation_count', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `regional_citation_count` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `competitor_cited`");
+                }
+                if (!in_array('regional_citation_ratio', $urCols, true)) {
+                    $db->exec("ALTER TABLE `{$table}` ADD COLUMN `regional_citation_ratio` DECIMAL(5,2) NULL DEFAULT NULL AFTER `regional_citation_count`");
                 }
             }
         } catch (Throwable $e) {
@@ -286,9 +334,9 @@ function insertUserResultRow(PDO $db, int $userId, array $row): int
         $citationsJson = json_encode($citationsJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    $strategy = (string)($row['execution_strategy'] ?? 'prompt_caching');
+    $strategy = (string)($row['execution_strategy'] ?? 'regular');
     if (!in_array($strategy, ['prompt_caching', 'batch_api', 'regular'], true)) {
-        $strategy = 'prompt_caching';
+        $strategy = 'regular';
     }
 
     $status = (string)($row['status'] ?? 'completed');
@@ -305,19 +353,23 @@ function insertUserResultRow(PDO $db, int $userId, array $row): int
             `run_id`, `config_id`, `custom_id`, `batch_id`,
             `execution_strategy`, `prompt_cache_key`, `input_tokens`, `output_tokens`, `cached_tokens`,
             `trigger_source`, `is_test_run`,
-            `prompt`, `llm_answer`, `provider`, `model`, `brand_name`, `status`,
+            `prompt`, `market_region`, `prompt_language`, `effective_region`, `region_source`,
+            `llm_answer`, `provider`, `model`, `brand_name`, `status`,
             `brand_mentioned`, `char_earliness`, `word_earliness`, `relative_position_pct`,
             `total_chars`, `total_words`, `mece_category`, `geo_quadrant`,
-            `brand_cited`, `competitor_cited`, `competitors_json`, `citations_json`,
+            `brand_cited`, `competitor_cited`, `regional_citation_count`, `regional_citation_ratio`,
+            `competitors_json`, `citations_json`,
             `error_message`, `scheduled_at`, `created_at`
         ) VALUES (
             :run_id, :config_id, :custom_id, :batch_id,
             :execution_strategy, :prompt_cache_key, :input_tokens, :output_tokens, :cached_tokens,
             :trigger_source, :is_test_run,
-            :prompt, :llm_answer, :provider, :model, :brand_name, :status,
+            :prompt, :market_region, :prompt_language, :effective_region, :region_source,
+            :llm_answer, :provider, :model, :brand_name, :status,
             :brand_mentioned, :char_earliness, :word_earliness, :relative_position_pct,
             :total_chars, :total_words, :mece_category, :geo_quadrant,
-            :brand_cited, :competitor_cited, :competitors_json, :citations_json,
+            :brand_cited, :competitor_cited, :regional_citation_count, :regional_citation_ratio,
+            :competitors_json, :citations_json,
             :error_message, :scheduled_at, :created_at
         )
     ";
@@ -335,23 +387,29 @@ function insertUserResultRow(PDO $db, int $userId, array $row): int
         ':cached_tokens'         => max(0, (int)($row['cached_tokens'] ?? 0)),
         ':trigger_source'        => (string)($row['trigger_source'] ?? 'batch_queue'),
         ':is_test_run'           => !empty($row['is_test_run']) ? 1 : 0,
-        ':prompt'                => (string)($row['prompt'] ?? ''),
-        ':llm_answer'            => isset($row['llm_answer']) ? (string)$row['llm_answer'] : null,
-        ':provider'              => (string)($row['provider'] ?? 'openai'),
-        ':model'                 => (string)($row['model'] ?? ''),
-        ':brand_name'            => (string)($row['brand_name'] ?? ''),
-        ':status'                => $status,
-        ':brand_mentioned'       => !empty($row['brand_mentioned']) ? 1 : 0,
-        ':char_earliness'        => isset($row['char_earliness']) && $row['char_earliness'] !== null ? (int)$row['char_earliness'] : null,
-        ':word_earliness'        => isset($row['word_earliness']) && $row['word_earliness'] !== null ? (int)$row['word_earliness'] : null,
-        ':relative_position_pct' => isset($row['relative_position_pct']) && $row['relative_position_pct'] !== null ? (float)$row['relative_position_pct'] : null,
-        ':total_chars'           => max(0, (int)($row['total_chars'] ?? 0)),
-        ':total_words'           => max(0, (int)($row['total_words'] ?? 0)),
-        ':mece_category'         => (string)($row['mece_category'] ?? '4_GENERIC'),
-        ':geo_quadrant'          => (string)($row['geo_quadrant'] ?? 'NONE'),
-        ':brand_cited'           => !empty($row['brand_cited']) ? 1 : 0,
-        ':competitor_cited'      => !empty($row['competitor_cited']) ? 1 : 0,
-        ':competitors_json'      => $competitorsJson,
+        ':prompt'                  => (string)($row['prompt'] ?? ''),
+        ':market_region'           => isset($row['market_region']) && trim((string)$row['market_region']) !== '' ? trim((string)$row['market_region']) : null,
+        ':prompt_language'         => isset($row['prompt_language']) && trim((string)$row['prompt_language']) !== '' ? trim((string)$row['prompt_language']) : null,
+        ':effective_region'        => isset($row['effective_region']) && trim((string)$row['effective_region']) !== '' ? trim((string)$row['effective_region']) : null,
+        ':region_source'           => isset($row['region_source']) && trim((string)$row['region_source']) !== '' ? trim((string)$row['region_source']) : null,
+        ':llm_answer'              => isset($row['llm_answer']) ? (string)$row['llm_answer'] : null,
+        ':provider'                => (string)($row['provider'] ?? 'openai'),
+        ':model'                   => (string)($row['model'] ?? ''),
+        ':brand_name'              => (string)($row['brand_name'] ?? ''),
+        ':status'                  => $status,
+        ':brand_mentioned'         => !empty($row['brand_mentioned']) ? 1 : 0,
+        ':char_earliness'          => isset($row['char_earliness']) && $row['char_earliness'] !== null ? (int)$row['char_earliness'] : null,
+        ':word_earliness'          => isset($row['word_earliness']) && $row['word_earliness'] !== null ? (int)$row['word_earliness'] : null,
+        ':relative_position_pct'   => isset($row['relative_position_pct']) && $row['relative_position_pct'] !== null ? (float)$row['relative_position_pct'] : null,
+        ':total_chars'             => max(0, (int)($row['total_chars'] ?? 0)),
+        ':total_words'             => max(0, (int)($row['total_words'] ?? 0)),
+        ':mece_category'           => (string)($row['mece_category'] ?? '4_GENERIC'),
+        ':geo_quadrant'            => (string)($row['geo_quadrant'] ?? 'NONE'),
+        ':brand_cited'             => !empty($row['brand_cited']) ? 1 : 0,
+        ':competitor_cited'        => !empty($row['competitor_cited']) ? 1 : 0,
+        ':regional_citation_count' => max(0, (int)($row['regional_citation_count'] ?? 0)),
+        ':regional_citation_ratio' => isset($row['regional_citation_ratio']) && $row['regional_citation_ratio'] !== null ? (float)$row['regional_citation_ratio'] : null,
+        ':competitors_json'        => $competitorsJson,
         ':citations_json'        => $citationsJson,
         ':error_message'         => isset($row['error_message']) && $row['error_message'] !== '' ? (string)$row['error_message'] : null,
         ':scheduled_at'          => isset($row['scheduled_at']) && $row['scheduled_at'] !== '' ? (string)$row['scheduled_at'] : null,
@@ -393,6 +451,50 @@ function ensureCoreSchemaColumns(PDO $db): void
         return;
     }
 
+    if ($driver === 'mysql') {
+        if (!$db->inTransaction()) {
+            try {
+                $mysqlColumnPatches = [
+                    'tracking_configs' => [
+                        'market_region' => "ALTER TABLE `tracking_configs` ADD COLUMN `market_region` VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `keywords_prompts`",
+                    ],
+                    'batch_requests' => [
+                        'market_region'      => "ALTER TABLE `batch_requests` ADD COLUMN `market_region` VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `prompt`",
+                        'supports_tools'     => "ALTER TABLE `batch_requests` ADD COLUMN `supports_tools` TINYINT(1) NOT NULL DEFAULT 1 AFTER `search_enabled`",
+                        'last_polled_at'     => "ALTER TABLE `batch_requests` ADD COLUMN `last_polled_at` TIMESTAMP NULL DEFAULT NULL AFTER `submitted_at`",
+                        'batch_error_detail' => "ALTER TABLE `batch_requests` ADD COLUMN `batch_error_detail` TEXT COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `last_polled_at`",
+                    ],
+                    'llm_runs' => [
+                        'market_region'           => "ALTER TABLE `llm_runs` ADD COLUMN `market_region` VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `prompt`",
+                        'prompt_language'         => "ALTER TABLE `llm_runs` ADD COLUMN `prompt_language` VARCHAR(16) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `market_region`",
+                        'effective_region'        => "ALTER TABLE `llm_runs` ADD COLUMN `effective_region` VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `prompt_language`",
+                        'region_source'           => "ALTER TABLE `llm_runs` ADD COLUMN `region_source` VARCHAR(32) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL AFTER `effective_region`",
+                        'regional_citation_count' => "ALTER TABLE `llm_runs` ADD COLUMN `regional_citation_count` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `competitor_cited`",
+                        'regional_citation_ratio' => "ALTER TABLE `llm_runs` ADD COLUMN `regional_citation_ratio` DECIMAL(5,2) NULL DEFAULT NULL AFTER `regional_citation_count`",
+                    ],
+                    'run_citations' => [
+                        'is_regional_tld' => "ALTER TABLE `run_citations` ADD COLUMN `is_regional_tld` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_competitor_domain`",
+                    ],
+                ];
+                foreach ($mysqlColumnPatches as $tbl => $patches) {
+                    $cStmt = $db->query("SHOW COLUMNS FROM `{$tbl}`");
+                    $existingCols = $cStmt ? array_column($cStmt->fetchAll(), 'Field') : [];
+                    if (!empty($existingCols)) {
+                        foreach ($patches as $colName => $alterSql) {
+                            if (!in_array($colName, $existingCols, true)) {
+                                $db->exec($alterSql);
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable $e) {
+                // Ignore schema inspection errors on limited privileges or mocks
+            }
+        }
+        ensureAdminCatalogTables($db);
+        return;
+    }
+
     if ($driver !== 'sqlite') {
         return;
     }
@@ -404,26 +506,47 @@ function ensureCoreSchemaColumns(PDO $db): void
                 `id` INTEGER PRIMARY KEY AUTOINCREMENT,
                 `custom_id` TEXT UNIQUE NOT NULL,
                 `prompt_cache_key` TEXT NULL DEFAULT NULL,
-                `execution_strategy` TEXT NOT NULL DEFAULT 'prompt_caching',
+                `execution_strategy` TEXT NOT NULL DEFAULT 'regular',
                 `provider_batch_id` TEXT NULL DEFAULT NULL,
                 `run_id` INTEGER NULL DEFAULT NULL,
                 `user_id` INTEGER NOT NULL,
                 `config_id` INTEGER NOT NULL,
                 `prompt` TEXT NOT NULL,
+                `market_region` TEXT NULL DEFAULT NULL,
                 `provider` TEXT NOT NULL,
                 `model` TEXT NOT NULL,
                 `brand_name` TEXT NOT NULL,
                 `brand_domains` TEXT NOT NULL,
                 `competitors` TEXT NOT NULL,
                 `search_enabled` INTEGER NOT NULL DEFAULT 1,
+                `supports_tools` INTEGER NOT NULL DEFAULT 1,
                 `is_test_run` INTEGER NOT NULL DEFAULT 0,
                 `status` TEXT NOT NULL DEFAULT 'queued',
                 `scheduled_for` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 `submitted_at` DATETIME NULL DEFAULT NULL,
+                `last_polled_at` DATETIME NULL DEFAULT NULL,
+                `batch_error_detail` TEXT NULL DEFAULT NULL,
                 `completed_at` DATETIME NULL DEFAULT NULL,
                 `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         ");
+
+        $brColsStmt = $db->query("PRAGMA table_info(batch_requests)");
+        $brCols = $brColsStmt ? array_column($brColsStmt->fetchAll(), 'name') : [];
+        if (!empty($brCols)) {
+            if (!in_array('market_region', $brCols, true)) {
+                $db->exec("ALTER TABLE batch_requests ADD COLUMN market_region TEXT NULL DEFAULT NULL");
+            }
+            if (!in_array('supports_tools', $brCols, true)) {
+                $db->exec("ALTER TABLE batch_requests ADD COLUMN supports_tools INTEGER NOT NULL DEFAULT 1");
+            }
+            if (!in_array('last_polled_at', $brCols, true)) {
+                $db->exec("ALTER TABLE batch_requests ADD COLUMN last_polled_at DATETIME NULL DEFAULT NULL");
+            }
+            if (!in_array('batch_error_detail', $brCols, true)) {
+                $db->exec("ALTER TABLE batch_requests ADD COLUMN batch_error_detail TEXT NULL DEFAULT NULL");
+            }
+        }
 
         // 2. Check tracking_configs columns if table exists
         $tcColsStmt = $db->query("PRAGMA table_info(tracking_configs)");
@@ -431,6 +554,9 @@ function ensureCoreSchemaColumns(PDO $db): void
         if (!empty($tcCols)) {
             if (!in_array('preset_id', $tcCols, true)) {
                 $db->exec("ALTER TABLE tracking_configs ADD COLUMN preset_id TEXT NULL DEFAULT NULL");
+            }
+            if (!in_array('market_region', $tcCols, true)) {
+                $db->exec("ALTER TABLE tracking_configs ADD COLUMN market_region TEXT NULL DEFAULT NULL");
             }
             if (!in_array('datasets_per_day', $tcCols, true)) {
                 $db->exec("ALTER TABLE tracking_configs ADD COLUMN datasets_per_day INTEGER NOT NULL DEFAULT 12");
@@ -463,7 +589,7 @@ function ensureCoreSchemaColumns(PDO $db): void
                 $db->exec("ALTER TABLE llm_runs ADD COLUMN batch_id TEXT NULL DEFAULT NULL");
             }
             if (!in_array('execution_strategy', $lrCols, true)) {
-                $db->exec("ALTER TABLE llm_runs ADD COLUMN execution_strategy TEXT NOT NULL DEFAULT 'prompt_caching'");
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN execution_strategy TEXT NOT NULL DEFAULT 'regular'");
             }
             if (!in_array('prompt_cache_key', $lrCols, true)) {
                 $db->exec("ALTER TABLE llm_runs ADD COLUMN prompt_cache_key TEXT NULL DEFAULT NULL");
@@ -480,6 +606,31 @@ function ensureCoreSchemaColumns(PDO $db): void
             if (!in_array('is_test_run', $lrCols, true)) {
                 $db->exec("ALTER TABLE llm_runs ADD COLUMN is_test_run INTEGER NOT NULL DEFAULT 0");
             }
+            if (!in_array('market_region', $lrCols, true)) {
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN market_region TEXT NULL DEFAULT NULL");
+            }
+            if (!in_array('prompt_language', $lrCols, true)) {
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN prompt_language TEXT NULL DEFAULT NULL");
+            }
+            if (!in_array('effective_region', $lrCols, true)) {
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN effective_region TEXT NULL DEFAULT NULL");
+            }
+            if (!in_array('region_source', $lrCols, true)) {
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN region_source TEXT NULL DEFAULT NULL");
+            }
+            if (!in_array('regional_citation_count', $lrCols, true)) {
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN regional_citation_count INTEGER NOT NULL DEFAULT 0");
+            }
+            if (!in_array('regional_citation_ratio', $lrCols, true)) {
+                $db->exec("ALTER TABLE llm_runs ADD COLUMN regional_citation_ratio REAL NULL DEFAULT NULL");
+            }
+        }
+
+        // 4. Check run_citations columns if table exists
+        $rcColsStmt = $db->query("PRAGMA table_info(run_citations)");
+        $rcCols = $rcColsStmt ? array_column($rcColsStmt->fetchAll(), 'name') : [];
+        if (!empty($rcCols) && !in_array('is_regional_tld', $rcCols, true)) {
+            $db->exec("ALTER TABLE run_citations ADD COLUMN is_regional_tld INTEGER NOT NULL DEFAULT 0");
         }
     } catch (Throwable $e) {
         // Ignore schema inspection errors on partial mock schemas
@@ -611,88 +762,117 @@ function getDefaultLlmModelsSeed(): array
             'display_name'        => 'OpenAI · GPT-6 Luna',
             'eu_hosted'           => false,
             'supports_web_search' => true,
-            'execution_strategy'  => 'prompt_caching',
+            'supports_batch_api'  => true,
+            'supports_tools'      => true,
+            'execution_strategy'  => 'batch_api',
             'is_allowed'          => true,
             'is_default'          => true,
-            'n8n_credential_name' => 'OpenAI - Chatlytics - Chatlytics-dev-1',
+            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
             'n8n_sync_status'     => 'seeded',
             'last_synced_at'      => null,
             'sort_order'          => 10,
         ],
         [
-            'id'                  => 'gemini/models/gemini-3.5-flash',
-            'provider'            => 'gemini',
-            'model_name'          => 'models/gemini-3.5-flash',
+            'id'                  => 'google/gemini-3.5-flash',
+            'provider'            => 'google',
+            'model_name'          => 'gemini-3.5-flash',
             'display_name'        => 'Google · Gemini 3.5 Flash',
             'eu_hosted'           => false,
             'supports_web_search' => true,
-            'execution_strategy'  => 'prompt_caching',
+            'supports_batch_api'  => true,
+            'supports_tools'      => true,
+            'execution_strategy'  => 'batch_api',
             'is_allowed'          => true,
             'is_default'          => true,
-            'n8n_credential_name' => 'Google_AI Studio - Chatlytics - Chatlytics-dev-1',
+            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
             'n8n_sync_status'     => 'seeded',
             'last_synced_at'      => null,
             'sort_order'          => 20,
         ],
         [
-            'id'                  => 'mistral/mistral-medium-latest',
-            'provider'            => 'mistral',
-            'model_name'          => 'mistral-medium-latest',
-            'display_name'        => 'Mistral Medium Latest',
-            'eu_hosted'           => true,
-            'supports_web_search' => false,
-            'execution_strategy'  => 'prompt_caching',
+            'id'                  => 'mistralai/mistral-medium-3-5',
+            'provider'            => 'mistralai',
+            'model_name'          => 'mistral-medium-3-5',
+            'display_name'        => 'Mistral · Medium 3.5',
+            'eu_hosted'           => false,
+            'supports_web_search' => true,
+            'supports_batch_api'  => true,
+            'supports_tools'      => true,
+            'execution_strategy'  => 'batch_api',
             'is_allowed'          => true,
             'is_default'          => true,
-            'n8n_credential_name' => 'Mistral - Chatlytics - Chatlytics-dev-1',
+            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
             'n8n_sync_status'     => 'seeded',
             'last_synced_at'      => null,
             'sort_order'          => 30,
         ],
         [
-            'id'                  => 'mistral/mistral-large-latest',
-            'provider'            => 'mistral',
-            'model_name'          => 'mistral-large-latest',
-            'display_name'        => 'Mistral Large Latest',
-            'eu_hosted'           => true,
-            'supports_web_search' => false,
-            'execution_strategy'  => 'prompt_caching',
+            'id'                  => 'mistralai/mistral-large-4-0',
+            'provider'            => 'mistralai',
+            'model_name'          => 'mistral-large-4-0',
+            'display_name'        => 'Mistral · Large 4.0',
+            'eu_hosted'           => false,
+            'supports_web_search' => true,
+            'supports_batch_api'  => false,
+            'supports_tools'      => true,
+            'execution_strategy'  => 'regular',
             'is_allowed'          => true,
             'is_default'          => false,
-            'n8n_credential_name' => 'Mistral - Chatlytics - Chatlytics-dev-1',
+            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
             'n8n_sync_status'     => 'seeded',
             'last_synced_at'      => null,
             'sort_order'          => 40,
         ],
         [
-            'id'                  => 'mistral/zai-glm-5-3',
-            'provider'            => 'mistral',
-            'model_name'          => 'zai-glm-5-3',
-            'display_name'        => 'Z.ai GLM 5.3 (Mistral EU)',
-            'eu_hosted'           => true,
-            'supports_web_search' => false,
-            'execution_strategy'  => 'regular',
+            'id'                  => 'z-ai/glm-5.3',
+            'provider'            => 'z-ai',
+            'model_name'          => 'glm-5.3',
+            'display_name'        => 'Z.ai · GLM 5.3',
+            'eu_hosted'           => false,
+            'supports_web_search' => true,
+            'supports_batch_api'  => true,
+            'supports_tools'      => true,
+            'execution_strategy'  => 'batch_api',
             'is_allowed'          => true,
             'is_default'          => true,
-            'n8n_credential_name' => 'Mistral - Chatlytics - Chatlytics-dev-1',
+            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
             'n8n_sync_status'     => 'seeded',
             'last_synced_at'      => null,
             'sort_order'          => 50,
         ],
         [
-            'id'                  => 'mistral/zai-glm-5-3-flash',
-            'provider'            => 'mistral',
-            'model_name'          => 'zai-glm-5-3-flash',
-            'display_name'        => 'Z.ai GLM 5.3 Flash (Mistral EU)',
-            'eu_hosted'           => true,
-            'supports_web_search' => false,
-            'execution_strategy'  => 'regular',
+            'id'                  => 'z-ai/glm-5.3-flash',
+            'provider'            => 'z-ai',
+            'model_name'          => 'glm-5.3-flash',
+            'display_name'        => 'Z.ai · GLM 5.3 Flash',
+            'eu_hosted'           => false,
+            'supports_web_search' => true,
+            'supports_batch_api'  => true,
+            'supports_tools'      => true,
+            'execution_strategy'  => 'batch_api',
             'is_allowed'          => true,
             'is_default'          => false,
-            'n8n_credential_name' => 'Mistral - Chatlytics - Chatlytics-dev-1',
+            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
             'n8n_sync_status'     => 'seeded',
             'last_synced_at'      => null,
             'sort_order'          => 60,
+        ],
+        [
+            'id'                  => 'anthropic/claude-sonnet-5.5',
+            'provider'            => 'anthropic',
+            'model_name'          => 'claude-sonnet-5.5',
+            'display_name'        => 'Anthropic · Claude Sonnet 5.5',
+            'eu_hosted'           => false,
+            'supports_web_search' => true,
+            'supports_batch_api'  => true,
+            'supports_tools'      => true,
+            'execution_strategy'  => 'batch_api',
+            'is_allowed'          => true,
+            'is_default'          => false,
+            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
+            'n8n_sync_status'     => 'seeded',
+            'last_synced_at'      => null,
+            'sort_order'          => 70,
         ],
     ];
 }
@@ -707,13 +887,13 @@ function getDefaultModelPresetsSeed(): array
     return [
         [
             'id'             => 'dach_core_baseline',
-            'name_de'        => 'DACH Basis-Radar (Live-Suche)',
-            'name_en'        => 'DACH Core Radar (Live Search)',
-            'description_de' => 'Direktvergleich über OpenAI GPT-6 Luna und Google Gemini 3.5 Flash inkl. Live-Websuche & Quellenzitaten.',
-            'description_en' => 'Head-to-head benchmark across OpenAI GPT-6 Luna and Google Gemini 3.5 Flash with live web search & citations.',
+            'name_de'        => 'Basis-Radar (Live-Suche)',
+            'name_en'        => 'Core Radar (Live Search)',
+            'description_de' => 'Direktvergleich über OpenAI GPT-6 Luna und Google Gemini 3.5 Flash via OpenRouter inkl. Live-Websuche & Quellenzitaten.',
+            'description_en' => 'Head-to-head benchmark across OpenAI GPT-6 Luna and Google Gemini 3.5 Flash via OpenRouter with live web search & citations.',
             'badge_de'       => 'Standard',
             'badge_en'       => 'Default',
-            'target_llms'    => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'],
+            'target_llms'    => ['openai/gpt-6-luna', 'google/gemini-3.5-flash'],
             'search_enabled' => true,
             'allowed_tiers'  => ['free', 'starter', 'growth', 'enterprise_managed'],
             'is_default'     => true,
@@ -722,13 +902,13 @@ function getDefaultModelPresetsSeed(): array
         ],
         [
             'id'             => 'parametric_brand_memory',
-            'name_de'        => 'Parametrisches Marken-Gedächtnis (Ohne Websuche)',
-            'name_en'        => 'Parametric Brand Memory (No Web Search)',
-            'description_de' => 'Prüft das reine Modellwissen über OpenAI, Gemini und Mistral EU ohne Beeinflussung durch Live-Suchergebnisse.',
-            'description_en' => 'Evaluates pure parametric training memory across OpenAI, Gemini, and Mistral EU without live web search.',
-            'badge_de'       => 'Starter & höher',
-            'badge_en'       => 'Starter+',
-            'target_llms'    => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash', 'mistral/mistral-medium-latest'],
+            'name_de'        => 'Parametrisches Marken-Gedächtnis (Batch / Ohne Websuche)',
+            'name_en'        => 'Parametric Brand Memory (Batch / No Web Search)',
+            'description_de' => 'Prüft das reine Modellwissen über OpenAI, Google Gemini und Mistral via OpenRouter Batch-API ohne Live-Suchergebnisse.',
+            'description_en' => 'Evaluates pure parametric training memory across OpenAI, Google Gemini, and Mistral via OpenRouter Batch API without live web search.',
+            'badge_de'       => 'Batch-API',
+            'badge_en'       => 'Batch API',
+            'target_llms'    => ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5'],
             'search_enabled' => false,
             'allowed_tiers'  => ['starter', 'growth', 'enterprise_managed'],
             'is_default'     => false,
@@ -737,13 +917,13 @@ function getDefaultModelPresetsSeed(): array
         ],
         [
             'id'             => 'eu_sovereign_dsgvo',
-            'name_de'        => 'EU-Souveränitäts-Set (Mistral & GLM EU)',
-            'name_en'        => 'EU Sovereign Suite (Mistral & GLM EU)',
-            'description_de' => '100 % europäische Inferenz auf dem Frankfurter/EU-Endpunkt (Mistral Medium, Mistral Large & Z.ai GLM 5.3).',
-            'description_en' => '100% European inference on Mistral EU endpoints (Mistral Medium, Mistral Large & Z.ai GLM 5.3).',
-            'badge_de'       => 'EU-Hosted',
-            'badge_en'       => 'EU-Hosted',
-            'target_llms'    => ['mistral/mistral-medium-latest', 'mistral/mistral-large-latest', 'mistral/zai-glm-5-3'],
+            'name_de'        => 'Europäisches & GLM Benchmark-Set (Mistral & GLM)',
+            'name_en'        => 'European & GLM Benchmark Suite (Mistral & GLM)',
+            'description_de' => 'Vergleich führender europäischer und globaler Sprachmodelle via OpenRouter (Mistral Medium 3.5, Mistral Large 4.0 & Z.ai GLM 5.3).',
+            'description_en' => 'Benchmark across Mistral Medium 3.5, Mistral Large 4.0 & Z.ai GLM 5.3 via OpenRouter.',
+            'badge_de'       => 'OpenRouter',
+            'badge_en'       => 'OpenRouter',
+            'target_llms'    => ['mistralai/mistral-medium-3-5', 'mistralai/mistral-large-4-0', 'z-ai/glm-5.3'],
             'search_enabled' => false,
             'allowed_tiers'  => ['starter', 'growth', 'enterprise_managed'],
             'is_default'     => false,
@@ -754,11 +934,11 @@ function getDefaultModelPresetsSeed(): array
             'id'             => 'executive_full_spectrum',
             'name_de'        => '360° Vorstands-Benchmark (Alle Kernmodelle + Suche)',
             'name_en'        => '360° Executive Benchmark (All Core Models + Search)',
-            'description_de' => 'Umfassende Multi-LLM-Abdeckung über US-Frontier-Modelle (mit Live-Grounding) und europäische Sprachmodelle.',
-            'description_en' => 'Complete multi-LLM coverage combining US frontier models (with live grounding) and European models.',
+            'description_de' => 'Umfassende Multi-LLM-Abdeckung über führende Frontier- und Open-Weights-Modelle via OpenRouter mit Live-Websuche.',
+            'description_en' => 'Complete multi-LLM coverage combining frontier and open-weights models via OpenRouter with live web search.',
             'badge_de'       => 'Vollabdeckung',
             'badge_en'       => 'Full Coverage',
-            'target_llms'    => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash', 'mistral/mistral-medium-latest', 'mistral/zai-glm-5-3'],
+            'target_llms'    => ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5', 'z-ai/glm-5.3'],
             'search_enabled' => true,
             'allowed_tiers'  => ['starter', 'growth', 'enterprise_managed'],
             'is_default'     => false,
@@ -800,14 +980,14 @@ function getDefaultSubscriptionPlansSeed(): array
             'features_de'                => [
                 '40 Live-Abfragen (Lifetime)',
                 'Bis zu 3 Marken-Profile (Standard)',
-                'Basis Analyse-Set: DACH Basis-Radar inkl. Live-Websuche',
+                'Basis Analyse-Set: Basis-Radar inkl. Live-Websuche',
                 'Basis-Ergebnis nach Empfehlungs-Stufen',
                 'Zugang über geschäftliche E-Mail-Adresse',
             ],
             'features_en'                => [
                 '40 live queries (Lifetime)',
                 'Up to 3 brand profiles (default)',
-                'Core Model Preset: DACH Core Radar incl. live web search',
+                'Core Model Preset: Core Radar incl. live web search',
                 'Basic visibility rating by recommendation tiers',
                 'Access via business email address',
             ],
@@ -838,7 +1018,7 @@ function getDefaultSubscriptionPlansSeed(): array
                 '500 Live-Abfragen pro Monat',
                 'Bis zu 5 Marken-Profile oder Produktlinien',
                 'Bis zu 5 Wettbewerber pro Profil',
-                'Alle kuratierten Analyse-Sets (Parametrisch, EU-Souveränität & 360° Benchmark)',
+                'Alle kuratierten Analyse-Sets (Parametrisch Batch, Mistral/GLM & 360° Benchmark)',
                 'Volle Ursachen- & Maßnahmen-Matrix',
                 'CSV-/JSON-Export für eigenes Reporting',
             ],
@@ -846,7 +1026,7 @@ function getDefaultSubscriptionPlansSeed(): array
                 '500 live queries per month',
                 'Up to 5 brand profiles or product lines',
                 'Up to 5 competitors per profile',
-                'All curated Model Presets (Parametric, EU Sovereign & 360° Benchmark)',
+                'All curated Model Presets (Parametric Batch, Mistral/GLM & 360° Benchmark)',
                 'Full cause & action matrix',
                 'CSV / JSON export for custom reporting',
             ],
@@ -877,7 +1057,7 @@ function getDefaultSubscriptionPlansSeed(): array
                 '2.000 Live-Abfragen pro Monat',
                 '10 Marken-Profile / Märkte',
                 'Bis zu 10 Wettbewerber pro Profil',
-                'Freie Modellwahl & Websuche-Steuerung (inkl. EU-Hosted & alle Analyse-Sets)',
+                'Freie Modellwahl & Websuche-Steuerung (alle OpenRouter-Modelle & Analyse-Sets)',
                 'Schreibgeschützte Vorstandsreports per Link',
                 'Historischer Sichtbarkeits-Trend über alle Modelle',
                 'Priorisierte Content- & Schema.org-Maßnahmen',
@@ -886,7 +1066,7 @@ function getDefaultSubscriptionPlansSeed(): array
                 '2,000 live queries per month',
                 '10 brand profiles / markets',
                 'Up to 10 competitors per profile',
-                'Free custom model & web-search control (incl. EU-Hosted & all Model Presets)',
+                'Free custom model & web-search control (all OpenRouter models & Model Presets)',
                 'Read-only executive reports via shareable link',
                 'Historical visibility trends across all models',
                 'Prioritized content & Schema.org actions',
@@ -956,7 +1136,9 @@ function ensureAdminCatalogTables(PDO $db): void
                     `display_name` TEXT NOT NULL,
                     `eu_hosted` INTEGER NOT NULL DEFAULT 0,
                     `supports_web_search` INTEGER NOT NULL DEFAULT 0,
-                    `execution_strategy` TEXT NOT NULL DEFAULT 'prompt_caching',
+                    `supports_batch_api` INTEGER NOT NULL DEFAULT 0,
+                    `supports_tools` INTEGER NOT NULL DEFAULT 1,
+                    `execution_strategy` TEXT NOT NULL DEFAULT 'batch_api',
                     `is_allowed` INTEGER NOT NULL DEFAULT 1,
                     `is_default` INTEGER NOT NULL DEFAULT 0,
                     `n8n_credential_name` TEXT NULL DEFAULT NULL,
@@ -1023,7 +1205,9 @@ function ensureAdminCatalogTables(PDO $db): void
                     `display_name` VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL,
                     `eu_hosted` TINYINT(1) NOT NULL DEFAULT 0,
                     `supports_web_search` TINYINT(1) NOT NULL DEFAULT 0,
-                    `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prompt_caching',
+                    `supports_batch_api` TINYINT(1) NOT NULL DEFAULT 0,
+                    `supports_tools` TINYINT(1) NOT NULL DEFAULT 1,
+                    `execution_strategy` ENUM('prompt_caching', 'batch_api', 'regular') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'batch_api',
                     `is_allowed` TINYINT(1) NOT NULL DEFAULT 1,
                     `is_default` TINYINT(1) NOT NULL DEFAULT 0,
                     `n8n_credential_name` VARCHAR(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
@@ -1087,6 +1271,31 @@ function ensureAdminCatalogTables(PDO $db): void
             ");
         }
 
+        // Upgrade existing llm_models schema idempotently
+        if ($driver === 'sqlite') {
+            $lmColsStmt = $db->query("PRAGMA table_info(llm_models)");
+            $lmCols = $lmColsStmt ? array_column($lmColsStmt->fetchAll(), 'name') : [];
+            if (!empty($lmCols)) {
+                if (!in_array('supports_batch_api', $lmCols, true)) {
+                    $db->exec("ALTER TABLE llm_models ADD COLUMN supports_batch_api INTEGER NOT NULL DEFAULT 0");
+                }
+                if (!in_array('supports_tools', $lmCols, true)) {
+                    $db->exec("ALTER TABLE llm_models ADD COLUMN supports_tools INTEGER NOT NULL DEFAULT 1");
+                }
+            }
+        } else {
+            $lmColsStmt = $db->query("SHOW COLUMNS FROM `llm_models`");
+            $lmCols = $lmColsStmt ? array_column($lmColsStmt->fetchAll(), 'Field') : [];
+            if (!empty($lmCols)) {
+                if (!in_array('supports_batch_api', $lmCols, true)) {
+                    $db->exec("ALTER TABLE `llm_models` ADD COLUMN `supports_batch_api` TINYINT(1) NOT NULL DEFAULT 0 AFTER `supports_web_search`");
+                }
+                if (!in_array('supports_tools', $lmCols, true)) {
+                    $db->exec("ALTER TABLE `llm_models` ADD COLUMN `supports_tools` TINYINT(1) NOT NULL DEFAULT 1 AFTER `supports_batch_api`");
+                }
+            }
+        }
+
         // Seed default models when table is empty
         $mCount = (int)$db->query("SELECT COUNT(*) FROM llm_models")->fetchColumn();
         if ($mCount === 0) {
@@ -1120,9 +1329,11 @@ function ensureAdminCatalogTables(PDO $db): void
  */
 function formatLlmModelRow(array $row): array
 {
-    $strategy = (string)($row['execution_strategy'] ?? 'prompt_caching');
-    if (!in_array($strategy, ['prompt_caching', 'batch_api', 'regular'], true)) {
-        $strategy = 'prompt_caching';
+    $supportsBatch = !empty($row['supports_batch_api']);
+    $supportsTools = !array_key_exists('supports_tools', $row) || !empty($row['supports_tools']);
+    $strategy = (string)($row['execution_strategy'] ?? ($supportsBatch ? 'batch_api' : 'regular'));
+    if ($strategy === 'prompt_caching' || !in_array($strategy, ['batch_api', 'regular'], true)) {
+        $strategy = $supportsBatch ? 'batch_api' : 'regular';
     }
     return [
         'id'                  => (string)($row['id'] ?? ''),
@@ -1131,6 +1342,8 @@ function formatLlmModelRow(array $row): array
         'display_name'        => (string)($row['display_name'] ?? ''),
         'eu_hosted'           => !empty($row['eu_hosted']),
         'supports_web_search' => !empty($row['supports_web_search']),
+        'supports_batch_api'  => $supportsBatch,
+        'supports_tools'      => $supportsTools,
         'execution_strategy'  => $strategy,
         'is_allowed'          => !isset($row['is_allowed']) || !empty($row['is_allowed']),
         'is_default'          => !empty($row['is_default']),
@@ -1216,9 +1429,11 @@ function upsertLlmModel(PDO $db, array $data, bool $preserveAdminFlagsIfExists =
         }
     }
 
-    $strategy = (string)($data['execution_strategy'] ?? 'prompt_caching');
-    if (!in_array($strategy, ['prompt_caching', 'batch_api', 'regular'], true)) {
-        $strategy = 'prompt_caching';
+    $supportsBatch = !empty($data['supports_batch_api']);
+    $supportsTools = !array_key_exists('supports_tools', $data) || !empty($data['supports_tools']);
+    $strategy = (string)($data['execution_strategy'] ?? ($supportsBatch ? 'batch_api' : 'regular'));
+    if ($strategy === 'prompt_caching' || !in_array($strategy, ['batch_api', 'regular'], true)) {
+        $strategy = $supportsBatch ? 'batch_api' : 'regular';
     }
 
     $isAllowed = !isset($data['is_allowed']) || !empty($data['is_allowed']);
@@ -1234,9 +1449,16 @@ function upsertLlmModel(PDO $db, array $data, bool $preserveAdminFlagsIfExists =
         if ($existing) {
             $isAllowed = !empty($existing['is_allowed']);
             $isDefault = !empty($existing['is_default']);
-            $strategy = in_array((string)$existing['execution_strategy'], ['prompt_caching', 'batch_api', 'regular'], true)
-                ? (string)$existing['execution_strategy']
-                : $strategy;
+            $supportsBatch = array_key_exists('supports_batch_api', $data) ? !empty($data['supports_batch_api']) : !empty($existing['supports_batch_api']);
+            $supportsTools = array_key_exists('supports_tools', $data) ? !empty($data['supports_tools']) : (!array_key_exists('supports_tools', $existing) || !empty($existing['supports_tools']));
+            $existingStrat = (string)($existing['execution_strategy'] ?? '');
+            if ($existingStrat === 'batch_api' || $existingStrat === 'regular') {
+                $strategy = ($existingStrat === 'batch_api' && !$supportsBatch && array_key_exists('supports_batch_api', $data))
+                    ? 'regular'
+                    : $existingStrat;
+            } else {
+                $strategy = $supportsBatch ? 'batch_api' : 'regular';
+            }
             $sortOrder = (int)($existing['sort_order'] ?? $sortOrder);
             $euHosted = array_key_exists('eu_hosted', $data) ? !empty($data['eu_hosted']) : !empty($existing['eu_hosted']);
             $supportsSearch = array_key_exists('supports_web_search', $data) ? !empty($data['supports_web_search']) : !empty($existing['supports_web_search']);
@@ -1251,6 +1473,8 @@ function upsertLlmModel(PDO $db, array $data, bool $preserveAdminFlagsIfExists =
             display_name = excluded.display_name,
             eu_hosted = excluded.eu_hosted,
             supports_web_search = excluded.supports_web_search,
+            supports_batch_api = excluded.supports_batch_api,
+            supports_tools = excluded.supports_tools,
             execution_strategy = excluded.execution_strategy,
             is_allowed = excluded.is_allowed,
             is_default = excluded.is_default,
@@ -1264,6 +1488,8 @@ function upsertLlmModel(PDO $db, array $data, bool $preserveAdminFlagsIfExists =
             display_name = VALUES(display_name),
             eu_hosted = VALUES(eu_hosted),
             supports_web_search = VALUES(supports_web_search),
+            supports_batch_api = VALUES(supports_batch_api),
+            supports_tools = VALUES(supports_tools),
             execution_strategy = VALUES(execution_strategy),
             is_allowed = VALUES(is_allowed),
             is_default = VALUES(is_default),
@@ -1275,10 +1501,12 @@ function upsertLlmModel(PDO $db, array $data, bool $preserveAdminFlagsIfExists =
     $sql = "
         INSERT INTO llm_models (
             id, provider, model_name, display_name, eu_hosted, supports_web_search,
+            supports_batch_api, supports_tools,
             execution_strategy, is_allowed, is_default, n8n_credential_name,
             n8n_sync_status, last_synced_at, sort_order
         ) VALUES (
             :id, :provider, :model_name, :display_name, :eu_hosted, :supports_web_search,
+            :supports_batch_api, :supports_tools,
             :execution_strategy, :is_allowed, :is_default, :n8n_credential_name,
             :n8n_sync_status, :last_synced_at, :sort_order
         )
@@ -1293,6 +1521,8 @@ function upsertLlmModel(PDO $db, array $data, bool $preserveAdminFlagsIfExists =
         ':display_name'        => trim((string)($data['display_name'] ?? $id)),
         ':eu_hosted'           => $euHosted ? 1 : 0,
         ':supports_web_search' => $supportsSearch ? 1 : 0,
+        ':supports_batch_api'  => $supportsBatch ? 1 : 0,
+        ':supports_tools'      => $supportsTools ? 1 : 0,
         ':execution_strategy'  => $strategy,
         ':is_allowed'          => $isAllowed ? 1 : 0,
         ':is_default'          => $isDefault ? 1 : 0,
@@ -1309,6 +1539,8 @@ function upsertLlmModel(PDO $db, array $data, bool $preserveAdminFlagsIfExists =
         'display_name'        => trim((string)($data['display_name'] ?? $id)),
         'eu_hosted'           => $euHosted ? 1 : 0,
         'supports_web_search' => $supportsSearch ? 1 : 0,
+        'supports_batch_api'  => $supportsBatch ? 1 : 0,
+        'supports_tools'      => $supportsTools ? 1 : 0,
         'execution_strategy'  => $strategy,
         'is_allowed'          => $isAllowed ? 1 : 0,
         'is_default'          => $isDefault ? 1 : 0,
@@ -1560,6 +1792,29 @@ function getAdminModelsCatalog(PDO $db, bool $onlyAllowed = false): array
         $seed = array_values(array_filter($seed, fn($m) => !empty($m['is_allowed'])));
     }
     return array_map('formatLlmModelRow', $seed);
+}
+
+/**
+ * Returns an associative lookup map keyed by canonical model ID (`provider/model`)
+ * containing capability flags (`supports_batch_api`, `supports_tools`, `supports_web_search`, `execution_strategy`).
+ *
+ * @return array<string, array{supports_batch_api:bool,supports_tools:bool,supports_web_search:bool,execution_strategy:string}>
+ */
+function getLlmModelCapabilitiesMap(PDO $db): array
+{
+    $map = [];
+    foreach (getAdminModelsCatalog($db, false) as $modelRow) {
+        $id = (string)($modelRow['id'] ?? '');
+        if ($id !== '') {
+            $map[$id] = [
+                'supports_batch_api'  => !empty($modelRow['supports_batch_api']),
+                'supports_tools'      => !array_key_exists('supports_tools', $modelRow) || !empty($modelRow['supports_tools']),
+                'supports_web_search' => !empty($modelRow['supports_web_search']),
+                'execution_strategy'  => (string)($modelRow['execution_strategy'] ?? 'regular'),
+            ];
+        }
+    }
+    return $map;
 }
 
 /**

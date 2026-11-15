@@ -105,20 +105,230 @@ if ($action === 'register_batch') {
     ], 200);
 }
 
-// Auxiliary Action B: List open/submitted Batch API jobs for deferred polling
+// Auxiliary Action B: List open/submitted Batch API jobs for deferred OpenRouter polling
 if ($action === 'open_batches') {
     $stmt = $db->query("
-        SELECT provider, model, provider_batch_id, custom_id, config_id, user_id, prompt, status, scheduled_for, submitted_at
+        SELECT id, custom_id, provider, model, provider_batch_id, run_id, config_id, user_id,
+               prompt, market_region, brand_name, brand_domains, competitors,
+               search_enabled, supports_tools, is_test_run, status, scheduled_for, submitted_at
         FROM batch_requests
         WHERE execution_strategy = 'batch_api'
           AND status IN ('queued', 'submitted')
-        ORDER BY created_at ASC
+        ORDER BY id ASC
         LIMIT 200
     ");
-    $rows = $stmt ? $stmt->fetchAll() : [];
+    $rawRows = $stmt ? $stmt->fetchAll() : [];
+    $rows = [];
+    $pollIds = [];
+    foreach ($rawRows as $r) {
+        $pollIds[] = (int)$r['id'];
+        $domainsArr = json_decode((string)($r['brand_domains'] ?? '[]'), true);
+        $compsArr = json_decode((string)($r['competitors'] ?? '[]'), true);
+        $prov = strtolower(trim((string)($r['provider'] ?? '')));
+        $mod = trim((string)($r['model'] ?? ''));
+        $targetLlm = str_contains($mod, '/') ? $mod : ($prov !== '' && $mod !== '' ? "{$prov}/{$mod}" : $mod);
+        $rows[] = [
+            'id'                => (int)$r['id'],
+            'custom_id'         => (string)$r['custom_id'],
+            'provider'          => $prov,
+            'model'             => $mod,
+            'target_llm'        => $targetLlm,
+            'provider_batch_id' => $r['provider_batch_id'],
+            'run_id'            => $r['run_id'] !== null ? (int)$r['run_id'] : null,
+            'config_id'         => (int)$r['config_id'],
+            'user_id'           => (int)$r['user_id'],
+            'prompt'            => (string)$r['prompt'],
+            'market_region'     => $r['market_region'] ?? null,
+            'brand_name'        => (string)$r['brand_name'],
+            'brand_domains'     => is_array($domainsArr) ? $domainsArr : [],
+            'competitors'       => is_array($compsArr) ? $compsArr : [],
+            'search_enabled'    => !empty($r['search_enabled']),
+            'supports_tools'    => !array_key_exists('supports_tools', $r) || !empty($r['supports_tools']),
+            'is_test_run'       => !empty($r['is_test_run']),
+            'status'            => (string)$r['status'],
+            'scheduled_for'     => $r['scheduled_for'] ?? null,
+            'submitted_at'      => $r['submitted_at'] ?? null,
+            'api_base_url'      => $apiBaseUrl,
+        ];
+    }
+
+    if (!empty($pollIds)) {
+        try {
+            $idPhs = [];
+            $pollParams = [':now' => date('Y-m-d H:i:s')];
+            foreach ($pollIds as $idx => $bid) {
+                $ph = ':bid_' . $idx;
+                $idPhs[] = $ph;
+                $pollParams[$ph] = $bid;
+            }
+            $updPoll = $db->prepare("UPDATE batch_requests SET last_polled_at = :now WHERE id IN (" . implode(',', $idPhs) . ")");
+            $updPoll->execute($pollParams);
+        } catch (Throwable $e) {
+            // Non-fatal if column missing in partial test schema
+        }
+    }
+
     jsonResponse([
         'open_batches_count' => count($rows),
         'open_batches'       => $rows,
+    ], 200);
+}
+
+// Auxiliary Action C: Mark failed/expired/cancelled OpenRouter batches and record failed audit rows
+if ($action === 'fail_batch') {
+    $providerBatchId = trim((string)($requestData['provider_batch_id'] ?? $requestData['batch_id'] ?? ''));
+    $customIds = is_array($requestData['custom_ids'] ?? null) ? $requestData['custom_ids'] : [];
+    $errorMsg = trim((string)($requestData['error_message'] ?? $requestData['error'] ?? 'OpenRouter batch execution failed or expired'));
+    $errorMsg = mb_substr($errorMsg !== '' ? $errorMsg : 'OpenRouter batch execution failed', 0, 2000);
+
+    if ($providerBatchId === '' && empty($customIds)) {
+        jsonError("provider_batch_id or non-empty custom_ids array is required.", 422);
+    }
+
+    $selWhere = ["status IN ('queued', 'submitted')"];
+    $selParams = [];
+    if ($providerBatchId !== '') {
+        $selWhere[] = "provider_batch_id = :provider_batch_id";
+        $selParams[':provider_batch_id'] = $providerBatchId;
+    }
+    $cleanCustomIds = array_values(array_filter(array_map(fn($c) => trim((string)$c), $customIds), fn($c) => $c !== ''));
+    if (!empty($cleanCustomIds)) {
+        $phs = [];
+        foreach ($cleanCustomIds as $idx => $cid) {
+            $ph = ':fcid_' . $idx;
+            $phs[] = $ph;
+            $selParams[$ph] = $cid;
+        }
+        $selWhere[] = "custom_id IN (" . implode(',', $phs) . ")";
+    }
+
+    $selStmt = $db->prepare("SELECT * FROM batch_requests WHERE " . implode(' AND ', $selWhere) . " ORDER BY id ASC");
+    $selStmt->execute($selParams);
+    $pendingFailRows = $selStmt->fetchAll() ?: [];
+
+    // Pre-provision per-user physical result tables outside transaction
+    $userIdsToEnsure = [];
+    foreach ($pendingFailRows as $br) {
+        $uid = (int)($br['user_id'] ?? 0);
+        if ($uid > 0) {
+            $userIdsToEnsure[$uid] = true;
+        }
+    }
+    foreach (array_keys($userIdsToEnsure) as $uid) {
+        ensureUserResultsTable($db, (int)$uid);
+    }
+
+    $nowTs = date('Y-m-d H:i:s');
+    $failedCount = 0;
+    $recordedRunIds = [];
+
+    $db->beginTransaction();
+    try {
+        $updBr = $db->prepare("
+            UPDATE batch_requests
+            SET status = 'failed', batch_error_detail = :err, completed_at = :now
+            WHERE id = :id
+        ");
+        $chkRun = $db->prepare("SELECT id FROM llm_runs WHERE custom_id = :cid LIMIT 1");
+        $insFailRun = $db->prepare("
+            INSERT INTO llm_runs (
+                config_id, user_id, custom_id, batch_id, execution_strategy,
+                prompt_cache_key, input_tokens, output_tokens, cached_tokens, is_test_run,
+                prompt, market_region, provider, model, brand_name, status, error_message,
+                brand_mentioned, brand_prominence_rank, char_earliness, word_earliness,
+                relative_position_pct, total_chars, total_words, mece_category, geo_quadrant,
+                has_citations, brand_cited, competitor_cited, regional_citation_count,
+                regional_citation_ratio, cost_credits, created_at
+            ) VALUES (
+                :config_id, :user_id, :custom_id, :batch_id, :execution_strategy,
+                NULL, 0, 0, 0, :is_test_run,
+                :prompt, :market_region, :provider, :model, :brand_name, 'failed', :error_message,
+                0, NULL, NULL, NULL,
+                NULL, 0, 0, '4_GENERIC', 'NONE',
+                0, 0, 0, 0,
+                NULL, 0, :created_at
+            )
+        ");
+
+        foreach ($pendingFailRows as $br) {
+            $updBr->execute([
+                ':err' => $errorMsg,
+                ':now' => $nowTs,
+                ':id'  => (int)$br['id'],
+            ]);
+            $failedCount++;
+
+            $cid = (string)$br['custom_id'];
+            $chkRun->execute([':cid' => $cid]);
+            $existingRunId = $chkRun->fetchColumn();
+            if ($existingRunId) {
+                $recordedRunIds[] = (int)$existingRunId;
+                continue;
+            }
+
+            $insFailRun->execute([
+                ':config_id'          => (int)$br['config_id'],
+                ':user_id'            => (int)$br['user_id'],
+                ':custom_id'          => $cid,
+                ':batch_id'           => $br['provider_batch_id'] ?? ($providerBatchId !== '' ? $providerBatchId : null),
+                ':execution_strategy' => (string)($br['execution_strategy'] ?? 'batch_api'),
+                ':is_test_run'        => !empty($br['is_test_run']) ? 1 : 0,
+                ':prompt'             => (string)$br['prompt'],
+                ':market_region'      => $br['market_region'] ?? null,
+                ':provider'           => (string)$br['provider'],
+                ':model'              => (string)$br['model'],
+                ':brand_name'         => (string)$br['brand_name'],
+                ':error_message'      => $errorMsg,
+                ':created_at'         => $nowTs,
+            ]);
+            $newRunId = (int)$db->lastInsertId();
+            $recordedRunIds[] = $newRunId;
+
+            $db->prepare("UPDATE batch_requests SET run_id = :rid WHERE id = :id")->execute([
+                ':rid' => $newRunId,
+                ':id'  => (int)$br['id'],
+            ]);
+
+            insertUserResultRow($db, (int)$br['user_id'], [
+                'run_id'             => $newRunId,
+                'config_id'          => (int)$br['config_id'],
+                'custom_id'          => $cid,
+                'batch_id'           => $br['provider_batch_id'] ?? ($providerBatchId !== '' ? $providerBatchId : null),
+                'execution_strategy' => (string)($br['execution_strategy'] ?? 'batch_api'),
+                'prompt_cache_key'   => null,
+                'input_tokens'       => 0,
+                'output_tokens'      => 0,
+                'cached_tokens'      => 0,
+                'trigger_source'     => 'batch_api_fail',
+                'is_test_run'        => !empty($br['is_test_run']) ? 1 : 0,
+                'prompt'             => (string)$br['prompt'],
+                'market_region'      => $br['market_region'] ?? null,
+                'llm_answer'         => null,
+                'provider'           => (string)$br['provider'],
+                'model'              => (string)$br['model'],
+                'brand_name'         => (string)$br['brand_name'],
+                'status'             => 'failed',
+                'mece_category'      => '4_GENERIC',
+                'geo_quadrant'       => 'NONE',
+                'error_message'      => $errorMsg,
+                'scheduled_at'       => $br['scheduled_for'] ?? null,
+                'created_at'         => $nowTs,
+            ]);
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+
+    jsonResponse([
+        'success'           => true,
+        'provider_batch_id' => $providerBatchId !== '' ? $providerBatchId : null,
+        'failed_count'      => $failedCount,
+        'run_ids'           => $recordedRunIds,
     ], 200);
 }
 
@@ -141,11 +351,11 @@ $queueDepth = (int)$depthStmt->fetchColumn();
 
 // 4. Atomic Job Claiming Transaction
 $forUpdateSql = strtolower((string)$db->getAttribute(PDO::ATTR_DRIVER_NAME)) === 'sqlite' ? '' : 'FOR UPDATE';
+$modelCaps = getLlmModelCapabilitiesMap($db);
 $claimedJobs = [];
 $dispatchGroups = [
-    'prompt_caching' => [],
-    'batch_api'      => [],
-    'regular'        => [],
+    'batch_api' => [],
+    'regular'   => [],
 ];
 
 $db->beginTransaction();
@@ -154,21 +364,21 @@ try {
     $insBatchReq = $db->prepare("
         INSERT INTO batch_requests (
             custom_id, prompt_cache_key, execution_strategy,
-            user_id, config_id, prompt, provider, model,
+            user_id, config_id, prompt, market_region, provider, model,
             brand_name, brand_domains, competitors,
-            search_enabled, is_test_run, status, scheduled_for
+            search_enabled, supports_tools, is_test_run, status, scheduled_for
         ) VALUES (
             :custom_id, :prompt_cache_key, :execution_strategy,
-            :user_id, :config_id, :prompt, :provider, :model,
+            :user_id, :config_id, :prompt, :market_region, :provider, :model,
             :brand_name, :brand_domains, :competitors,
-            :search_enabled, 0, 'queued', NOW()
+            :search_enabled, :supports_tools, 0, 'queued', NOW()
         )
     ");
 
     // 4.1 Claim explicit pending runs from llm_runs (if any queued asynchronously)
     $pendingStmt = $db->prepare("
         SELECT r.id, r.config_id, r.user_id, r.prompt, r.provider, r.model,
-               tc.brand_name, tc.brand_domains, tc.competitors, tc.search_enabled, tc.schedule_interval,
+               tc.brand_name, tc.brand_domains, tc.market_region, tc.competitors, tc.search_enabled, tc.schedule_interval,
                u.credits_remaining
         FROM llm_runs r
         JOIN tracking_configs tc ON r.config_id = tc.id
@@ -191,37 +401,62 @@ try {
         $competitors = json_decode($row['competitors'] ?: '[]', true) ?? [];
         $compList = normalizeQueueCompetitors(is_array($competitors) ? $competitors : []);
         $scheduleInterval = normalizeScheduleInterval((string)($row['schedule_interval'] ?? 'every_120m'));
+        $searchEnabled = !empty($row['search_enabled']);
+        $marketRegion = isset($row['market_region']) && trim((string)$row['market_region']) !== '' ? trim((string)$row['market_region']) : null;
         $rawToken = ($row['provider'] ?? 'openai') . (!empty($row['model']) ? '/' . $row['model'] : '');
-        $spec = resolveTargetLlmSpec($rawToken, $scheduleInterval);
+        $baseSpec = resolveTargetLlmSpec($rawToken, $scheduleInterval, $searchEnabled, false);
+        $caps = $modelCaps[$baseSpec['id']] ?? [];
+        $spec = resolveTargetLlmSpec(
+            $rawToken,
+            $scheduleInterval,
+            $searchEnabled,
+            false,
+            array_key_exists('supports_batch_api', $caps) ? (bool)$caps['supports_batch_api'] : null,
+            array_key_exists('supports_tools', $caps) ? (bool)$caps['supports_tools'] : null
+        );
 
         $customId = sprintf('cl_u%d_c%d_%d_%s', (int)$row['user_id'], (int)$row['config_id'], time(), substr(bin2hex(random_bytes(4)), 0, 8));
-        $promptCacheKey = buildPromptCacheKey((int)$row['config_id'], (string)$row['prompt'], $spec['id']);
-        $providerCachingConfig = buildProviderCachingConfig($spec['provider'], $spec['model'], $promptCacheKey, $scheduleInterval);
+        $promptCacheKey = null;
+        $providerCachingConfig = buildProviderCachingConfig(
+            $spec['provider'],
+            $spec['model'],
+            null,
+            $scheduleInterval,
+            $searchEnabled,
+            false,
+            $spec['supports_batch_api'],
+            $spec['supports_tools']
+        );
 
         $insBatchReq->execute([
             ':custom_id'          => $customId,
-            ':prompt_cache_key'   => $promptCacheKey,
+            ':prompt_cache_key'   => null,
             ':execution_strategy' => $spec['execution_strategy'],
             ':user_id'            => (int)$row['user_id'],
             ':config_id'          => (int)$row['config_id'],
             ':prompt'             => (string)$row['prompt'],
+            ':market_region'      => $marketRegion,
             ':provider'           => $spec['provider'],
             ':model'              => $spec['model'],
             ':brand_name'         => (string)$row['brand_name'],
             ':brand_domains'      => json_encode($domains, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ':competitors'        => json_encode($compList, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            ':search_enabled'     => !empty($row['search_enabled']) ? 1 : 0,
+            ':search_enabled'     => $searchEnabled ? 1 : 0,
+            ':supports_tools'     => $spec['supports_tools'] ? 1 : 0,
         ]);
 
         $batchItem = [
             'custom_id'               => $customId,
-            'prompt_cache_key'        => $promptCacheKey,
+            'prompt_cache_key'        => null,
             'execution_strategy'      => $spec['execution_strategy'],
             'provider_caching_config' => $providerCachingConfig,
             'prompt'                  => (string)$row['prompt'],
+            'market_region'           => $marketRegion,
             'provider'                => $spec['provider'],
             'model'                   => $spec['model'],
             'target_llm'              => $spec['id'],
+            'supports_tools'          => $spec['supports_tools'],
+            'supports_batch_api'      => $spec['supports_batch_api'],
             'is_test_run'             => false,
         ];
         $dispatchGroups[$spec['execution_strategy']][] = $batchItem;
@@ -229,7 +464,7 @@ try {
         $claimedJobs[] = [
             'run_id'                  => 'run_' . time() . '_' . substr(bin2hex(random_bytes(4)), 0, 7),
             'custom_id'               => $customId,
-            'prompt_cache_key'        => $promptCacheKey,
+            'prompt_cache_key'        => null,
             'execution_strategy'      => $spec['execution_strategy'],
             'provider_caching_config' => $providerCachingConfig,
             'batch_items'             => [$batchItem],
@@ -239,10 +474,12 @@ try {
             'brand_name'              => (string)$row['brand_name'],
             'brand_domains'           => $domains,
             'prompt'                  => (string)$row['prompt'],
+            'market_region'           => $marketRegion,
             'competitors'             => $compList,
             'target_llms'             => [$spec['id']],
             'schedule_interval'       => $scheduleInterval,
-            'search_enabled'          => (bool)$row['search_enabled'],
+            'search_enabled'          => $searchEnabled,
+            'supports_tools'          => $spec['supports_tools'],
             'is_test_run'             => false,
         ];
     }
@@ -259,7 +496,7 @@ try {
     if ($availableSlots > 0) {
         $configStmt = $db->prepare("
             SELECT tc.id, tc.user_id, tc.brand_name, tc.brand_domains,
-                   tc.keywords_prompts, tc.competitors, tc.target_llms,
+                   tc.keywords_prompts, tc.market_region, tc.competitors, tc.target_llms,
                    tc.search_enabled, tc.schedule_interval, tc.next_run_at, tc.full_started_at,
                    u.credits_remaining
             FROM tracking_configs tc
@@ -333,30 +570,52 @@ try {
 
                 if ($credStmt->rowCount() > 0) {
                     $promptBatchItems = [];
+                    $cfgSearchEnabled = !empty($cfg['search_enabled']);
+                    $cfgMarketRegion = isset($cfg['market_region']) && trim((string)$cfg['market_region']) !== '' ? trim((string)$cfg['market_region']) : null;
                     foreach ($targetLLMs as $llmToken) {
-                        $spec = resolveTargetLlmSpec((string)$llmToken, $scheduleInterval);
+                        $baseSpec = resolveTargetLlmSpec((string)$llmToken, $scheduleInterval, $cfgSearchEnabled, false);
+                        $caps = $modelCaps[$baseSpec['id']] ?? [];
+                        $spec = resolveTargetLlmSpec(
+                            (string)$llmToken,
+                            $scheduleInterval,
+                            $cfgSearchEnabled,
+                            false,
+                            array_key_exists('supports_batch_api', $caps) ? (bool)$caps['supports_batch_api'] : null,
+                            array_key_exists('supports_tools', $caps) ? (bool)$caps['supports_tools'] : null
+                        );
                         $customId = sprintf('cl_u%d_c%d_%d_%s', (int)$cfg['user_id'], (int)$cfg['id'], time(), substr(bin2hex(random_bytes(4)), 0, 8));
-                        $promptCacheKey = buildPromptCacheKey((int)$cfg['id'], (string)$promptText, $spec['id']);
-                        $providerCachingConfig = buildProviderCachingConfig($spec['provider'], $spec['model'], $promptCacheKey, $scheduleInterval);
+                        $promptCacheKey = null;
+                        $providerCachingConfig = buildProviderCachingConfig(
+                            $spec['provider'],
+                            $spec['model'],
+                            null,
+                            $scheduleInterval,
+                            $cfgSearchEnabled,
+                            false,
+                            $spec['supports_batch_api'],
+                            $spec['supports_tools']
+                        );
 
                         $insBatchReq->execute([
                             ':custom_id'          => $customId,
-                            ':prompt_cache_key'   => $promptCacheKey,
+                            ':prompt_cache_key'   => null,
                             ':execution_strategy' => $spec['execution_strategy'],
                             ':user_id'            => (int)$cfg['user_id'],
                             ':config_id'          => (int)$cfg['id'],
                             ':prompt'             => (string)$promptText,
+                            ':market_region'      => $cfgMarketRegion,
                             ':provider'           => $spec['provider'],
                             ':model'              => $spec['model'],
                             ':brand_name'         => (string)$cfg['brand_name'],
                             ':brand_domains'      => $domainsJson,
                             ':competitors'        => $compJson,
-                            ':search_enabled'     => !empty($cfg['search_enabled']) ? 1 : 0,
+                            ':search_enabled'     => $cfgSearchEnabled ? 1 : 0,
+                            ':supports_tools'     => $spec['supports_tools'] ? 1 : 0,
                         ]);
 
                         $item = [
                             'custom_id'               => $customId,
-                            'prompt_cache_key'        => $promptCacheKey,
+                            'prompt_cache_key'        => null,
                             'execution_strategy'      => $spec['execution_strategy'],
                             'provider_caching_config' => $providerCachingConfig,
                             'config_id'               => (int)$cfg['id'],
@@ -365,11 +624,14 @@ try {
                             'brand_domains'           => $domains,
                             'competitors'             => $compList,
                             'prompt'                  => (string)$promptText,
+                            'market_region'           => $cfgMarketRegion,
                             'provider'                => $spec['provider'],
                             'model'                   => $spec['model'],
                             'target_llm'              => $spec['id'],
+                            'supports_tools'          => $spec['supports_tools'],
+                            'supports_batch_api'      => $spec['supports_batch_api'],
                             'schedule_interval'       => $scheduleInterval,
-                            'search_enabled'          => (bool)$cfg['search_enabled'],
+                            'search_enabled'          => $cfgSearchEnabled,
                             'is_test_run'             => false,
                         ];
                         $promptBatchItems[] = $item;
@@ -380,8 +642,8 @@ try {
                     $claimedJobs[] = [
                         'run_id'                  => $batchRunId,
                         'custom_id'               => $firstItem['custom_id'] ?? null,
-                        'prompt_cache_key'        => $firstItem['prompt_cache_key'] ?? null,
-                        'execution_strategy'      => $firstItem['execution_strategy'] ?? 'prompt_caching',
+                        'prompt_cache_key'        => null,
+                        'execution_strategy'      => $firstItem['execution_strategy'] ?? 'regular',
                         'provider_caching_config' => $firstItem['provider_caching_config'] ?? null,
                         'batch_items'             => $promptBatchItems,
                         'api_base_url'            => $apiBaseUrl,
@@ -390,10 +652,12 @@ try {
                         'brand_name'              => (string)$cfg['brand_name'],
                         'brand_domains'           => $domains,
                         'prompt'                  => (string)$promptText,
+                        'market_region'           => $cfgMarketRegion,
                         'competitors'             => $compList,
                         'target_llms'             => $targetLLMs,
                         'schedule_interval'       => $scheduleInterval,
-                        'search_enabled'          => (bool)$cfg['search_enabled'],
+                        'search_enabled'          => $cfgSearchEnabled,
+                        'supports_tools'          => $firstItem['supports_tools'] ?? true,
                         'is_test_run'             => false,
                     ];
                 } else {

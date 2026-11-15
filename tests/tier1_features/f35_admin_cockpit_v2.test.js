@@ -351,8 +351,10 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
               display_name: 'OpenAI · GPT-6 Luna',
               eu_hosted: false,
               supports_web_search: true,
-              execution_strategy: 'prompt_caching',
-              n8n_credential_name: 'OpenAI Live Cred',
+              supports_batch_api: true,
+              supports_tools: true,
+              execution_strategy: 'batch_api',
+              n8n_credential_name: 'OpenRouter - Chatlytics - Chatlytics-dev-1',
               sort_order: 10
             },
             {
@@ -361,10 +363,33 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
               model_name: 'claude-4-sonnet',
               display_name: 'Anthropic · Claude 4 Sonnet',
               eu_hosted: false,
-              supports_web_search: false,
-              execution_strategy: 'prompt_caching',
-              n8n_credential_name: 'Anthropic Live Cred',
+              supports_web_search: true,
+              supports_batch_api: true,
+              supports_tools: true,
+              execution_strategy: 'batch_api',
+              n8n_credential_name: 'OpenRouter - Chatlytics - Chatlytics-dev-1',
               sort_order: 70
+            },
+            {
+              id: 'anthropic/claude-4-sonnet:batch',
+              provider: 'anthropic',
+              model_name: 'claude-4-sonnet:batch',
+              display_name: 'Anthropic · Claude 4 Sonnet (Batch)',
+              eu_hosted: false,
+              supports_batch_api: true
+            },
+            {
+              id: 'openai/dall-e-3',
+              provider: 'openai',
+              model_name: 'dall-e-3',
+              display_name: 'DALL-E 3 (Blocked image)',
+              architecture: { input_modalities: ['text'], output_modalities: ['image'] }
+            },
+            {
+              id: 'cohere/command-r-plus',
+              provider: 'cohere',
+              model_name: 'command-r-plus',
+              display_name: 'Unlisted Provider Model'
             }
           ]
         }));
@@ -392,9 +417,48 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
       const claude = syncJson.data.models.find(m => m.id === 'anthropic/claude-4-sonnet');
       assert.ok(claude);
       assert.equal(claude.n8n_sync_status, 'connected');
-      assert.equal(claude.is_allowed, true);
+      assert.equal(claude.is_allowed, false, 'Newly discovered OpenRouter models must default to is_allowed = false');
+      assert.equal(claude.supports_batch_api, true);
+      // Verify :batch suffix was collapsed and non-whitelisted / non-text models excluded
+      assert.equal(syncJson.data.models.some(m => m.id.endsWith(':batch')), false);
+      assert.equal(syncJson.data.models.some(m => m.id === 'openai/dall-e-3'), false);
+      assert.equal(syncJson.data.models.some(m => m.id === 'cohere/command-r-plus'), false);
 
-      // Disable a model and verify Growth user gets 403 when trying to select it
+      // Blocked before admin enables newly discovered model
+      const blockedBeforeEnable = await fetch(`${srv.baseUrl}/api/configs.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer growth_token_f35' },
+        body: JSON.stringify({
+          name: 'Blocked Before Enable',
+          brand_name: 'Celonis',
+          brand_domains: ['celonis.com'],
+          keywords_prompts: ['Process Mining'],
+          target_llms: ['anthropic/claude-4-sonnet']
+        })
+      });
+      assert.equal(blockedBeforeEnable.status, 403);
+
+      // Admin enables model -> Growth can select it, then disable -> Growth gets 403
+      const enableRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=toggle_model`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({ id: 'anthropic/claude-4-sonnet', is_allowed: true })
+      });
+      assert.equal(enableRes.status, 200);
+
+      const allowedCfg = await fetch(`${srv.baseUrl}/api/configs.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer growth_token_f35' },
+        body: JSON.stringify({
+          name: 'Allowed After Enable',
+          brand_name: 'Celonis',
+          brand_domains: ['celonis.com'],
+          keywords_prompts: ['Process Mining'],
+          target_llms: ['anthropic/claude-4-sonnet']
+        })
+      });
+      assert.equal(allowedCfg.status, 201);
+
       const toggleRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=toggle_model`, {
         method: 'POST',
         headers: admHeaders,
@@ -501,9 +565,9 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
       assert.equal(starterJson.data.config.preset_id, 'eu_sovereign_dsgvo');
       assert.equal(starterJson.data.config.search_enabled, false);
       assert.deepEqual(starterJson.data.config.target_llms, [
-        'mistral/mistral-medium-latest',
-        'mistral/mistral-large-latest',
-        'mistral/zai-glm-5-3'
+        'mistralai/mistral-medium-3-5',
+        'mistralai/mistral-large-4-0',
+        'z-ai/glm-5.3'
       ]);
 
       // 5. Growth user freely configures custom single model + search_enabled=false
@@ -528,7 +592,7 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
           id: 'dach_custom_test',
           name_de: 'DACH Custom Test',
           name_en: 'DACH Custom Test',
-          target_llms: ['openai/gpt-6-luna', 'mistral/zai-glm-5-3'],
+          target_llms: ['openai/gpt-6-luna', 'z-ai/glm-5.3'],
           search_enabled: true,
           allowed_tiers: ['growth', 'enterprise_managed']
         })

@@ -111,7 +111,8 @@ function handleGetConfig(?int $id): void {
             jsonError("Configuration not found.", 404);
         }
 
-        $formatted = formatConfigRecord($config);
+        $modelCaps = getLlmModelCapabilitiesMap($db);
+        $formatted = formatConfigRecord($config, $modelCaps);
 
         // Fetch run count
         $runCountStmt = $db->prepare("SELECT COUNT(*) FROM llm_runs WHERE config_id = :id");
@@ -135,8 +136,9 @@ function handleGetConfig(?int $id): void {
         $stmt->execute([':user_id' => $userId]);
         $rows = $stmt->fetchAll();
 
-        $configs = array_map(function (array $row): array {
-            $formatted = formatConfigRecord($row);
+        $modelCaps = getLlmModelCapabilitiesMap($db);
+        $configs = array_map(function (array $row) use ($modelCaps): array {
+            $formatted = formatConfigRecord($row, $modelCaps);
             $formatted['total_runs'] = (int)($row['run_count'] ?? 0);
             return $formatted;
         }, $rows);
@@ -184,12 +186,12 @@ function handleCreateConfig(array $data): void {
 
     $sql = "
         INSERT INTO tracking_configs (
-            user_id, name, brand_name, brand_domains, keywords_prompts,
+            user_id, name, brand_name, brand_domains, keywords_prompts, market_region,
             competitors, preset_id, target_llms, search_enabled, schedule_interval,
             datasets_per_day, initial_test_used, full_started_at,
             status, next_run_at
         ) VALUES (
-            :user_id, :name, :brand_name, :brand_domains, :keywords_prompts,
+            :user_id, :name, :brand_name, :brand_domains, :keywords_prompts, :market_region,
             :competitors, :preset_id, :target_llms, :search_enabled, :schedule_interval,
             :datasets_per_day, :initial_test_used, :full_started_at,
             :status, :next_run_at
@@ -203,6 +205,7 @@ function handleCreateConfig(array $data): void {
         ':brand_name'        => $validated['brand_name'],
         ':brand_domains'     => json_encode($validated['brand_domains'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':keywords_prompts'  => json_encode($validated['keywords_prompts'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ':market_region'     => $validated['market_region'],
         ':competitors'       => json_encode($validated['competitors'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':preset_id'         => $validated['preset_id'],
         ':target_llms'       => json_encode($validated['target_llms'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -222,7 +225,7 @@ function handleCreateConfig(array $data): void {
     $fetchStmt->execute([':id' => $newConfigId]);
     $created = $fetchStmt->fetch();
 
-    $formatted = formatConfigRecord($created);
+    $formatted = formatConfigRecord($created, getLlmModelCapabilitiesMap($db));
     $formatted['total_runs'] = 0;
 
     jsonResponse([
@@ -399,7 +402,7 @@ function handleUpdateConfig(?int $id, array $data): void {
 
     $isActivatingFullStart = ($action === 'full_start') || !empty($data['full_start']);
 
-    // Enforce prompt immutability after Full Start to preserve provider Input Prompt Caching prefix
+    // Enforce prompt and market_region immutability after Full Start to preserve daily benchmark consistency
     if ($alreadyFullStarted && (isset($data['keywords_prompts']) || isset($data['prompts']))) {
         $existingPrompts = json_decode($existing['keywords_prompts'] ?: '[]', true) ?? [];
         $incomingRaw = $data['keywords_prompts'] ?? $data['prompts'];
@@ -410,7 +413,18 @@ function handleUpdateConfig(?int $id, array $data): void {
         }
         if ($incomingRaw !== $existingPrompts) {
             jsonError(
-                "Prompts are locked after Full Start to preserve LLM provider Input Prompt Caching and daily time-series consistency. Configuration can only be paused or resumed.",
+                "Prompts and target market/region are locked after Full Start to preserve daily time-series consistency. Configuration can only be paused or resumed.",
+                409
+            );
+        }
+    }
+
+    if ($alreadyFullStarted && array_key_exists('market_region', $data)) {
+        $existingRegion = sanitizeMarketRegion($existing['market_region'] ?? null);
+        $incomingRegion = sanitizeMarketRegion($data['market_region']);
+        if ($incomingRegion !== $existingRegion) {
+            jsonError(
+                "Target market/region is locked after Full Start to preserve daily time-series consistency. Configuration can only be paused or resumed.",
                 409
             );
         }
@@ -449,6 +463,7 @@ function handleUpdateConfig(?int $id, array $data): void {
             brand_name = :brand_name,
             brand_domains = :brand_domains,
             keywords_prompts = :keywords_prompts,
+            market_region = :market_region,
             competitors = :competitors,
             preset_id = :preset_id,
             target_llms = :target_llms,
@@ -468,6 +483,7 @@ function handleUpdateConfig(?int $id, array $data): void {
         ':brand_name'        => $validated['brand_name'],
         ':brand_domains'     => json_encode($validated['brand_domains'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':keywords_prompts'  => json_encode($validated['keywords_prompts'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ':market_region'     => $validated['market_region'],
         ':competitors'       => json_encode($validated['competitors'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':preset_id'         => $validated['preset_id'],
         ':target_llms'       => json_encode($validated['target_llms'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -487,7 +503,7 @@ function handleUpdateConfig(?int $id, array $data): void {
     $updated = $fetchStmt->fetch();
 
     jsonResponse([
-        'config'  => formatConfigRecord($updated),
+        'config'  => formatConfigRecord($updated, getLlmModelCapabilitiesMap($db)),
         'message' => $isActivatingFullStart
             ? 'Full Data Mining activated successfully.'
             : 'Configuration updated successfully.',
@@ -708,7 +724,7 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
         $existingLLMs = json_decode($existing['target_llms'] ?: '[]', true);
         $targetLLMs = normalizeTargetLlmsList(is_array($existingLLMs) ? $existingLLMs : []);
     } else {
-        $targetLLMs = ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'];
+        $targetLLMs = ['openai/gpt-6-luna', 'google/gemini-3.5-flash'];
     }
 
     // 6. schedule_interval (Data Mining Accuracy: every_120m, every_60m, every_30m, every_15m)
@@ -762,11 +778,21 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
         $presetId = trim((string)$existing['preset_id']);
     }
 
+    // 11. market_region (optional geographic target region; null = auto-infer from prompt language)
+    if (array_key_exists('market_region', $data)) {
+        $marketRegion = sanitizeMarketRegion($data['market_region']);
+    } elseif ($isUpdate && $existing && array_key_exists('market_region', $existing)) {
+        $marketRegion = sanitizeMarketRegion($existing['market_region']);
+    } else {
+        $marketRegion = null;
+    }
+
     return [
         'name'              => $name,
         'brand_name'        => $brandName,
         'brand_domains'     => $brandDomains,
         'keywords_prompts'  => $keywordsPrompts,
+        'market_region'     => $marketRegion,
         'competitors'       => $competitors,
         'preset_id'         => $presetId,
         'target_llms'       => $targetLLMs,
@@ -774,6 +800,21 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
         'search_enabled'    => $searchEnabled,
         'status'            => $status,
     ];
+}
+
+/**
+ * Normalizes an optional market_region value (`'auto'`, `'default'`, empty -> `null`).
+ */
+function sanitizeMarketRegion($raw): ?string {
+    if ($raw === null || is_array($raw) || is_object($raw)) {
+        return null;
+    }
+    $clean = trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', (string)$raw));
+    $clean = preg_replace('/\s+/u', ' ', $clean);
+    if ($clean === '' || in_array(strtolower($clean), ['auto', 'default', 'none', 'null'], true)) {
+        return null;
+    }
+    return mb_substr($clean, 0, 100);
 }
 
 /**
@@ -1014,7 +1055,7 @@ function calculateNextRunAt(string $interval): ?string {
 /**
  * Formats database tracking_configs record into normalized JSON object for responses.
  */
-function formatConfigRecord(array $row): array {
+function formatConfigRecord(array $row, array $modelCaps = []): array {
     $domains = json_decode($row['brand_domains'] ?: '[]', true) ?? [];
     $prompts = json_decode($row['keywords_prompts'] ?: '[]', true) ?? [];
     $competitors = json_decode($row['competitors'] ?: '[]', true) ?? [];
@@ -1037,11 +1078,21 @@ function formatConfigRecord(array $row): array {
 
     $referenceDate = $fullStartedAt ?? ($row['created_at'] ?? null);
     $isFirstDay = $referenceDate !== null && substr((string)$referenceDate, 0, 10) === date('Y-m-d');
+    $searchEnabled = !empty($row['search_enabled']);
 
     $executionStrategies = [];
     foreach ($targetLLMs as $llmToken) {
-        $spec = resolveTargetLlmSpec((string)$llmToken, $scheduleInterval);
-        if ($spec['id'] !== '') {
+        $baseSpec = resolveTargetLlmSpec((string)$llmToken, $scheduleInterval, $searchEnabled, false);
+        if ($baseSpec['id'] !== '') {
+            $caps = $modelCaps[$baseSpec['id']] ?? [];
+            $spec = resolveTargetLlmSpec(
+                (string)$llmToken,
+                $scheduleInterval,
+                $searchEnabled,
+                false,
+                array_key_exists('supports_batch_api', $caps) ? (bool)$caps['supports_batch_api'] : null,
+                array_key_exists('supports_tools', $caps) ? (bool)$caps['supports_tools'] : null
+            );
             $executionStrategies[$spec['id']] = $spec['execution_strategy'];
         }
     }
@@ -1054,6 +1105,7 @@ function formatConfigRecord(array $row): array {
         'brand_domains'        => $domains,
         'keywords_prompts'     => $prompts,
         'prompts'              => $prompts, // Alias for client/test compatibility
+        'market_region'        => sanitizeMarketRegion($row['market_region'] ?? null),
         'competitors'          => $competitors,
         'preset_id'            => !empty($row['preset_id']) ? (string)$row['preset_id'] : null,
         'target_llms'          => $targetLLMs,

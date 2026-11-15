@@ -39,6 +39,7 @@ const SQLITE_SCHEMA = `
     brand_name TEXT NOT NULL,
     brand_domains TEXT NOT NULL,
     keywords_prompts TEXT NOT NULL,
+    market_region TEXT NULL,
     competitors TEXT NOT NULL,
     target_llms TEXT NOT NULL,
     search_enabled INTEGER DEFAULT 1,
@@ -63,6 +64,10 @@ const SQLITE_SCHEMA = `
     cached_tokens INTEGER NOT NULL DEFAULT 0,
     is_test_run INTEGER NOT NULL DEFAULT 0,
     prompt TEXT NOT NULL,
+    market_region TEXT NULL,
+    prompt_language TEXT NULL,
+    effective_region TEXT NULL,
+    region_source TEXT NULL,
     provider TEXT NOT NULL DEFAULT 'openai',
     model TEXT NOT NULL DEFAULT 'gpt-6-luna',
     brand_name TEXT NOT NULL DEFAULT '',
@@ -80,6 +85,8 @@ const SQLITE_SCHEMA = `
     has_citations INTEGER DEFAULT 0,
     brand_cited INTEGER DEFAULT 0,
     competitor_cited INTEGER DEFAULT 0,
+    regional_citation_count INTEGER NOT NULL DEFAULT 0,
+    regional_citation_ratio REAL NULL,
     raw_prompt_payload TEXT NULL,
     raw_response_text TEXT NULL,
     raw_response_payload TEXT NULL,
@@ -109,6 +116,7 @@ const SQLITE_SCHEMA = `
     citation_title TEXT NULL,
     is_brand_domain INTEGER DEFAULT 0,
     is_competitor_domain INTEGER DEFAULT 0,
+    is_regional_tld INTEGER DEFAULT 0,
     citation_index INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -122,16 +130,20 @@ const SQLITE_SCHEMA = `
     user_id INTEGER NOT NULL,
     config_id INTEGER NOT NULL,
     prompt TEXT NOT NULL,
+    market_region TEXT NULL,
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
     brand_name TEXT NOT NULL,
     brand_domains TEXT NOT NULL,
     competitors TEXT NOT NULL,
     search_enabled INTEGER NOT NULL DEFAULT 1,
+    supports_tools INTEGER NOT NULL DEFAULT 1,
     is_test_run INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'queued',
     scheduled_for DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     submitted_at DATETIME NULL DEFAULT NULL,
+    last_polled_at DATETIME NULL DEFAULT NULL,
+    batch_error_detail TEXT NULL DEFAULT NULL,
     completed_at DATETIME NULL DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
@@ -340,48 +352,67 @@ test('Feature 33.1: Physical per-user result tables (user_results_<user_id>) pro
   }
 });
 
-test('Feature 33.2: Provider-native 3-tier cost cascade (prompt_caching -> batch_api -> regular)', () => {
+test('Feature 33.2: OpenRouter non-caching execution strategy cascade (batch_api vs regular)', () => {
   const res = runPhp(`
     require_once '${API_DIR.replace(/\\/g, '/')}/bootstrap.php';
     echo json_encode([
-      'openai_120' => [resolveTargetLlmSpec('openai', 'every_120m'), buildProviderCachingConfig('openai', 'gpt-6-luna', 'ck_oai', 'every_120m')],
-      'gemini_120' => [resolveTargetLlmSpec('gemini', 'every_120m'), buildProviderCachingConfig('gemini', 'models/gemini-3.5-flash', 'ck_gem', 'every_120m')],
-      'anthropic_60' => [resolveTargetLlmSpec('anthropic', 'every_60m'), buildProviderCachingConfig('anthropic', 'claude-sonnet-4-5', 'ck_ant60', 'every_60m')],
-      'anthropic_120' => [resolveTargetLlmSpec('anthropic', 'every_120m'), buildProviderCachingConfig('anthropic', 'claude-sonnet-4-5', 'ck_ant120', 'every_120m')],
-      'mistral_120' => [resolveTargetLlmSpec('mistral', 'every_120m'), buildProviderCachingConfig('mistral', 'mistral-large-latest', 'ck_mis', 'every_120m')],
-      'zai_60' => [resolveTargetLlmSpec('zai-glm', 'every_60m'), buildProviderCachingConfig('mistral', 'zai-glm', 'ck_zai', 'every_60m')]
+      'openai_sched_nosearch' => [
+        resolveTargetLlmSpec('openai', 'every_15m', false, false),
+        buildProviderCachingConfig('openai', 'gpt-6-luna', 'ck_oai', 'every_15m', false, false)
+      ],
+      'openai_sched_search' => [
+        resolveTargetLlmSpec('openai', 'every_15m', true, false),
+        buildProviderCachingConfig('openai', 'gpt-6-luna', 'ck_oai', 'every_15m', true, false)
+      ],
+      'openai_test_nosearch' => [
+        resolveTargetLlmSpec('openai', 'every_15m', false, true),
+        buildProviderCachingConfig('openai', 'gpt-6-luna', 'ck_oai', 'every_15m', false, true)
+      ],
+      'gemini_120' => [
+        resolveTargetLlmSpec('google/gemini-3.5-flash', 'every_120m', false, false),
+        buildProviderCachingConfig('google', 'gemini-3.5-flash', 'ck_gem', 'every_120m', false, false)
+      ],
+      'anthropic_60' => [
+        resolveTargetLlmSpec('anthropic/claude-sonnet-5.5', 'every_60m', false, false),
+        buildProviderCachingConfig('anthropic', 'claude-sonnet-5.5', 'ck_ant60', 'every_60m', false, false)
+      ],
+      'zai_sched' => [
+        resolveTargetLlmSpec('z-ai/glm-5.3', 'every_60m', false, false),
+        buildProviderCachingConfig('z-ai', 'glm-5.3', 'ck_zai', 'every_60m', false, false)
+      ],
+      'perplexity_nonbatch' => [
+        resolveTargetLlmSpec('perplexity/sonar-pro', 'every_60m', false, false),
+        buildProviderCachingConfig('perplexity', 'sonar-pro', 'ck_pplx', 'every_60m', false, false)
+      ],
+      'cache_key' => buildPromptCacheKey(10, 'Prompt', 'openai/gpt-6-luna')
     ]);
   `);
   assert.equal(res.status, 0, res.stderr || res.stdout);
   const d = res.parsed;
 
-  // OpenAI: 24h extended prompt caching
-  assert.equal(d.openai_120[0].execution_strategy, 'prompt_caching');
-  assert.equal(d.openai_120[1].prompt_cache_retention, '24h');
-  assert.equal(d.openai_120[1].prompt_cache_key, 'ck_oai');
+  // Input Prompt Caching is strictly disabled everywhere (even at every_15m Precision tier)
+  assert.equal(d.cache_key, null);
 
-  // Gemini: implicit + v1beta/cachedContents
-  assert.equal(d.gemini_120[0].execution_strategy, 'prompt_caching');
-  assert.equal(d.gemini_120[1].implicit_caching, true);
-  assert.equal(d.gemini_120[1].explicit_cache_endpoint, 'v1beta/cachedContents');
+  // Batchable scheduled non-search runs -> batch_api across every interval
+  assert.equal(d.openai_sched_nosearch[0].execution_strategy, 'batch_api');
+  assert.equal(d.openai_sched_nosearch[0].supports_prompt_caching, false);
+  assert.equal(d.openai_sched_nosearch[1].gateway, 'openrouter');
+  assert.equal(d.openai_sched_nosearch[1].prompt_cache_key, null);
+  assert.equal(d.openai_sched_nosearch[1].endpoint, '/api/v1/batches');
 
-  // Anthropic <=60m -> prompt_caching with 1h ephemeral TTL
-  assert.equal(d.anthropic_60[0].execution_strategy, 'prompt_caching');
-  assert.equal(d.anthropic_60[1].cache_control.ttl, '1h');
+  // Search ON or Test Run -> forces synchronous regular OpenRouter chat completion
+  assert.equal(d.openai_sched_search[0].execution_strategy, 'regular');
+  assert.equal(d.openai_sched_search[1].endpoint, '/api/v1/chat/completions');
+  assert.equal(d.openai_test_nosearch[0].execution_strategy, 'regular');
 
-  // Anthropic every_120m -> exceeds 1h max TTL, falls back to 50% Batch API
-  assert.equal(d.anthropic_120[0].execution_strategy, 'batch_api');
-  assert.equal(d.anthropic_120[1].strategy, 'batch_api');
-  assert.equal(d.anthropic_120[1].reason, 'interval_120m_exceeds_claude_1h_max_cache_ttl');
+  assert.equal(d.gemini_120[0].execution_strategy, 'batch_api');
+  assert.equal(d.anthropic_60[0].execution_strategy, 'batch_api');
+  assert.equal(d.zai_sched[0].execution_strategy, 'batch_api');
 
-  // Mistral native -> prompt_caching
-  assert.equal(d.mistral_120[0].execution_strategy, 'prompt_caching');
-  assert.equal(d.mistral_120[1].prompt_cache_key, 'ck_mis');
-
-  // Z.ai GLM -> neither cache nor batch -> regular
-  assert.equal(d.zai_60[0].execution_strategy, 'regular');
-  assert.equal(d.zai_60[1].strategy, 'regular');
-  assert.equal(d.zai_60[1].prompt_cache_key, null);
+  // Non-batchable models fall back cleanly to regular
+  assert.equal(d.perplexity_nonbatch[0].supports_batch_api, false);
+  assert.equal(d.perplexity_nonbatch[0].execution_strategy, 'regular');
+  assert.equal(d.perplexity_nonbatch[0].supports_tools, false);
 });
 
 test('Feature 33.3: custom_id batch_requests correlation, provider cached_tokens extraction, dual insertion & idempotency', async () => {
@@ -401,8 +432,8 @@ test('Feature 33.3: custom_id batch_requests correlation, provider cached_tokens
       $pdo->prepare("INSERT INTO users (id, email, password_hash, role, tier, credits_remaining, status, api_key) VALUES (1, 'c@b2b.de', 'h', 'user', 'starter', 100, 'active', 'f33_corr_key_123456')")->execute();
       $pdo->prepare("INSERT INTO tracking_configs (id, user_id, name, brand_name, brand_domains, keywords_prompts, competitors, target_llms, schedule_interval, datasets_per_day, status, initial_test_used, full_started_at, next_run_at) VALUES (10, 1, 'TestCfg', 'Personio', ?, ?, ?, ?, 'every_120m', 12, 'active', 0, NULL, NULL)")
         ->execute([json_encode(['personio.de']), json_encode(['Best HR?']), json_encode(['Workday']), json_encode(['openai', 'gemini'])]);
-      $pdo->prepare("INSERT INTO tracking_configs (id, user_id, name, brand_name, brand_domains, keywords_prompts, competitors, target_llms, schedule_interval, datasets_per_day, status, initial_test_used, full_started_at, next_run_at) VALUES (11, 1, 'BatchCfg', 'Personio', ?, ?, ?, ?, 'every_120m', 12, 'active', 1, ?, ?)")
-        ->execute([json_encode(['personio.de']), json_encode(['Top Payroll?']), json_encode(['Workday']), json_encode(['anthropic', 'zai-glm']), '${pastDue}', '${pastDue}']);
+      $pdo->prepare("INSERT INTO tracking_configs (id, user_id, name, brand_name, brand_domains, keywords_prompts, competitors, target_llms, search_enabled, schedule_interval, datasets_per_day, status, initial_test_used, full_started_at, next_run_at) VALUES (11, 1, 'BatchCfg', 'Personio', ?, ?, ?, ?, 0, 'every_120m', 12, 'active', 1, ?, ?)")
+        ->execute([json_encode(['personio.de']), json_encode(['Top Payroll?']), json_encode(['Workday']), json_encode(['anthropic', 'perplexity/sonar-pro']), '${pastDue}', '${pastDue}']);
     `);
     assert.equal(init.status, 0, init.stderr);
 
@@ -418,11 +449,13 @@ test('Feature 33.3: custom_id batch_requests correlation, provider cached_tokens
     assert.equal(trigRes.status, 200, JSON.stringify(trigBody));
     assert.equal(trigBody.batch_items.length, 2);
     const oaiItem = trigBody.batch_items.find((b) => b.provider === 'openai');
-    const gemItem = trigBody.batch_items.find((b) => b.provider === 'gemini');
-    assert.equal(oaiItem.execution_strategy, 'prompt_caching');
+    const gemItem = trigBody.batch_items.find((b) => b.provider === 'google' || b.provider === 'gemini');
+    assert.ok(gemItem, 'Gemini/Google batch item must exist');
+    assert.equal(oaiItem.execution_strategy, 'regular');
+    assert.equal(oaiItem.prompt_cache_key, null);
     assert.equal(oaiItem.is_test_run, true);
 
-    // 2. Poll n8n_queue -> dispatches Full-Started config 11 with anthropic (batch_api) & zai-glm (regular)
+    // 2. Poll n8n_queue -> dispatches Full-Started config 11 with search_enabled=false -> anthropic (batch_api) & perplexity (regular)
     const pollRes = await fetch(`${server.baseUrl}/api/n8n_queue.php?action=poll&limit=5`, {
       headers: { 'X-N8N-Secret': 'f33_test_secret' }
     });
@@ -431,9 +464,9 @@ test('Feature 33.3: custom_id batch_requests correlation, provider cached_tokens
     assert.equal(pollBody.jobs_count, 1);
     const qItems = pollBody.jobs[0].batch_items;
     const anthItem = qItems.find((b) => b.provider === 'anthropic');
-    const zaiItem = qItems.find((b) => b.model === 'zai-glm');
+    const pplxItem = qItems.find((b) => b.provider === 'perplexity');
     assert.equal(anthItem.execution_strategy, 'batch_api');
-    assert.equal(zaiItem.execution_strategy, 'regular');
+    assert.equal(pplxItem.execution_strategy, 'regular');
 
     // 3. Ingest deferred results using ONLY custom_id + usage telemetry (verifying DB correlation & token extraction)
     const ing1 = await (await fetch(`${server.baseUrl}/api/ingest.php`, {
@@ -852,4 +885,151 @@ test('Feature 33.6: DashboardController accordion row toggle, XSS-safe DOM rende
   assert.equal(aligned.length, 2);
   assert.notEqual(aligned[0].color, aligned[1].color);
   assert.equal(aligned.find((s) => s.provider === 'openai').slots[1].value, null);
+});
+
+test('Feature 33.7: market_region CRUD + Full-Start lock, open_batches, fail_batch & ingest geo telemetry persistence', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatlytics-f33-geo-'));
+  const dbPath = path.join(tmpDir, 'geo.sqlite').replace(/\\/g, '/');
+  const routerPath = path.join(tmpDir, 'router.php');
+  const webhook = await startMockWebhookServer();
+  let server = null;
+
+  try {
+    fs.writeFileSync(routerPath, buildRouterScript(dbPath, webhook.url), 'utf8');
+    const pastDue = '2026-01-01 00:00:00';
+    const init = runPhp(`
+      $pdo = new PDO('sqlite:${dbPath}');
+      $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      $pdo->exec(${JSON.stringify(SQLITE_SCHEMA)});
+      $pdo->prepare("INSERT INTO users (id, email, password_hash, role, tier, credits_remaining, status, api_key) VALUES (1, 'geo@b2b.de', 'h', 'user', 'growth', 500, 'active', 'f33_geo_key_123456')")->execute();
+    `);
+    assert.equal(init.status, 0, init.stderr);
+
+    server = await startTempPhpServer(routerPath);
+    const userHeaders = { 'Content-Type': 'application/json', 'Authorization': 'Bearer f33_geo_key_123456' };
+    const n8nHeaders = { 'Content-Type': 'application/json', 'X-N8N-Secret': 'f33_test_secret' };
+
+    // 1. Create config with market_region = 'FR', search_enabled = false
+    const createRes = await fetch(`${server.baseUrl}/api/configs.php`, {
+      method: 'POST',
+      headers: userHeaders,
+      body: JSON.stringify({
+        name: 'Geo FR Config',
+        brand_name: 'Personio',
+        brand_domains: ['personio.de'],
+        keywords_prompts: ['Welche HR Software ist gut?'],
+        market_region: 'FR',
+        competitors: ['Workday'],
+        target_llms: ['openai/gpt-6-luna'],
+        search_enabled: false
+      })
+    });
+    const createJson = await createRes.json();
+    assert.equal(createRes.status, 201, JSON.stringify(createJson));
+    const cfgId = createJson.data.config.id;
+    assert.equal(createJson.data.config.market_region, 'FR');
+
+    // 2. Full Start locks market_region from subsequent modification (HTTP 409)
+    const updRes = await fetch(`${server.baseUrl}/api/configs.php?id=${cfgId}`, {
+      method: 'PUT',
+      headers: userHeaders,
+      body: JSON.stringify({ market_region: 'ES' })
+    });
+    assert.equal(updRes.status, 200);
+    assert.equal((await updRes.json()).data.config.market_region, 'ES');
+
+    // Mark config full_started + due in SQLite and test 409 lock + n8n_queue batch lifecycle
+    const setDue = runPhp(`
+      $pdo = new PDO('sqlite:${dbPath}');
+      $pdo->prepare("UPDATE tracking_configs SET full_started_at = ?, next_run_at = ? WHERE id = ?")
+          ->execute(['${pastDue}', '${pastDue}', ${cfgId}]);
+    `);
+    assert.equal(setDue.status, 0, setDue.stderr);
+
+    const lockedUpd = await fetch(`${server.baseUrl}/api/configs.php?id=${cfgId}`, {
+      method: 'PUT',
+      headers: userHeaders,
+      body: JSON.stringify({ market_region: 'DACH' })
+    });
+    assert.equal(lockedUpd.status, 409);
+
+    // 3. Queue poller returns batch_api item carrying market_region='ES'
+    const pollRes = await fetch(`${server.baseUrl}/api/n8n_queue.php?action=poll&limit=5`, { headers: n8nHeaders });
+    const pollBody = await pollRes.json();
+    assert.equal(pollRes.status, 200);
+    assert.equal(pollBody.jobs_count, 1);
+    assert.equal(pollBody.jobs[0].market_region, 'ES');
+    const cid = pollBody.jobs[0].batch_items[0].custom_id;
+    assert.equal(pollBody.jobs[0].batch_items[0].execution_strategy, 'batch_api');
+
+    // 4. register_batch -> open_batches -> fail_batch lifecycle
+    const regRes = await fetch(`${server.baseUrl}/api/n8n_queue.php?action=register_batch`, {
+      method: 'POST',
+      headers: n8nHeaders,
+      body: JSON.stringify({ provider_batch_id: 'batch_or_999', custom_ids: [cid], execution_strategy: 'batch_api' })
+    });
+    assert.equal(regRes.status, 200);
+
+    const openRes = await fetch(`${server.baseUrl}/api/n8n_queue.php?action=open_batches`, { headers: n8nHeaders });
+    const openJson = await openRes.json();
+    assert.equal(openRes.status, 200);
+    assert.equal(openJson.open_batches_count, 1);
+    assert.equal(openJson.open_batches[0].provider_batch_id, 'batch_or_999');
+    assert.equal(openJson.open_batches[0].market_region, 'ES');
+
+    // 5. Ingest geo-enriched result -> verifies user_results_1 stores market_region/prompt_language/effective_region/region_source/regional_citation_*
+    const ingGeo = await (await fetch(`${server.baseUrl}/api/ingest.php`, {
+      method: 'POST',
+      headers: n8nHeaders,
+      body: JSON.stringify({
+        custom_id: cid,
+        batch_id: 'batch_or_999',
+        mece_category: '1_DIRECT_WIN',
+        geo_quadrant: 'NONE',
+        raw_response_text: 'Personio domina en España.',
+        market_region: 'ES',
+        prompt_language: 'de',
+        effective_region: 'ES',
+        region_source: 'user_setting',
+        regional_citation_count: 1,
+        regional_citation_ratio: 1,
+        citations: [{ citation_url: 'https://personio.es/rrhh', citation_domain: 'personio.es', is_brand_domain: true, is_regional_tld: true }]
+      })
+    })).json();
+    assert.equal(ingGeo.status, 'success', JSON.stringify(ingGeo));
+
+    // Also test fail_batch on another synthetic batch row
+    runPhp(`
+      $pdo = new PDO('sqlite:${dbPath}');
+      $pdo->prepare("INSERT INTO batch_requests (custom_id, execution_strategy, provider_batch_id, user_id, config_id, prompt, market_region, provider, model, brand_name, brand_domains, competitors, status) VALUES ('cid_fail_1', 'batch_api', 'batch_or_fail_1', 1, ${cfgId}, 'Prompt Fail', 'DACH', 'openai', 'gpt-6-luna', 'Personio', '[]', '[]', 'submitted')")->execute();
+    `);
+    const failRes = await fetch(`${server.baseUrl}/api/n8n_queue.php?action=fail_batch`, {
+      method: 'POST',
+      headers: n8nHeaders,
+      body: JSON.stringify({ provider_batch_id: 'batch_or_fail_1', custom_ids: ['cid_fail_1'], error_message: 'OpenRouter batch expired' })
+    });
+    assert.equal(failRes.status, 200);
+
+    const verifyDb = runPhp(`
+      $pdo = new PDO('sqlite:${dbPath}');
+      $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+      $ur = $pdo->query("SELECT market_region, prompt_language, effective_region, region_source, regional_citation_count FROM user_results_1 WHERE custom_id = " . $pdo->quote('${cid}'))->fetch();
+      $fb = $pdo->query("SELECT status, batch_error_detail FROM batch_requests WHERE custom_id = 'cid_fail_1'")->fetch();
+      $fr = $pdo->query("SELECT status, error_message FROM llm_runs WHERE custom_id = 'cid_fail_1'")->fetch();
+      echo json_encode(['ur' => $ur, 'fb' => $fb, 'fr' => $fr]);
+    `);
+    assert.equal(verifyDb.status, 0, verifyDb.stderr);
+    assert.equal(verifyDb.parsed.ur.market_region, 'ES');
+    assert.equal(verifyDb.parsed.ur.prompt_language, 'de');
+    assert.equal(verifyDb.parsed.ur.effective_region, 'ES');
+    assert.equal(verifyDb.parsed.ur.region_source, 'user_setting');
+    assert.equal(Number(verifyDb.parsed.ur.regional_citation_count), 1);
+    assert.equal(verifyDb.parsed.fb.status, 'failed');
+    assert.equal(verifyDb.parsed.fb.batch_error_detail, 'OpenRouter batch expired');
+    assert.equal(verifyDb.parsed.fr.status, 'failed');
+  } finally {
+    if (server && server.proc) { await new Promise((r) => { if (server.proc.exitCode !== null) return r(); server.proc.once('close', r); server.proc.kill(); setTimeout(r, 300); }); }
+    await webhook.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  }
 });

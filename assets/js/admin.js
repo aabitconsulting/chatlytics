@@ -76,6 +76,7 @@ const AdminState = {
   activeTab: 'users',
   platformKpis: null,
   models: [],
+  modelFilters: { search: '', provider: '', capability: '' },
   providerCredentials: [],
   presets: [],
   plans: [],
@@ -737,7 +738,7 @@ function renderRunTokenInspector(data) {
 
     const tdModel = document.createElement('td');
     tdModel.className = 'font-mono';
-    tdModel.textContent = `${r.provider || ''}/${r.model || ''} (${r.execution_strategy || 'prompt_caching'})`;
+    tdModel.textContent = `${r.provider || ''}/${r.model || ''} (${r.execution_strategy || 'regular'})`;
     tr.appendChild(tdModel);
 
     const tdInput = document.createElement('td');
@@ -933,6 +934,18 @@ function bindAdminV2Events() {
 
   // Model Management Controls & Modal
   document.getElementById('btn-sync-n8n-models')?.addEventListener('click', () => triggerN8nModelSync());
+  document.getElementById('model-filter-search')?.addEventListener('input', (e) => {
+    AdminState.modelFilters.search = String(e.target?.value || '').trim().toLowerCase();
+    renderModelsTable(AdminState.models);
+  });
+  document.getElementById('model-filter-provider')?.addEventListener('change', (e) => {
+    AdminState.modelFilters.provider = String(e.target?.value || '').trim().toLowerCase();
+    renderModelsTable(AdminState.models);
+  });
+  document.getElementById('model-filter-capability')?.addEventListener('change', (e) => {
+    AdminState.modelFilters.capability = String(e.target?.value || '').trim();
+    renderModelsTable(AdminState.models);
+  });
   document.getElementById('btn-new-model')?.addEventListener('click', () => openModelModal(null));
   document.getElementById('form-save-model')?.addEventListener('submit', handleSaveModel);
   document.getElementById('btn-model-modal-close')?.addEventListener('click', closeModelModal);
@@ -995,7 +1008,7 @@ async function switchAdminTab(tabKey) {
 async function handlePauseAllUserConfigs(user, triggerBtn = null) {
   if (!user || !user.id) return;
   try {
-    setButtonLoading(triggerBtn, true, 'Pausiere...');
+    setAdminButtonLoading(triggerBtn, true, 'Pausiere...');
     const res = await fetch('api/admin_users.php?action=pause_all_configs', {
       method: 'POST',
       headers: getAdminAuthHeaders(),
@@ -1013,7 +1026,7 @@ async function handlePauseAllUserConfigs(user, triggerBtn = null) {
     console.error('handlePauseAllUserConfigs error:', err);
     showToast('Netzwerkfehler beim Pausieren.', 'error');
   } finally {
-    setButtonLoading(triggerBtn, false);
+    setAdminButtonLoading(triggerBtn, false);
   }
 }
 
@@ -1021,7 +1034,7 @@ async function handleToggleUserStatus(user, triggerBtn = null) {
   if (!user || !user.id) return;
   const nextStatus = String(user.status || 'active') === 'suspended' ? 'active' : 'suspended';
   try {
-    setButtonLoading(triggerBtn, true, 'Aktualisiere...');
+    setAdminButtonLoading(triggerBtn, true, 'Aktualisiere...');
     const res = await fetch('api/admin_users.php?action=set_user_status', {
       method: 'POST',
       headers: getAdminAuthHeaders(),
@@ -1043,7 +1056,7 @@ async function handleToggleUserStatus(user, triggerBtn = null) {
     console.error('handleToggleUserStatus error:', err);
     showToast('Netzwerkfehler bei Status-Änderung.', 'error');
   } finally {
-    setButtonLoading(triggerBtn, false);
+    setAdminButtonLoading(triggerBtn, false);
   }
 }
 
@@ -1075,7 +1088,7 @@ async function handleTierSubmit(e) {
   const applyCredits = Boolean(document.getElementById('tier-apply-credits')?.checked);
 
   try {
-    setButtonLoading(submitBtn, true, 'Speichert...');
+    setAdminButtonLoading(submitBtn, true, 'Speichert...');
     const res = await fetch('api/admin_users.php?action=update_user_tier', {
       method: 'POST',
       headers: getAdminAuthHeaders(),
@@ -1097,7 +1110,7 @@ async function handleTierSubmit(e) {
     console.error('handleTierSubmit error:', err);
     showToast('Netzwerkfehler beim Tarif-Update.', 'error');
   } finally {
-    setButtonLoading(submitBtn, false);
+    setAdminButtonLoading(submitBtn, false);
   }
 }
 
@@ -1132,7 +1145,7 @@ function renderProviderCredentials(credentials) {
     const header = document.createElement('div');
     header.className = 'provider-cred-header';
     const name = document.createElement('strong');
-    name.textContent = String(cred.provider || '').toUpperCase();
+    name.textContent = String(cred.provider || 'openrouter').toUpperCase();
     const badge = document.createElement('span');
     const isLive = cred.status === 'connected';
     badge.className = `badge ${isLive ? 'badge-active' : 'badge-secondary'}`;
@@ -1141,32 +1154,109 @@ function renderProviderCredentials(credentials) {
 
     const credName = document.createElement('div');
     credName.className = 'provider-cred-name font-mono text-muted';
-    credName.textContent = cred.credential_name || '—';
+    credName.textContent = cred.credential_name || 'OpenRouter - Chatlytics - Chatlytics-dev-1';
 
     const countEl = document.createElement('div');
     countEl.className = 'provider-cred-count';
-    countEl.textContent = `${Number(cred.model_count || 0)} Modell(e)`;
+    countEl.textContent = `${Number(cred.model_count ?? cred.models_discovered ?? 0)} Modell(e)`;
 
     card.append(header, credName, countEl);
+
+    if (cred.provider_counts && typeof cred.provider_counts === 'object') {
+      const breakdown = document.createElement('div');
+      breakdown.style.cssText = 'display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem;';
+      Object.entries(cred.provider_counts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([prov, cnt]) => {
+          const pill = document.createElement('span');
+          pill.className = 'badge badge-secondary font-mono';
+          pill.style.fontSize = '0.72rem';
+          pill.textContent = `${prov}: ${cnt}`;
+          breakdown.appendChild(pill);
+        });
+      card.appendChild(breakdown);
+    }
+
     grid.appendChild(card);
   });
 }
 
+function populateModelProviderFilterOptions(models) {
+  const select = document.getElementById('model-filter-provider');
+  if (!select) return;
+  const current = AdminState.modelFilters?.provider || '';
+  const providers = Array.from(new Set((models || []).map(m => String(m.provider || '').toLowerCase()).filter(Boolean))).sort();
+  select.replaceChildren();
+  const allOpt = document.createElement('option');
+  allOpt.value = '';
+  allOpt.textContent = `Alle Provider (${providers.length})`;
+  select.appendChild(allOpt);
+  providers.forEach((p) => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    select.appendChild(opt);
+  });
+  select.value = providers.includes(current) ? current : '';
+}
+
+function filterAdminModels(models) {
+  const filters = AdminState.modelFilters || {};
+  const q = String(filters.search || '').trim().toLowerCase();
+  const prov = String(filters.provider || '').trim().toLowerCase();
+  const cap = String(filters.capability || '').trim();
+
+  return (models || []).filter((m) => {
+    if (prov && String(m.provider || '').toLowerCase() !== prov) return false;
+    if (cap === 'batch_api' && !m.supports_batch_api) return false;
+    if (cap === 'tools' && m.supports_tools === false) return false;
+    if (cap === 'allowed' && !m.is_allowed) return false;
+    if (cap === 'pending' && m.is_allowed) return false;
+    if (q) {
+      const hay = `${m.id || ''} ${m.display_name || ''} ${m.provider || ''} ${m.model_name || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
 function renderModelsTable(models) {
+  populateModelProviderFilterOptions(models);
+  const filtered = filterAdminModels(models);
+
+  const countBadge = document.getElementById('model-filter-count');
+  if (countBadge) {
+    const total = Array.isArray(models) ? models.length : 0;
+    countBadge.textContent = filtered.length === total
+      ? `${total} Modelle`
+      : `${filtered.length} / ${total} Modelle`;
+  }
+
   const tbody = document.getElementById('models-tbody');
   if (!tbody) return;
   tbody.replaceChildren();
 
-  (models || []).forEach((m) => {
+  if (filtered.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 7;
+    td.className = 'text-center text-muted';
+    td.textContent = 'Keine passenden KI-Modelle für den aktuellen Filter.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  filtered.forEach((m) => {
     const tr = document.createElement('tr');
 
     const tdId = document.createElement('td');
     const idStrong = document.createElement('div');
     idStrong.className = 'font-mono';
     idStrong.textContent = m.id;
-    const provSpan = document.createElement('div');
-    provSpan.className = 'text-muted';
-    provSpan.style.fontSize = '0.75rem';
+    const provSpan = document.createElement('span');
+    provSpan.className = 'text-muted font-mono';
+    provSpan.style.fontSize = '0.78rem';
     provSpan.textContent = `${m.provider} · Sync: ${m.n8n_sync_status || 'seeded'}`;
     tdId.append(idStrong, provSpan);
     tr.appendChild(tdId);
@@ -1176,17 +1266,29 @@ function renderModelsTable(models) {
     tr.appendChild(tdName);
 
     const tdStrat = document.createElement('td');
+    const rawStrat = String(m.execution_strategy || '');
+    const displayStrat = (!rawStrat || rawStrat === 'prompt_caching')
+      ? (m.supports_batch_api ? 'batch_api' : 'regular')
+      : rawStrat;
+
     const stratBadge = document.createElement('span');
-    stratBadge.className = `badge strategy-badge strategy-${escapeHtml(m.execution_strategy || 'prompt_caching')}`;
-    stratBadge.textContent = m.execution_strategy || 'prompt_caching';
+    stratBadge.className = `badge strategy-badge strategy-${escapeHtml(displayStrat)}`;
+    stratBadge.textContent = displayStrat;
     tdStrat.appendChild(stratBadge);
-    if (m.eu_hosted) {
-      const euBadge = document.createElement('span');
-      euBadge.className = 'badge badge-eu';
-      euBadge.style.marginLeft = '6px';
-      euBadge.textContent = 'EU-Hosted';
-      tdStrat.appendChild(euBadge);
+
+    if (m.supports_batch_api) {
+      const batchBadge = document.createElement('span');
+      batchBadge.className = 'badge badge-active';
+      batchBadge.style.marginLeft = '6px';
+      batchBadge.textContent = ':batch';
+      tdStrat.appendChild(batchBadge);
     }
+
+    const toolsBadge = document.createElement('span');
+    toolsBadge.className = `badge ${m.supports_tools !== false ? 'badge-secondary' : 'badge-warning'}`;
+    toolsBadge.style.marginLeft = '6px';
+    toolsBadge.textContent = m.supports_tools !== false ? 'Tools' : 'Web-Plugin';
+    tdStrat.appendChild(toolsBadge);
     tr.appendChild(tdStrat);
 
     const appendToggleCell = (fieldName, checkedVal) => {
@@ -1227,7 +1329,7 @@ async function triggerN8nModelSync() {
   const btn = document.getElementById('btn-sync-n8n-models');
   const statusBadge = document.getElementById('n8n-sync-status-badge');
   try {
-    setButtonLoading(btn, true, 'Synchronisiere mit n8n...');
+    setAdminButtonLoading(btn, true, 'Synchronisiere OpenRouter via n8n...');
     const res = await fetch('api/admin_users.php?action=sync_n8n_models', {
       method: 'POST',
       headers: getAdminAuthHeaders(),
@@ -1245,23 +1347,24 @@ async function triggerN8nModelSync() {
     renderProviderCredentials(AdminState.providerCredentials);
     renderModelsTable(AdminState.models);
 
+    const timeStr = (data.last_synced_at || '').substring(11, 19);
     if (statusBadge) {
       statusBadge.className = `badge ${data.synced ? 'badge-active' : 'badge-secondary'}`;
       statusBadge.textContent = data.synced
-        ? `Live-Sync erfolgreich (${(data.last_synced_at || '').substring(11, 19)})`
-        : `Lokaler Cache (n8n offline · ${(data.last_synced_at || '').substring(11, 19)})`;
+        ? `OpenRouter Live-Sync OK (${AdminState.models.length} Modelle · ${timeStr})`
+        : `Lokaler OpenRouter-Katalog (${AdminState.models.length} Modelle · ${timeStr})`;
     }
     showToast(
       data.synced
-        ? 'Modelle erfolgreich live über n8n-Credentials synchronisiert.'
-        : 'n8n Webhook derzeit nicht erreichbar — lokaler Modellkatalog aktualisiert.',
+        ? `${AdminState.models.length} OpenRouter-Modelle live über n8n synchronisiert.`
+        : (data.detail ? `n8n Offline (${data.detail}) — lokaler OpenRouter-Katalog geladen.` : 'n8n Webhook derzeit nicht erreichbar — lokaler Modellkatalog aktualisiert.'),
       data.synced ? 'success' : 'info'
     );
   } catch (err) {
     console.error('triggerN8nModelSync error:', err);
     showToast('Netzwerkfehler beim n8n Model-Sync.', 'error');
   } finally {
-    setButtonLoading(btn, false);
+    setAdminButtonLoading(btn, false);
   }
 }
 
@@ -1294,7 +1397,8 @@ function openModelModal(model = null) {
   const nameInput = document.getElementById('model-name');
   const dispInput = document.getElementById('model-display-name');
   const stratSelect = document.getElementById('model-strategy');
-  const euEl = document.getElementById('model-eu-hosted');
+  const batchEl = document.getElementById('model-supports-batch');
+  const toolsEl = document.getElementById('model-supports-tools');
   const searchEl = document.getElementById('model-supports-search');
   const allowEl = document.getElementById('model-is-allowed');
   const defEl = document.getElementById('model-is-default');
@@ -1305,8 +1409,12 @@ function openModelModal(model = null) {
     if (provSelect) provSelect.value = model.provider || 'openai';
     if (nameInput) nameInput.value = model.model_name || '';
     if (dispInput) dispInput.value = model.display_name || '';
-    if (stratSelect) stratSelect.value = model.execution_strategy || 'prompt_caching';
-    if (euEl) euEl.checked = Boolean(model.eu_hosted);
+    if (stratSelect) {
+      const rawStrat = model.execution_strategy || '';
+      stratSelect.value = (rawStrat === 'batch_api' || (rawStrat === 'prompt_caching' && model.supports_batch_api)) ? 'batch_api' : 'regular';
+    }
+    if (batchEl) batchEl.checked = Boolean(model.supports_batch_api);
+    if (toolsEl) toolsEl.checked = model.supports_tools !== false;
     if (searchEl) searchEl.checked = Boolean(model.supports_web_search);
     if (allowEl) allowEl.checked = model.is_allowed !== false;
     if (defEl) defEl.checked = Boolean(model.is_default);
@@ -1316,8 +1424,9 @@ function openModelModal(model = null) {
     if (provSelect) provSelect.value = 'openai';
     if (nameInput) nameInput.value = '';
     if (dispInput) dispInput.value = '';
-    if (stratSelect) stratSelect.value = 'prompt_caching';
-    if (euEl) euEl.checked = false;
+    if (stratSelect) stratSelect.value = 'batch_api';
+    if (batchEl) batchEl.checked = true;
+    if (toolsEl) toolsEl.checked = true;
     if (searchEl) searchEl.checked = true;
     if (allowEl) allowEl.checked = true;
     if (defEl) defEl.checked = false;
@@ -1339,15 +1448,17 @@ async function handleSaveModel(e) {
     provider: document.getElementById('model-provider')?.value || 'openai',
     model_name: document.getElementById('model-name')?.value.trim(),
     display_name: document.getElementById('model-display-name')?.value.trim(),
-    execution_strategy: document.getElementById('model-strategy')?.value || 'prompt_caching',
-    eu_hosted: Boolean(document.getElementById('model-eu-hosted')?.checked),
+    execution_strategy: document.getElementById('model-strategy')?.value || 'regular',
+    eu_hosted: false,
+    supports_batch_api: Boolean(document.getElementById('model-supports-batch')?.checked),
+    supports_tools: Boolean(document.getElementById('model-supports-tools')?.checked),
     supports_web_search: Boolean(document.getElementById('model-supports-search')?.checked),
     is_allowed: Boolean(document.getElementById('model-is-allowed')?.checked),
     is_default: Boolean(document.getElementById('model-is-default')?.checked)
   };
 
   try {
-    setButtonLoading(saveBtn, true, 'Speichert...');
+    setAdminButtonLoading(saveBtn, true, 'Speichert...');
     const res = await fetch('api/admin_users.php?action=save_model', {
       method: 'POST',
       headers: getAdminAuthHeaders(),
@@ -1367,18 +1478,26 @@ async function handleSaveModel(e) {
     console.error('handleSaveModel error:', err);
     showToast('Netzwerkfehler beim Speichern des Modells.', 'error');
   } finally {
-    setButtonLoading(saveBtn, false);
+    setAdminButtonLoading(saveBtn, false);
   }
 }
 
 function buildClientCredFallback(models) {
-  return AdminState.providerCredentials && AdminState.providerCredentials.length > 0
-    ? AdminState.providerCredentials
-    : [
-        { provider: 'openai', credential_name: 'OpenAI - Chatlytics', status: 'seeded', model_count: (models || []).filter(m => m.provider === 'openai').length },
-        { provider: 'gemini', credential_name: 'Google AI Studio', status: 'seeded', model_count: (models || []).filter(m => m.provider === 'gemini').length },
-        { provider: 'mistral', credential_name: 'Mistral EU', status: 'seeded', model_count: (models || []).filter(m => m.provider === 'mistral').length }
-      ];
+  if (AdminState.providerCredentials && AdminState.providerCredentials.length > 0) {
+    return AdminState.providerCredentials;
+  }
+  const providerCounts = {};
+  (models || []).forEach((m) => {
+    const p = String(m.provider || 'other').toLowerCase();
+    providerCounts[p] = (providerCounts[p] || 0) + 1;
+  });
+  return [{
+    provider: 'openrouter',
+    credential_name: 'OpenRouter - Chatlytics - Chatlytics-dev-1',
+    status: 'seeded',
+    model_count: Array.isArray(models) ? models.length : 0,
+    provider_counts: providerCounts
+  }];
 }
 
 async function loadAdminPresets() {
@@ -1579,7 +1698,7 @@ async function handleSavePreset(e) {
   };
 
   try {
-    setButtonLoading(saveBtn, true, 'Speichert...');
+    setAdminButtonLoading(saveBtn, true, 'Speichert...');
     const res = await fetch('api/admin_users.php?action=save_preset', {
       method: 'POST',
       headers: getAdminAuthHeaders(),
@@ -1598,7 +1717,7 @@ async function handleSavePreset(e) {
     console.error('handleSavePreset error:', err);
     showToast('Netzwerkfehler beim Speichern des Analyse-Sets.', 'error');
   } finally {
-    setButtonLoading(saveBtn, false);
+    setAdminButtonLoading(saveBtn, false);
   }
 }
 
@@ -1833,7 +1952,7 @@ async function handleSavePlan(tier, cardEl, saveBtn = null) {
   };
 
   try {
-    setButtonLoading(saveBtn, true, 'Speichert...');
+    setAdminButtonLoading(saveBtn, true, 'Speichert...');
     const res = await fetch('api/admin_users.php?action=save_plan', {
       method: 'POST',
       headers: getAdminAuthHeaders(),
@@ -1851,7 +1970,7 @@ async function handleSavePlan(tier, cardEl, saveBtn = null) {
     console.error('handleSavePlan error:', err);
     showToast('Netzwerkfehler beim Speichern des Tarifs.', 'error');
   } finally {
-    setButtonLoading(saveBtn, false);
+    setAdminButtonLoading(saveBtn, false);
   }
 }
 

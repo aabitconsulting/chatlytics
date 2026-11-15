@@ -523,6 +523,43 @@ foreach ($modelBreakdown as $mb) {
     ];
 }
 
+// Query 7: Regional Inference & Citation Fit Breakdown
+$regionSummary = [];
+try {
+    $regStmt = $db->prepare("
+        SELECT
+            COALESCE(NULLIF(TRIM(r.effective_region), ''), 'unknown') AS effective_region,
+            COALESCE(NULLIF(TRIM(r.prompt_language), ''), 'unknown') AS prompt_language,
+            COALESCE(NULLIF(TRIM(r.region_source), ''), 'unknown') AS region_source,
+            COUNT(*) AS runs_count,
+            COALESCE(SUM(r.regional_citation_count), 0) AS regional_citation_count,
+            AVG(r.regional_citation_ratio) AS avg_regional_citation_ratio
+        FROM llm_runs r
+        WHERE {$baseWhere}
+          AND r.created_at >= :cur_start AND r.created_at <= :cur_end
+        GROUP BY
+            COALESCE(NULLIF(TRIM(r.effective_region), ''), 'unknown'),
+            COALESCE(NULLIF(TRIM(r.prompt_language), ''), 'unknown'),
+            COALESCE(NULLIF(TRIM(r.region_source), ''), 'unknown')
+        ORDER BY runs_count DESC
+    ");
+    $regStmt->execute($curParams);
+    foreach ($regStmt->fetchAll() as $regRow) {
+        $regionSummary[] = [
+            'effective_region'            => (string)$regRow['effective_region'],
+            'prompt_language'             => (string)$regRow['prompt_language'],
+            'region_source'               => (string)$regRow['region_source'],
+            'runs_count'                  => (int)$regRow['runs_count'],
+            'regional_citation_count'     => (int)$regRow['regional_citation_count'],
+            'avg_regional_citation_ratio' => $regRow['avg_regional_citation_ratio'] !== null
+                ? round((float)$regRow['avg_regional_citation_ratio'], 2)
+                : null,
+        ];
+    }
+} catch (Throwable $e) {
+    $regionSummary = [];
+}
+
 // 13. Assemble Final Response
 jsonResponse([
     'metrics' => [
@@ -563,8 +600,10 @@ jsonResponse([
     'model_timeline'      => $modelTimeline,
     'model_breakdown'     => $modelBreakdown,
     'available_prompts'   => $availablePrompts,
-    'available_models'    => $availableModels,
-    'active_prompt'       => $promptFilter !== '' ? $promptFilter : null,
+    'available_models'        => $availableModels,
+    'configured_market_region'=> ($selectedConfigRow !== null && !empty($selectedConfigRow['market_region'])) ? (string)$selectedConfigRow['market_region'] : null,
+    'region_summary'          => $regionSummary,
+    'active_prompt'           => $promptFilter !== '' ? $promptFilter : null,
     'is_first_day'        => $isFirstDay,
     'first_day_message_de'=> $isFirstDay
         ? 'Tag 1 der Konfiguration: Datensätze werden über den Kalendertag verteilt erhoben. Aggregierte Tageswerte stehen ab morgen bereit.'

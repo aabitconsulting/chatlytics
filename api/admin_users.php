@@ -421,7 +421,8 @@ function handleSeedDemoData(): void {
                     ['name' => 'Factorial', 'domain' => 'factorial.de'],
                     ['name' => 'Kenjo', 'domain' => 'kenjo.io']
                 ],
-                'target_llms'       => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash', 'mistral/mistral-large-latest'],
+                'market_region'     => 'DACH',
+                'target_llms'       => ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-large-4-0'],
                 'schedule_interval' => 'every_60m',
                 'datasets_per_day'  => 24,
                 'search_enabled'    => 1,
@@ -446,7 +447,8 @@ function handleSeedDemoData(): void {
                     ['name' => 'UiPath', 'domain' => 'uipath.com'],
                     ['name' => 'ARIS', 'domain' => 'softwareag.com']
                 ],
-                'target_llms'       => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash', 'mistral/mistral-large-latest'],
+                'market_region'     => 'DACH',
+                'target_llms'       => ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-large-4-0'],
                 'schedule_interval' => 'every_15m',
                 'datasets_per_day'  => 96,
                 'search_enabled'    => 1,
@@ -471,7 +473,8 @@ function handleSeedDemoData(): void {
                     ['name' => 'Microsoft Translator', 'domain' => 'translator.microsoft.com'],
                     ['name' => 'NeuroFlash', 'domain' => 'neuroflash.com']
                 ],
-                'target_llms'       => ['openai/gpt-6-luna', 'gemini/models/gemini-3.5-flash'],
+                'market_region'     => 'DACH',
+                'target_llms'       => ['openai/gpt-6-luna', 'google/gemini-3.5-flash'],
                 'schedule_interval' => 'every_120m',
                 'datasets_per_day'  => 12,
                 'search_enabled'    => 1,
@@ -548,12 +551,12 @@ function handleSeedDemoData(): void {
 
             $insConfig = $db->prepare("
                 INSERT INTO tracking_configs (
-                    user_id, name, brand_name, brand_domains, keywords_prompts,
+                    user_id, name, brand_name, brand_domains, keywords_prompts, market_region,
                     competitors, target_llms, search_enabled, schedule_interval,
                     datasets_per_day, initial_test_used, full_started_at,
                     status, next_run_at, created_at
                 ) VALUES (
-                    :user_id, :name, :brand_name, :brand_domains, :keywords_prompts,
+                    :user_id, :name, :brand_name, :brand_domains, :keywords_prompts, :market_region,
                     :competitors, :target_llms, :search_enabled, :schedule_interval,
                     :datasets_per_day, 1, :full_started_at,
                     'active', :next_run_at, :created_at
@@ -565,6 +568,7 @@ function handleSeedDemoData(): void {
                 ':brand_name'        => $cfg['brand_name'],
                 ':brand_domains'     => json_encode($cfg['brand_domains']),
                 ':keywords_prompts'  => json_encode($cfg['keywords_prompts']),
+                ':market_region'     => $cfg['market_region'] ?? 'DACH',
                 ':competitors'       => json_encode($cfg['competitors']),
                 ':target_llms'       => json_encode($cfg['target_llms']),
                 ':search_enabled'    => $cfg['search_enabled'],
@@ -747,9 +751,9 @@ function handleSeedDemoData(): void {
             ];
 
             $providers = [
-                ['provider' => 'openai',  'model' => 'gpt-6-luna',              'strategy' => 'prompt_caching', 'input_tokens' => 1420, 'output_tokens' => 310, 'cached_tokens' => 1152],
-                ['provider' => 'mistral', 'model' => 'mistral-large-latest',    'strategy' => 'prompt_caching', 'input_tokens' => 1280, 'output_tokens' => 295, 'cached_tokens' => 1024],
-                ['provider' => 'gemini',  'model' => 'models/gemini-3.5-flash', 'strategy' => 'prompt_caching', 'input_tokens' => 2320, 'output_tokens' => 340, 'cached_tokens' => 2048],
+                ['provider' => 'openai',    'model' => 'gpt-6-luna',         'strategy' => 'regular',   'input_tokens' => 1420, 'output_tokens' => 310, 'cached_tokens' => 0],
+                ['provider' => 'mistralai', 'model' => 'mistral-large-4-0',  'strategy' => 'regular',   'input_tokens' => 1280, 'output_tokens' => 295, 'cached_tokens' => 0],
+                ['provider' => 'google',    'model' => 'gemini-3.5-flash',   'strategy' => 'regular',   'input_tokens' => 2320, 'output_tokens' => 340, 'cached_tokens' => 0],
             ];
 
             $primaryCompetitor = $cfg['competitors'][0];
@@ -761,25 +765,33 @@ function handleSeedDemoData(): void {
                     $dayOffset = (int)($tmpl['day_offset'] ?? 1);
                     $createdAt = date('Y-m-d H:i:s', strtotime("-{$dayOffset} days"));
                     $customId = sprintf('cl_u%d_c%d_seed_%d_%d_%s', $userId, $configId, $tIdx, $pIdx, substr(bin2hex(random_bytes(3)), 0, 6));
-                    $promptCacheKey = buildPromptCacheKey($configId, $promptText, $prov['provider'] . '/' . $prov['model']);
+                    $promptCacheKey = null;
+                    $demoRegion = $cfg['market_region'] ?? 'DACH';
+                    $demoRegCitCount = ($tmpl['has_cit'] && $tmpl['brand_cited']) ? 1 : 0;
+                    $demoTotalCitCount = ($tmpl['brand_cited'] ? 1 : 0) + ($tmpl['comp_cited'] ? 1 : 0);
+                    $demoRegCitRatio = $demoTotalCitCount > 0 ? round(($demoRegCitCount / $demoTotalCitCount) * 100, 2) : null;
                     $responseText = "Synthesized AI visibility evaluation for {$cfg['brand_name']} ({$prov['provider']}/{$prov['model']}) on prompt: {$promptText}.";
 
                     $insRun = $db->prepare("
                         INSERT INTO llm_runs (
                             config_id, user_id, custom_id, execution_strategy, prompt_cache_key, input_tokens, output_tokens, cached_tokens, is_test_run,
-                            prompt, provider, model, brand_name, status,
+                            prompt, market_region, prompt_language, effective_region, region_source,
+                            provider, model, brand_name, status,
                             brand_mentioned, brand_prominence_rank, char_earliness,
                             word_earliness, relative_position_pct, total_chars, total_words,
                             mece_category, geo_quadrant, has_citations, brand_cited,
-                            competitor_cited, raw_response_text, run_duration_ms, cost_credits,
+                            competitor_cited, regional_citation_count, regional_citation_ratio,
+                            raw_response_text, run_duration_ms, cost_credits,
                             created_at
                         ) VALUES (
                             :config_id, :user_id, :custom_id, :execution_strategy, :prompt_cache_key, :input_tokens, :output_tokens, :cached_tokens, 0,
-                            :prompt, :provider, :model, :brand_name, 'completed',
+                            :prompt, :market_region, :prompt_language, :effective_region, :region_source,
+                            :provider, :model, :brand_name, 'completed',
                             :brand_mentioned, :brand_prominence_rank, :char_earliness,
                             :word_earliness, :relative_position_pct, 1280, 185,
                             :mece_category, :geo_quadrant, :has_citations, :brand_cited,
-                            :competitor_cited, :raw_response_text, 1450, 1,
+                            :competitor_cited, :regional_citation_count, :regional_citation_ratio,
+                            :raw_response_text, 1450, 1,
                             :created_at
                         )
                     ");
@@ -789,11 +801,15 @@ function handleSeedDemoData(): void {
                         ':user_id'                => $userId,
                         ':custom_id'              => $customId,
                         ':execution_strategy'     => $prov['strategy'],
-                        ':prompt_cache_key'       => $promptCacheKey,
+                        ':prompt_cache_key'       => null,
                         ':input_tokens'           => $prov['input_tokens'],
                         ':output_tokens'          => $prov['output_tokens'],
                         ':cached_tokens'          => $prov['cached_tokens'],
                         ':prompt'                 => $promptText,
+                        ':market_region'          => $demoRegion,
+                        ':prompt_language'        => 'de',
+                        ':effective_region'       => $demoRegion,
+                        ':region_source'          => 'user_setting',
                         ':provider'               => $prov['provider'],
                         ':model'                  => $prov['model'],
                         ':brand_name'             => $cfg['brand_name'],
@@ -807,6 +823,8 @@ function handleSeedDemoData(): void {
                         ':has_citations'          => $tmpl['has_cit'],
                         ':brand_cited'            => $tmpl['brand_cited'],
                         ':competitor_cited'       => $tmpl['comp_cited'],
+                        ':regional_citation_count'=> $demoRegCitCount,
+                        ':regional_citation_ratio'=> $demoRegCitRatio,
                         ':raw_response_text'      => $responseText,
                         ':created_at'             => $createdAt,
                     ]);
@@ -920,22 +938,28 @@ function handleSeedDemoData(): void {
                         'cached_tokens'         => $prov['cached_tokens'],
                         'trigger_source'        => 'seed_demo',
                         'is_test_run'           => 0,
-                        'prompt'                => $promptText,
-                        'llm_answer'            => $responseText,
-                        'provider'              => $prov['provider'],
-                        'model'                 => $prov['model'],
-                        'brand_name'            => $cfg['brand_name'],
-                        'status'                => 'completed',
-                        'brand_mentioned'       => $tmpl['brand_mentioned'],
-                        'char_earliness'        => $tmpl['char_earliness'],
-                        'word_earliness'        => $tmpl['word_earliness'],
-                        'relative_position_pct' => $tmpl['rel_pos'],
-                        'total_chars'           => 1280,
-                        'total_words'           => 185,
-                        'mece_category'         => $tmpl['mece'],
-                        'geo_quadrant'          => $tmpl['geo'],
-                        'brand_cited'           => $tmpl['brand_cited'],
-                        'competitor_cited'      => $tmpl['comp_cited'],
+                        'prompt'                  => $promptText,
+                        'market_region'           => $demoRegion,
+                        'prompt_language'         => 'de',
+                        'effective_region'        => $demoRegion,
+                        'region_source'           => 'user_setting',
+                        'llm_answer'              => $responseText,
+                        'provider'                => $prov['provider'],
+                        'model'                   => $prov['model'],
+                        'brand_name'              => $cfg['brand_name'],
+                        'status'                  => 'completed',
+                        'brand_mentioned'         => $tmpl['brand_mentioned'],
+                        'char_earliness'          => $tmpl['char_earliness'],
+                        'word_earliness'          => $tmpl['word_earliness'],
+                        'relative_position_pct'   => $tmpl['rel_pos'],
+                        'total_chars'             => 1280,
+                        'total_words'             => 185,
+                        'mece_category'           => $tmpl['mece'],
+                        'geo_quadrant'            => $tmpl['geo'],
+                        'brand_cited'             => $tmpl['brand_cited'],
+                        'competitor_cited'        => $tmpl['comp_cited'],
+                        'regional_citation_count' => $demoRegCitCount,
+                        'regional_citation_ratio' => $demoRegCitRatio,
                         'competitors_json'      => $competitorsList,
                         'citations_json'        => $citationsList,
                         'scheduled_at'          => $createdAt,
@@ -975,24 +999,45 @@ function handleSeedDemoData(): void {
  */
 function buildProviderCredentialSummary(array $models, string $defaultStatus = 'seeded'): array
 {
-    $defaults = [
-        'openai'    => 'OpenAI - Chatlytics - Chatlytics-dev-1',
-        'gemini'    => 'Google_AI Studio - Chatlytics - Chatlytics-dev-1',
-        'mistral'   => 'Mistral - Chatlytics - Chatlytics-dev-1',
-        'anthropic' => 'Anthropic - Optional Fallback',
-    ];
-    $summary = [];
-    foreach ($defaults as $prov => $credName) {
-        $provModels = array_values(array_filter($models, fn($m) => ($m['provider'] ?? '') === $prov));
-        $first = $provModels[0] ?? null;
-        $summary[] = [
-            'provider'        => $prov,
-            'credential_name' => (string)($first['n8n_credential_name'] ?? $credName),
-            'status'          => $first ? (string)($first['n8n_sync_status'] ?? $defaultStatus) : ($prov === 'anthropic' ? 'optional' : $defaultStatus),
-            'model_count'     => count($provModels),
-        ];
+    $credName = 'OpenRouter - Chatlytics - Chatlytics-dev-1';
+    $allowedCount = 0;
+    $batchCount = 0;
+    $providerCounts = [];
+    $resolvedStatus = $defaultStatus;
+
+    foreach ($models as $m) {
+        $prov = strtolower((string)($m['provider'] ?? ''));
+        if ($prov !== '') {
+            $providerCounts[$prov] = ($providerCounts[$prov] ?? 0) + 1;
+        }
+        if (!empty($m['is_allowed'])) {
+            $allowedCount++;
+        }
+        if (!empty($m['supports_batch_api'])) {
+            $batchCount++;
+        }
+        if (!empty($m['n8n_credential_name'])) {
+            $credName = (string)$m['n8n_credential_name'];
+        }
+        if (!empty($m['n8n_sync_status']) && $m['n8n_sync_status'] === 'connected') {
+            $resolvedStatus = 'connected';
+        } elseif (!empty($m['n8n_sync_status']) && $resolvedStatus === $defaultStatus) {
+            $resolvedStatus = (string)$m['n8n_sync_status'];
+        }
     }
-    return $summary;
+
+    ksort($providerCounts);
+
+    return [[
+        'provider'           => 'openrouter',
+        'credential_name'    => $credName,
+        'status'             => $resolvedStatus,
+        'model_count'        => count($models),
+        'allowed_count'      => $allowedCount,
+        'batch_count'        => $batchCount,
+        'providers_detected' => array_keys($providerCounts),
+        'provider_counts'    => $providerCounts,
+    ]];
 }
 
 /**
@@ -1197,17 +1242,26 @@ function handleSaveModel(array $data): void
         jsonError("Invalid model identifier.", 422);
     }
 
+    $supportsBatch = array_key_exists('supports_batch_api', $data) ? !empty($data['supports_batch_api']) : $spec['supports_batch_api'];
+    $supportsTools = array_key_exists('supports_tools', $data) ? !empty($data['supports_tools']) : $spec['supports_tools'];
+    $reqStrat = (string)($data['execution_strategy'] ?? ($supportsBatch ? 'batch_api' : 'regular'));
+    if ($reqStrat === 'prompt_caching' || !in_array($reqStrat, ['batch_api', 'regular'], true)) {
+        $reqStrat = $supportsBatch ? 'batch_api' : 'regular';
+    }
+
     $payload = [
         'id'                  => $spec['id'],
         'provider'            => $provider !== '' ? $provider : $spec['provider'],
         'model_name'          => $modelName !== '' ? $modelName : $spec['model'],
         'display_name'        => trim((string)($data['display_name'] ?? $spec['id'])),
-        'eu_hosted'           => array_key_exists('eu_hosted', $data) ? !empty($data['eu_hosted']) : $spec['eu_hosted'],
+        'eu_hosted'           => false,
         'supports_web_search' => !empty($data['supports_web_search']),
-        'execution_strategy'  => (string)($data['execution_strategy'] ?? $spec['execution_strategy']),
+        'supports_batch_api'  => $supportsBatch,
+        'supports_tools'      => $supportsTools,
+        'execution_strategy'  => $reqStrat,
         'is_allowed'          => !isset($data['is_allowed']) || !empty($data['is_allowed']),
         'is_default'          => !empty($data['is_default']),
-        'n8n_credential_name' => $data['n8n_credential_name'] ?? null,
+        'n8n_credential_name' => $data['n8n_credential_name'] ?? 'OpenRouter - Chatlytics - Chatlytics-dev-1',
         'n8n_sync_status'     => (string)($data['n8n_sync_status'] ?? 'manual'),
         'last_synced_at'      => $data['last_synced_at'] ?? null,
         'sort_order'          => (int)($data['sort_order'] ?? 100),
@@ -1244,14 +1298,23 @@ function handleToggleModel(array $data): void
         jsonError("Model '{$id}' not found.", 404);
     }
 
+    $mergedSupportsBatch = array_key_exists('supports_batch_api', $data) ? !empty($data['supports_batch_api']) : !empty($existing['supports_batch_api']);
+    $mergedSupportsTools = array_key_exists('supports_tools', $data) ? !empty($data['supports_tools']) : (!array_key_exists('supports_tools', $existing) || !empty($existing['supports_tools']));
+    $mergedStrat = array_key_exists('execution_strategy', $data) ? (string)$data['execution_strategy'] : (string)$existing['execution_strategy'];
+    if ($mergedStrat === 'prompt_caching' || !in_array($mergedStrat, ['batch_api', 'regular'], true)) {
+        $mergedStrat = $mergedSupportsBatch ? 'batch_api' : 'regular';
+    }
+
     $merged = [
         'id'                  => (string)$existing['id'],
         'provider'            => (string)$existing['provider'],
         'model_name'          => (string)$existing['model_name'],
         'display_name'        => array_key_exists('display_name', $data) ? (string)$data['display_name'] : (string)$existing['display_name'],
-        'eu_hosted'           => array_key_exists('eu_hosted', $data) ? !empty($data['eu_hosted']) : !empty($existing['eu_hosted']),
+        'eu_hosted'           => false,
         'supports_web_search' => array_key_exists('supports_web_search', $data) ? !empty($data['supports_web_search']) : !empty($existing['supports_web_search']),
-        'execution_strategy'  => array_key_exists('execution_strategy', $data) ? (string)$data['execution_strategy'] : (string)$existing['execution_strategy'],
+        'supports_batch_api'  => $mergedSupportsBatch,
+        'supports_tools'      => $mergedSupportsTools,
+        'execution_strategy'  => $mergedStrat,
         'is_allowed'          => array_key_exists('is_allowed', $data) ? !empty($data['is_allowed']) : !empty($existing['is_allowed']),
         'is_default'          => array_key_exists('is_default', $data) ? !empty($data['is_default']) : !empty($existing['is_default']),
         'n8n_credential_name' => $existing['n8n_credential_name'] ?? null,
@@ -1304,8 +1367,8 @@ function handleSyncN8nModels(array $data): void
                     CURLOPT_POST           => true,
                     CURLOPT_POSTFIELDS     => $payloadJson,
                     CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT        => 6,
-                    CURLOPT_CONNECTTIMEOUT => 2,
+                    CURLOPT_TIMEOUT        => 15,
+                    CURLOPT_CONNECTTIMEOUT => 4,
                     CURLOPT_HTTPHEADER     => [
                         'Content-Type: application/json',
                         'X-N8N-Secret: ' . $sharedSecret,
@@ -1329,7 +1392,7 @@ function handleSyncN8nModels(array $data): void
                     'method'        => 'POST',
                     'header'        => "Content-Type: application/json\r\nX-N8N-Secret: {$sharedSecret}\r\n",
                     'content'       => $payloadJson,
-                    'timeout'       => 5,
+                    'timeout'       => 15,
                     'ignore_errors' => true,
                 ],
             ]);
@@ -1350,30 +1413,78 @@ function handleSyncN8nModels(array $data): void
     }
 
     if ($syncedLive) {
+        $allowedProviders = getAllowedOpenRouterProviders();
+        $batchBases = [];
+        foreach ($discoveredModels as $item) {
+            if (is_array($item)) {
+                $rawId = strtolower(trim((string)($item['id'] ?? '')));
+                if (str_ends_with($rawId, ':batch')) {
+                    $batchBases[substr($rawId, 0, -6)] = true;
+                }
+            }
+        }
+
+        $syncedCount = 0;
         foreach ($discoveredModels as $idx => $item) {
             if (!is_array($item)) {
                 continue;
             }
-            $rawTok = (string)($item['id'] ?? (($item['provider'] ?? '') . '/' . ($item['model_name'] ?? '')));
-            $spec = resolveTargetLlmSpec($rawTok);
-            if ($spec['id'] === '') {
+            $rawTok = trim((string)($item['id'] ?? (($item['provider'] ?? '') . '/' . ($item['model_name'] ?? ''))));
+            if ($rawTok === '' || str_ends_with(strtolower($rawTok), ':batch')) {
                 continue;
             }
+            $rawLower = strtolower($rawTok);
+            $rawPrefix = str_contains($rawLower, '/') ? explode('/', $rawLower, 2)[0] : '';
+            if ($rawPrefix !== '' && !in_array($rawPrefix, $allowedProviders, true)) {
+                continue;
+            }
+            foreach (['embedding', 'embed', 'tts', 'whisper', 'dall-e', 'sora', 'imagen', 'veo', 'lyria', 'music', 'moderation', 'guard', 'realtime', '-image', 'image-preview', 'flux', 'midjourney', 'audio', 'speech'] as $blockedFrag) {
+                if (str_contains($rawLower, $blockedFrag)) {
+                    continue 2;
+                }
+            }
+            $arch = is_array($item['architecture'] ?? null) ? $item['architecture'] : [];
+            $inMods = is_array($arch['input_modalities'] ?? null) ? array_map('strtolower', $arch['input_modalities']) : ['text'];
+            $outMods = is_array($arch['output_modalities'] ?? null) ? array_map('strtolower', $arch['output_modalities']) : ['text'];
+            if (!in_array('text', $inMods, true) || !in_array('text', $outMods, true)) {
+                continue;
+            }
+            if (in_array('image', $outMods, true) || in_array('audio', $outMods, true) || in_array('video', $outMods, true)) {
+                continue;
+            }
+
+            $supportsBatch = !empty($item['supports_batch_api']) || !empty($batchBases[$rawLower]);
+            $supportsTools = !array_key_exists('supports_tools', $item) || !empty($item['supports_tools']);
+            $spec = resolveTargetLlmSpec($rawTok, 'every_120m', false, false, $supportsBatch, $supportsTools);
+            if ($spec['id'] === '' || !in_array($spec['provider'], $allowedProviders, true)) {
+                continue;
+            }
+
+            $itemStrategy = (string)($item['execution_strategy'] ?? ($supportsBatch ? 'batch_api' : 'regular'));
+            if ($itemStrategy === 'prompt_caching' || !in_array($itemStrategy, ['batch_api', 'regular'], true)) {
+                $itemStrategy = $supportsBatch ? 'batch_api' : 'regular';
+            }
+
             upsertLlmModel($db, [
                 'id'                  => $spec['id'],
-                'provider'            => strtolower((string)($item['provider'] ?? $spec['provider'])),
-                'model_name'          => (string)($item['model_name'] ?? $spec['model']),
+                'provider'            => $spec['provider'],
+                'model_name'          => $spec['model'],
                 'display_name'        => (string)($item['display_name'] ?? $spec['id']),
-                'eu_hosted'           => array_key_exists('eu_hosted', $item) ? !empty($item['eu_hosted']) : $spec['eu_hosted'],
-                'supports_web_search' => !empty($item['supports_web_search']),
-                'execution_strategy'  => (string)($item['execution_strategy'] ?? $spec['execution_strategy']),
-                'is_allowed'          => !isset($item['is_allowed']) || !empty($item['is_allowed']),
+                'eu_hosted'           => false,
+                'supports_web_search' => array_key_exists('supports_web_search', $item) ? !empty($item['supports_web_search']) : true,
+                'supports_batch_api'  => $supportsBatch,
+                'supports_tools'      => $supportsTools,
+                'execution_strategy'  => $itemStrategy,
+                // Brand-new discovered OpenRouter models stay curated (is_allowed = false) until Admin activates them;
+                // existing rows preserve Admin is_allowed / is_default choices.
+                'is_allowed'          => !empty($item['is_allowed']),
                 'is_default'          => !empty($item['is_default']),
-                'n8n_credential_name' => $item['n8n_credential_name'] ?? null,
+                'n8n_credential_name' => $item['n8n_credential_name'] ?? 'OpenRouter - Chatlytics - Chatlytics-dev-1',
                 'n8n_sync_status'     => 'connected',
                 'last_synced_at'      => $now,
                 'sort_order'          => (int)($item['sort_order'] ?? (100 + $idx * 10)),
             ], true);
+            $syncedCount++;
         }
 
         $models = getAdminModelsCatalog($db, false);
@@ -1385,7 +1496,7 @@ function handleSyncN8nModels(array $data): void
             'last_synced_at'       => $now,
             'provider_credentials' => !empty($providerCredentials) ? $providerCredentials : buildProviderCredentialSummary($models, 'connected'),
             'models'               => $models,
-            'message'              => count($discoveredModels) . ' model(s) synchronized from live n8n credentials.',
+            'message'              => $syncedCount . ' OpenRouter model(s) synchronized from live n8n credentials.',
         ]);
     }
 

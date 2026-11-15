@@ -184,16 +184,603 @@ function buildGermanRegex(entityName) {
 }
 
 /**
+ * Lightweight zero-dependency prompt language detector (36 EU + global languages).
+ *
+ * @param {string} prompt
+ * @returns {string} ISO language code or 'unknown'
+ */
+function detectPromptLanguage(prompt) {
+  if (!prompt || typeof prompt !== 'string') return 'unknown';
+  const text = prompt.normalize('NFC').trim();
+  if (!text) return 'unknown';
+
+  // Unambiguous non-Latin script detection first
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja';
+  if (/[\uAC00-\uD7AF\u1100-\u11FF]/.test(text)) return 'ko';
+  if (/[\u4E00-\u9FFF]/.test(text)) return 'zh';
+  if (/[\u0370-\u03FF]/.test(text)) return 'el';
+  if (/[\u0600-\u06FF]/.test(text)) return 'ar';
+  if (/[\u0900-\u097F]/.test(text)) return 'hi';
+  if (/[\u0980-\u09FF]/.test(text)) return 'bn';
+  if (/[\u0E00-\u0E7F]/.test(text)) return 'th';
+  if (/[\u0400-\u04FF]/.test(text)) {
+    if (/[\u0404\u0406\u0407\u0454\u0456\u0457\u0490\u0491]/.test(text)) return 'uk';
+    if (/\b(?:кои|които|какъв|каква|какво|за|най-добрите|българия)\b/iu.test(text) || /\u044A/i.test(text)) {
+      if (!/\b(?:объект|субъект|въезд|подъезд)\b/iu.test(text) && /\b(?:кои|за|най|какви|българия|са|е)\b/iu.test(text)) {
+        return 'bg';
+      }
+    }
+    return 'ru';
+  }
+
+  const lower = text.toLowerCase();
+  if (/[\u0103\u00e2\u0111\u00ea\u00f4\u01a1\u01b0\u1ea1-\u1ef9]/.test(lower) && /[\u0111\u01a1\u01b0\u1ea0-\u1ef9]/.test(lower)) {
+    return 'vi';
+  }
+
+  const rawWords = lower.match(/[\p{L}']+/gu) || [];
+  const words = new Set(rawWords);
+  if (words.size === 0) return 'unknown';
+
+  const scores = Object.create(null);
+  const addScore = (lang, pts) => {
+    scores[lang] = (scores[lang] || 0) + pts;
+  };
+  const scoreDict = (lang, strongWords, mildWords = []) => {
+    for (const w of strongWords) {
+      if (words.has(w)) addScore(lang, 2);
+    }
+    for (const w of mildWords) {
+      if (words.has(w)) addScore(lang, 1);
+    }
+  };
+
+  scoreDict(
+    'de',
+    [
+      'der', 'die', 'das', 'und', 'für', 'mit', 'welche', 'welcher', 'welches',
+      'wie', 'beste', 'bester', 'besten', 'ein', 'eine', 'einer', 'einem', 'einen',
+      'ist', 'sind', 'oder', 'nicht', 'auf', 'bei', 'aus', 'nach', 'über', 'unter',
+      'zum', 'zur', 'anbieter', 'vergleich', 'alternativen', 'lösungen', 'unternehmen',
+      'kosten', 'preise', 'deutschland', 'österreich', 'schweiz', 'empfehlen', 'empfehlung'
+    ],
+    ['in', 'im', 'am', 'von', 'zu', 'was', 'wo', 'man', 'kann']
+  );
+  if (/[äöüß]/.test(lower)) addScore('de', 3);
+
+  scoreDict(
+    'en',
+    [
+      'the', 'and', 'for', 'with', 'what', 'which', 'who', 'how', 'where', 'why',
+      'best', 'top', 'compare', 'comparison', 'between', 'alternatives', 'tools',
+      'solutions', 'companies', 'pricing', 'features', 'is', 'are', 'was', 'were',
+      'can', 'could', 'should', 'you', 'your', 'this', 'that', 'these', 'those',
+      'from', 'into', 'about', 'most', 'recommend', 'recommended', 'or'
+    ],
+    ['in', 'to', 'of', 'on', 'an']
+  );
+
+  scoreDict(
+    'fr',
+    [
+      'le', 'la', 'les', 'des', 'une', 'est', 'sont', 'avec', 'pour', 'dans',
+      'sur', 'quel', 'quelle', 'quels', 'quelles', 'meilleur', 'meilleurs',
+      'meilleure', 'meilleures', 'logiciel', 'logiciels', 'entreprise', 'entreprises',
+      'comparatif', 'comparaison', 'ou', 'et', 'pas', 'chez', 'comment', 'pourquoi',
+      'vous', 'votre', 'nous', 'france', 'outils', 'prix'
+    ],
+    ['de', 'un', 'du', 'au', 'qui', 'quoi']
+  );
+  if (/[œç]/.test(lower)) addScore('fr', 3);
+  else if (/[àâèéêëîïôùûü]/.test(lower)) addScore('fr', 1);
+
+  scoreDict(
+    'es',
+    [
+      'el', 'los', 'las', 'uno', 'una', 'unos', 'unas', 'son', 'con', 'para', 'por',
+      'qué', 'cuál', 'cuáles', 'mejor', 'mejores', 'empresa', 'empresas',
+      'comparativa', 'entre', 'sobre', 'cómo', 'dónde', 'herramientas', 'soluciones',
+      'españa', 'precio', 'precios', 'son'
+    ],
+    ['la', 'en', 'es', 'y', 'que', 'de']
+  );
+  if (/[ñ¡¿]/.test(lower)) addScore('es', 3);
+
+  scoreDict(
+    'it',
+    [
+      'il', 'lo', 'gli', 'una', 'sono', 'con', 'per', 'quale', 'quali',
+      'migliore', 'migliori', 'aziende', 'azienda', 'confronto', 'come', 'che',
+      'del', 'della', 'dei', 'delle', 'degli', 'nel', 'nella', 'italia', 'prezzi',
+      'strumenti', 'miglior', 'più'
+    ],
+    ['la', 'le', 'in', 'di', 'e', 'è']
+  );
+
+  scoreDict(
+    'nl',
+    [
+      'het', 'een', 'van', 'voor', 'met', 'zijn', 'welke', 'welk', 'hoe',
+      'beste', 'bedrijven', 'bedrijf', 'vergelijking', 'tussen', 'waar', 'over',
+      'bij', 'nederland', 'belgië', 'oplossingen', 'prijzen', 'aanbieders'
+    ],
+    ['de', 'en', 'in', 'op', 'wat', 'is']
+  );
+  if (/ij/.test(lower)) addScore('nl', 1);
+
+  scoreDict(
+    'pt',
+    [
+      'os', 'as', 'um', 'uma', 'são', 'com', 'para', 'por', 'em', 'nos', 'nas',
+      'qual', 'quais', 'melhor', 'melhores', 'empresas', 'comparação', 'como',
+      'entre', 'sobre', 'ferramentas', 'brasil', 'portugal', 'preços', 'soluções'
+    ],
+    ['o', 'a', 'no', 'na', 'é', 'de']
+  );
+  if (/[ãõ]/.test(lower)) addScore('pt', 3);
+
+  scoreDict(
+    'pl',
+    [
+      'do', 'dla', 'jak', 'jaki', 'jaka', 'jakie', 'najlepsze', 'najlepszy',
+      'najlepsza', 'porównanie', 'firmy', 'oprogramowanie', 'jest', 'są', 'lub',
+      'oraz', 'który', 'które', 'czy', 'polska', 'narzędzia'
+    ],
+    ['w', 'na', 'z', 'i']
+  );
+  if (/[ąćęłńśźż]/.test(lower)) addScore('pl', 3);
+
+  scoreDict(
+    'sv',
+    [
+      'och', 'att', 'det', 'som', 'för', 'med', 'på', 'är', 'vilken', 'vilket',
+      'vilka', 'bästa', 'hur', 'företag', 'mellan', 'sverige', 'jämförelse', 'verktyg'
+    ],
+    ['i', 'av']
+  );
+  if (/å/.test(lower) && !/[æø]/.test(lower)) addScore('sv', 2);
+
+  scoreDict(
+    'da',
+    [
+      'og', 'at', 'det', 'som', 'for', 'med', 'på', 'er', 'hvilken', 'hvilket',
+      'hvilke', 'bedste', 'hvordan', 'virksomheder', 'sammenligning', 'danmark', 'værktøjer'
+    ],
+    ['i', 'af']
+  );
+  if (/[æø]/.test(lower)) addScore('da', 3);
+
+  scoreDict(
+    'fi',
+    [
+      'ja', 'on', 'ovat', 'tai', 'että', 'mitkä', 'mikä', 'parhaat', 'paras',
+      'kuinka', 'miten', 'yritykset', 'vertailu', 'ohjelmisto', 'varten', 'suomi'
+    ],
+    []
+  );
+
+  scoreDict(
+    'cs',
+    [
+      'pro', 'je', 'jsou', 'jak', 'jaké', 'jaký', 'nejlepší', 'porovnání',
+      'firmy', 'srovnání', 'nástroje', 'česko'
+    ],
+    ['a', 'v', 'na']
+  );
+  if (/[ěčřžůťďň]/.test(lower)) addScore('cs', 3);
+
+  scoreDict(
+    'sk',
+    [
+      'pre', 'ako', 'aké', 'najlepšie', 'porovnanie', 'spoločnosti', 'slovensko'
+    ],
+    ['a', 'v', 'na', 'sú']
+  );
+  if (/[ĺľŕôä]/.test(lower) && words.has('ako')) addScore('sk', 2);
+
+  scoreDict(
+    'ro',
+    [
+      'și', 'în', 'pentru', 'cu', 'este', 'sunt', 'care', 'cum', 'cele',
+      'mai', 'bune', 'comparație', 'companii', 'românia'
+    ],
+    ['si', 'de', 'la']
+  );
+  if (/[ăîșțşţ]/.test(lower)) addScore('ro', 3);
+
+  scoreDict(
+    'hu',
+    [
+      'és', 'az', 'hogy', 'van', 'vannak', 'melyik', 'legjobb', 'vállalatok',
+      'összehasonlítás', 'szoftver', 'magyarország'
+    ],
+    ['a']
+  );
+  if (/[őű]/.test(lower)) addScore('hu', 3);
+
+  scoreDict(
+    'tr',
+    [
+      've', 'için', 'ile', 'iyi', 'nasıl', 'hangi', 'şirketler', 'karşılaştırma',
+      'yazılım', 'nedir', 'türkiye'
+    ],
+    ['en']
+  );
+  if (/[ğıİş]/.test(text)) addScore('tr', 3);
+
+  scoreDict(
+    'id',
+    [
+      'yang', 'dan', 'untuk', 'dengan', 'apa', 'bagaimana', 'terbaik',
+      'perusahaan', 'perbandingan', 'perangkat', 'lunak', 'indonesia'
+    ],
+    ['di']
+  );
+
+  scoreDict(
+    'hr',
+    ['koji', 'koje', 'najbolji', 'najbolje', 'usporedba', 'tvrtke', 'za', 'hrvatska'],
+    ['i', 'u', 'na']
+  );
+
+  scoreDict(
+    'sl',
+    ['kateri', 'katera', 'najboljši', 'najboljše', 'primerjava', 'podjetja', 'slovenija'],
+    ['in', 'za', 'na']
+  );
+
+  scoreDict(
+    'et',
+    ['parim', 'parimad', 'võrdlus', 'ettevõtted', 'tarkvara', 'kuidas', 'eesti'],
+    ['ja', 'on']
+  );
+
+  scoreDict(
+    'lv',
+    ['labākais', 'labākie', 'salīdzinājums', 'uzņēmumi', 'programmatūra', 'latvija'],
+    ['un', 'ir']
+  );
+  if (/[āēīūķļņģ]/.test(lower)) addScore('lv', 3);
+
+  scoreDict(
+    'lt',
+    ['geriausias', 'geriausi', 'palyginimas', 'įmonės', 'lietuva', 'kaip'],
+    ['ir', 'yra']
+  );
+  if (/[ąčęėįšųūž]/.test(lower)) addScore('lt', 3);
+
+  scoreDict(
+    'ga',
+    ['is', 'agus', 'fearr', 'na', 'comhlachtaí', 'bogearraí', 'conas', 'éire'],
+    []
+  );
+
+  scoreDict(
+    'mt',
+    ['l-aħjar', 'kumpaniji', 'tqabbil', 'softwer', 'malta', 'kif'],
+    ['u', 'ta']
+  );
+  if (/[ċġħż]/.test(lower)) addScore('mt', 3);
+
+  let bestLang = 'unknown';
+  let bestScore = 0;
+  for (const [lang, sc] of Object.entries(scores)) {
+    if (sc > bestScore) {
+      bestScore = sc;
+      bestLang = lang;
+    }
+  }
+
+  return bestScore >= 2 ? bestLang : 'unknown';
+}
+
+const LANGUAGE_REGION_MAP = {
+  de: 'DACH',
+  en: 'GLOBAL_EN',
+  fr: 'FR',
+  es: 'ES',
+  it: 'IT',
+  nl: 'NL',
+  pt: 'PT',
+  pl: 'PL',
+  sv: 'SE',
+  da: 'DK',
+  fi: 'FI',
+  cs: 'CZ',
+  ro: 'RO',
+  el: 'GR',
+  hu: 'HU',
+  bg: 'BG',
+  hr: 'HR',
+  sk: 'SK',
+  sl: 'SI',
+  et: 'EE',
+  lv: 'LV',
+  lt: 'LT',
+  ga: 'IE',
+  mt: 'MT',
+  zh: 'CN',
+  hi: 'IN',
+  ar: 'MENA',
+  bn: 'BD',
+  ru: 'RU',
+  ja: 'JP',
+  ko: 'KR',
+  tr: 'TR',
+  vi: 'VN',
+  id: 'ID',
+  th: 'TH',
+  uk: 'UA'
+};
+
+/**
+ * Infers a default geographic region code from a detected prompt language.
+ *
+ * @param {string} lang
+ * @returns {string}
+ */
+function inferRegionFromLanguage(lang) {
+  if (!lang || typeof lang !== 'string') return 'GLOBAL';
+  const key = lang.trim().toLowerCase();
+  return LANGUAGE_REGION_MAP[key] || 'GLOBAL';
+}
+
+const REGION_ALIASES = {
+  DEUTSCHLAND: 'DE',
+  GERMANY: 'DE',
+  OESTERREICH: 'AT',
+  AUSTRIA: 'AT',
+  SCHWEIZ: 'CH',
+  SWITZERLAND: 'CH',
+  SUISSE: 'CH',
+  SVIZZERA: 'CH',
+  USA: 'US',
+  'UNITED STATES': 'US',
+  'UNITED KINGDOM': 'UK',
+  GREATBRITAIN: 'UK',
+  GB: 'UK',
+  ENGLAND: 'UK',
+  FRANKREICH: 'FR',
+  FRANCE: 'FR',
+  SPANIEN: 'ES',
+  SPAIN: 'ES',
+  ITALIEN: 'IT',
+  ITALY: 'IT',
+  NIEDERLANDE: 'NL',
+  NETHERLANDS: 'NL',
+  EUROPA: 'EU',
+  EUROPE: 'EU'
+};
+
+/**
+ * Normalizes a region label or ISO/market code to a canonical uppercase key.
+ *
+ * @param {string|null|undefined} region
+ * @returns {string|null}
+ */
+function normalizeRegionCode(region) {
+  if (region === null || region === undefined) return null;
+  const trimmed = String(region).trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (lower === 'auto' || lower === 'default' || lower === 'none' || lower === 'null') {
+    return null;
+  }
+  const upper = trimmed
+    .toUpperCase()
+    .replace(/Ä/g, 'AE')
+    .replace(/Ö/g, 'OE')
+    .replace(/Ü/g, 'UE');
+  return REGION_ALIASES[upper] || trimmed.toUpperCase();
+}
+
+/**
+ * Resolves geographic evaluation context from user-configured market/region
+ * and detected prompt language.
+ *
+ * @param {string} prompt
+ * @param {string|null|undefined} userMarketRegion
+ * @returns {{ market_region: string|null, prompt_language: string, inferred_region: string, effective_region: string, region_source: string }}
+ */
+function resolveGeographicContext(prompt, userMarketRegion) {
+  const promptLanguage = detectPromptLanguage(prompt);
+  const inferredRegion = inferRegionFromLanguage(promptLanguage);
+  const cleanUserRegion = normalizeRegionCode(userMarketRegion);
+  const effectiveRegion = cleanUserRegion || inferredRegion;
+  const regionSource = cleanUserRegion
+    ? 'user_setting'
+    : (promptLanguage !== 'unknown' ? 'prompt_language' : 'default_fallback');
+
+  return {
+    market_region: cleanUserRegion,
+    prompt_language: promptLanguage,
+    inferred_region: inferredRegion,
+    effective_region: effectiveRegion,
+    region_source: regionSource
+  };
+}
+
+const GERMAN_TRANSLITERATION_REGIONS = new Set(['DACH', 'DE', 'AT', 'CH', 'LI', 'LU']);
+
+/**
+ * Gates DIN 5007-2 umlaut transliteration (ae/oe/ue/ss) to German / DACH
+ * geographic contexts, preserving backward-compatible fallback only when both
+ * user market_region is unset and prompt_language is unknown.
+ *
+ * @param {object|null|undefined} geoContext
+ * @returns {boolean}
+ */
+function shouldUseGermanTransliteration(geoContext) {
+  if (!geoContext || typeof geoContext !== 'object') return true;
+  const effective = normalizeRegionCode(geoContext.effective_region || geoContext.effectiveRegion || geoContext.market_region || geoContext.marketRegion);
+  const lang = geoContext.prompt_language || geoContext.promptLanguage || 'unknown';
+  const userRegion = normalizeRegionCode(geoContext.market_region || geoContext.marketRegion);
+
+  if (lang === 'de') return true;
+  if (effective && GERMAN_TRANSLITERATION_REGIONS.has(effective)) return true;
+  if (!userRegion && (!lang || lang === 'unknown') && (!effective || effective === 'GLOBAL')) return true;
+  return false;
+}
+
+const REGIONAL_TLD_MAP = {
+  DACH: ['.de', '.at', '.ch', '.li'],
+  DE: ['.de'],
+  AT: ['.at'],
+  CH: ['.ch'],
+  LI: ['.li'],
+  LU: ['.lu'],
+  FR: ['.fr'],
+  ES: ['.es'],
+  IT: ['.it'],
+  NL: ['.nl'],
+  BE: ['.be'],
+  BENELUX: ['.nl', '.be', '.lu'],
+  PT: ['.pt'],
+  PL: ['.pl'],
+  SE: ['.se'],
+  DK: ['.dk'],
+  FI: ['.fi'],
+  NO: ['.no'],
+  NORDICS: ['.se', '.dk', '.fi', '.no', '.is'],
+  CZ: ['.cz'],
+  SK: ['.sk'],
+  RO: ['.ro'],
+  GR: ['.gr'],
+  HU: ['.hu'],
+  BG: ['.bg'],
+  HR: ['.hr'],
+  SI: ['.si'],
+  EE: ['.ee'],
+  LV: ['.lv'],
+  LT: ['.lt'],
+  IE: ['.ie'],
+  MT: ['.mt'],
+  EU: [
+    '.eu', '.de', '.at', '.fr', '.es', '.it', '.nl', '.be', '.lu', '.pt',
+    '.pl', '.se', '.dk', '.fi', '.cz', '.sk', '.ro', '.gr', '.hu', '.bg',
+    '.hr', '.si', '.ee', '.lv', '.lt', '.ie', '.mt', '.cy'
+  ],
+  UK: ['.uk', '.co.uk', '.org.uk', '.ac.uk', '.gov.uk'],
+  US: ['.us', '.gov', '.edu', '.mil'],
+  CA: ['.ca'],
+  AU: ['.au', '.com.au', '.org.au', '.net.au'],
+  NZ: ['.nz', '.co.nz'],
+  CN: ['.cn', '.com.cn'],
+  IN: ['.in', '.co.in'],
+  MENA: ['.ae', '.sa', '.eg', '.qa', '.kw', '.bh', '.om', '.jo', '.ma', '.tn', '.lb'],
+  BD: ['.bd', '.com.bd'],
+  RU: ['.ru', '.su'],
+  JP: ['.jp', '.co.jp', '.ne.jp', '.or.jp'],
+  KR: ['.kr', '.co.kr', '.or.kr'],
+  TR: ['.tr', '.com.tr', '.org.tr'],
+  VN: ['.vn', '.com.vn'],
+  ID: ['.id', '.co.id'],
+  TH: ['.th', '.co.th'],
+  UA: ['.ua', '.com.ua'],
+  BR: ['.br', '.com.br'],
+  MX: ['.mx', '.com.mx'],
+  LATAM: ['.mx', '.com.mx', '.br', '.com.br', '.ar', '.com.ar', '.co', '.cl', '.pe', '.uy'],
+  GLOBAL_EN: ['.uk', '.co.uk', '.us', '.ca', '.au', '.com.au', '.nz', '.co.nz', '.ie', '.com', '.org', '.io', '.ai']
+};
+
+/**
+ * Checks whether a cited domain matches the regional ccTLD / regional TLD
+ * profile for the active effective_region.
+ *
+ * @param {string} domain
+ * @param {string|null|undefined} effectiveRegion
+ * @returns {boolean}
+ */
+function isRegionalCitationDomain(domain, effectiveRegion) {
+  if (!domain || !effectiveRegion) return false;
+  const cleanDomain = extractDomainFromUrl(String(domain));
+  if (!cleanDomain) return false;
+
+  const regionKey = normalizeRegionCode(effectiveRegion);
+  if (!regionKey || regionKey === 'GLOBAL') return false;
+
+  let suffixes = REGIONAL_TLD_MAP[regionKey];
+  if (!suffixes && /^[A-Z]{2}$/.test(regionKey)) {
+    suffixes = ['.' + regionKey.toLowerCase()];
+  }
+  if (!Array.isArray(suffixes) || suffixes.length === 0) return false;
+
+  return suffixes.some(sfx => cleanDomain.endsWith(sfx) && cleanDomain.length > sfx.length);
+}
+
+const UNICODE_CHAR_FOLD_MAP = {
+  a: '[a\u00e0\u00e1\u00e2\u00e3\u00e4\u00e5\u0101\u0103\u0105]',
+  c: '[c\u00e7\u0107\u0109\u010b\u010d]',
+  d: '[d\u010f\u0111\u00f0]',
+  e: '[e\u00e8\u00e9\u00ea\u00eb\u0113\u0115\u0117\u0119\u011b]',
+  g: '[g\u011d\u011f\u0121\u0123]',
+  h: '[h\u0125\u0127]',
+  i: '[i\u00ec\u00ed\u00ee\u00ef\u0129\u012b\u012d\u012f\u0131]',
+  j: '[j\u0135]',
+  k: '[k\u0137]',
+  l: '[l\u013a\u013c\u013e\u0140\u0142]',
+  n: '[n\u00f1\u0144\u0146\u0148]',
+  o: '[o\u00f2\u00f3\u00f4\u00f5\u00f6\u00f8\u014d\u014f\u0151]',
+  r: '[r\u0155\u0157\u0159]',
+  s: '[s\u015b\u015d\u015f\u0161]',
+  t: '[t\u0163\u0165\u0167]',
+  u: '[u\u00f9\u00fa\u00fb\u00fc\u0169\u016b\u016d\u016f\u0171\u0173]',
+  w: '[w\u0175]',
+  y: '[y\u00fd\u00ff\u0177]',
+  z: '[z\u017a\u017c\u017e]'
+};
+
+/**
+ * Builds a universal Unicode diacritic-tolerant boundary regex without German
+ * ae/oe/ue/ss DIN 5007-2 transliteration.
+ *
+ * @param {string} entityName
+ * @returns {RegExp|null}
+ */
+function buildUnicodeFoldRegex(entityName) {
+  if (!entityName || typeof entityName !== 'string') return null;
+  const norm = entityName.normalize('NFC').trim();
+  if (!norm) return null;
+
+  const SPECIAL_BASE = {
+    '\u00f8': 'o', '\u00d8': 'o',
+    '\u0142': 'l', '\u0141': 'l',
+    '\u0111': 'd', '\u0110': 'd',
+    '\u00f0': 'd', '\u00d0': 'd',
+    '\u0131': 'i'
+  };
+
+  const wordTokens = norm.split(/\s+/);
+  const wordPatterns = wordTokens.map(w => {
+    const chars = Array.from(w);
+    return chars.map(ch => {
+      const mappedSpecial = SPECIAL_BASE[ch];
+      const base = (mappedSpecial || ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '')).toLowerCase();
+      if (!base) return '';
+      if (UNICODE_CHAR_FOLD_MAP[base]) {
+        return `(?:${UNICODE_CHAR_FOLD_MAP[base]}[\u0300-\u036f]*)`;
+      }
+      return escapeRegex(base);
+    }).join('');
+  }).filter(p => p.length > 0);
+
+  if (wordPatterns.length === 0) return null;
+  const fullPattern = wordPatterns.join('\\s+');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${fullPattern}(?![\\p{L}\\p{N}])`, 'iu');
+}
+
+/**
  * Locates an entity within text using tiered resolution:
- * Tier 1: German Unicode transliteration regex with lookaround boundaries.
+ * Tier 1: Region-aware Unicode / DIN 5007-2 regex with lookaround boundaries.
  * Tier 2: Domain text fallback if registered domains are provided.
  * 
  * @param {string} text
  * @param {string} entityName
  * @param {string[]} [domains=[]]
+ * @param {object} [options={}]
  * @returns {{ found: boolean, charIndex: number|null, wordIndex: number|null, matchType: string, matchedText: string|null }}
  */
-function findBrandUnicode(text, entityName, domains = []) {
+function findBrandUnicode(text, entityName, domains = [], options = {}) {
   if (text === null || text === undefined || !entityName) {
     return { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };
   }
@@ -205,7 +792,16 @@ function findBrandUnicode(text, entityName, domains = []) {
     return { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };
   }
 
-  const regex = buildGermanRegex(target);
+  let useGerman = true;
+  if (options && typeof options === 'object') {
+    if (typeof options.useGermanTransliteration === 'boolean') {
+      useGerman = options.useGermanTransliteration;
+    } else if (options.geoContext || options.promptLanguage || options.marketRegion || options.market_region || options.effectiveRegion || options.effective_region) {
+      useGerman = shouldUseGermanTransliteration(options.geoContext || options);
+    }
+  }
+
+  const regex = useGerman ? buildGermanRegex(target) : buildUnicodeFoldRegex(target);
   if (regex) {
     const match = regex.exec(normText);
     if (match) {
@@ -216,12 +812,13 @@ function findBrandUnicode(text, entityName, domains = []) {
         ? getWords(prefix).length + 1
         : Math.max(1, getWords(prefix).length);
       const matchedText = match[0];
-      const isExact = matchedText.normalize('NFC').toLocaleLowerCase('de-DE') === target.toLocaleLowerCase('de-DE');
+      const locale = useGerman ? 'de-DE' : 'en-US';
+      const isExact = matchedText.normalize('NFC').toLocaleLowerCase(locale) === target.toLocaleLowerCase(locale);
       return {
         found: true,
         charIndex,
         wordIndex,
-        matchType: isExact ? 'unicode_exact' : 'german_transliterated',
+        matchType: isExact ? 'unicode_exact' : (useGerman ? 'german_transliterated' : 'unicode_folded'),
         matchedText
       };
     }
@@ -473,9 +1070,17 @@ function calculateMetrics(arg1, argBrandName, argBrandDomains, argCompetitors, a
     return { name: '', domains: [] };
   }).filter(c => c.name.length > 0);
 
+  // Resolve geographic context from user market_region & prompt language
+  const promptText = runOptions.prompt || runOptions.user_prompt || (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1) ? (arg1.prompt || '') : '');
+  const userMarketRegionOpt = runOptions.marketRegion ?? runOptions.market_region ?? (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1) ? (arg1.market_region ?? arg1.marketRegion ?? null) : null);
+  const geoContext = resolveGeographicContext(promptText, userMarketRegionOpt);
+  const useGerman = shouldUseGermanTransliteration(geoContext);
+  const matchOptions = { useGermanTransliteration: useGerman, geoContext };
+
   // Normalize citations (with null guard and percent-decoding resilience)
   let brandDomainCited = false;
   let competitorDomainCited = false;
+  let regionalCitationCount = 0;
 
   const rawCitationsList = Array.isArray(citations) ? citations : (citations && typeof citations === 'object' ? [citations] : []);
   const safeCitations = rawCitationsList.filter(cit => cit !== null && cit !== undefined && (typeof cit === 'string' || typeof cit === 'object'));
@@ -506,6 +1111,14 @@ function calculateMetrics(arg1, argBrandName, argBrandDomains, argCompetitors, a
     }
     if (isComp) competitorDomainCited = true;
 
+    let isRegionalTld = false;
+    if (isObj && typeof cit.is_regional_tld === 'boolean') {
+      isRegionalTld = cit.is_regional_tld;
+    } else {
+      isRegionalTld = isRegionalCitationDomain(rawDomain, geoContext.effective_region);
+    }
+    if (isRegionalTld) regionalCitationCount++;
+
     return {
       citation_index: idx + 1,
       url: rawUrl,
@@ -515,16 +1128,20 @@ function calculateMetrics(arg1, argBrandName, argBrandDomains, argCompetitors, a
       title: title,
       citation_title: title,
       is_brand_domain: isBrand,
-      is_competitor_domain: isComp
+      is_competitor_domain: isComp,
+      is_regional_tld: isRegionalTld
     };
   });
 
   const hasCitations = normCitations.length > 0;
+  const regionalCitationRatio = hasCitations
+    ? Math.round((regionalCitationCount / normCitations.length) * 10000) / 10000
+    : null;
 
   // Evaluate brand match
   let brandMatch = { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };
   if (targetBrand.length > 0 && totalChars > 0) {
-    brandMatch = findBrandUnicode(normText, targetBrand, normBrandDomains);
+    brandMatch = findBrandUnicode(normText, targetBrand, normBrandDomains, matchOptions);
   }
 
   const brandMentioned = brandMatch.found;
@@ -543,7 +1160,7 @@ function calculateMetrics(arg1, argBrandName, argBrandDomains, argCompetitors, a
   const evaluatedCompetitors = normCompetitors.map(comp => {
     let compMatch = { found: false, charIndex: null, wordIndex: null, matchType: 'none', matchedText: null };
     if (totalChars > 0) {
-      compMatch = findBrandUnicode(normText, comp.name, comp.domains);
+      compMatch = findBrandUnicode(normText, comp.name, comp.domains, matchOptions);
     }
     let compRelPosPct = null;
 
@@ -629,6 +1246,16 @@ function calculateMetrics(arg1, argBrandName, argBrandDomains, argCompetitors, a
     brand_domain_cited: brandDomainCited,
     brand_cited: brandDomainCited,
     competitor_cited: competitorDomainCited,
+    regional_citation_count: regionalCitationCount,
+    regional_citation_ratio: regionalCitationRatio,
+
+    // Geographic Context & Language Inference
+    market_region: geoContext.market_region,
+    prompt_language: geoContext.prompt_language,
+    inferred_region: geoContext.inferred_region,
+    effective_region: geoContext.effective_region,
+    region_source: geoContext.region_source,
+    german_transliteration_used: useGerman,
 
     // Detailed diagnostics breakdown
     diagnostics: {
@@ -655,6 +1282,13 @@ if (typeof module !== 'undefined' && module.exports) {
     normalizeGermanText,
     foldGerman: normalizeGermanText,
     buildGermanRegex,
+    buildUnicodeFoldRegex,
+    detectPromptLanguage,
+    inferRegionFromLanguage,
+    normalizeRegionCode,
+    resolveGeographicContext,
+    shouldUseGermanTransliteration,
+    isRegionalCitationDomain,
     getWords,
     countWords,
     countChars,
