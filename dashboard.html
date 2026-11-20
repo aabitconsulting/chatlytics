@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body class="dashboard-body">
+  <a href="#main-content" class="skip-link">Direkt zum Inhalt springen</a>
 
   <!-- Read-Only Board Report Preview Banner -->
   <div id="magic-audit-banner" class="magic-audit-banner" style="display: none;">
@@ -80,7 +81,7 @@
     </div>
   </header>
 
-  <main class="dashboard-main container-fluid">
+  <main id="main-content" class="dashboard-main container-fluid">
     <!-- Persistent Live Status Banners -->
     <div id="run-status-banner" class="run-status-banner hidden" role="status" aria-live="polite">
       <div class="run-status-main">
@@ -509,6 +510,7 @@
               data-i18n-placeholder="results.search_placeholder"
               aria-label="Prompt oder KI-Antwort durchsuchen"
             >
+            <button type="button" id="btn-results-reset-filters" class="btn btn-outline btn-sm results-reset-btn hidden" data-i18n="results.reset_filters">Filter zurücksetzen</button>
           </div>
 
           <p class="mobile-result-hint" data-i18n="results.tap_hint">Tippen für Prompt, Antworttext &amp; Quellen</p>
@@ -546,9 +548,12 @@
          VIEW 4: PROFIL (Tracking-Profil Konfiguration & Lifecycle)
          ================================================================ -->
     <section id="view-profiles" class="cockpit-view" data-view="profiles" data-audit-hide="1" aria-label="Tracking-Profile">
-      <div class="section-page-head">
-        <h2 class="section-page-title" data-i18n="profiles.title">Tracking-Profile &amp; Lebenszyklus</h2>
-        <p class="section-page-sub" data-i18n="profiles.subtitle">Verwalten Sie aktive Prompt-Sets, Frequenzen, Test-Läufe und den Profil-Status.</p>
+      <div class="section-page-head section-page-head-row">
+        <div>
+          <h2 class="section-page-title" data-i18n="profiles.title">Tracking-Profile &amp; Lebenszyklus</h2>
+          <p class="section-page-sub" data-i18n="profiles.subtitle">Verwalten Sie aktive Prompt-Sets, Frequenzen, Test-Läufe und den Profil-Status.</p>
+        </div>
+        <button id="btn-new-config" type="button" class="btn btn-primary btn-sm" data-i18n="dashboard.new_config">+ Neues Profil</button>
       </div>
 
       <div class="profiles-layout-grid">
@@ -594,16 +599,7 @@
         </div>
 
         <div>
-          <div class="card">
-            <div class="card-header">
-              <h3 class="card-title" data-i18n="dashboard.new_config">+ Neues Profil</h3>
-            </div>
-            <div class="card-body">
-              <button id="btn-new-config" type="button" class="btn btn-primary" data-i18n="dashboard.new_config">+ Neues Profil</button>
-            </div>
-          </div>
-
-          <div class="card danger-zone-card">
+          <div id="profile-danger-zone" class="card danger-zone-card hidden">
             <div class="card-header">
               <h3 class="card-title" data-i18n="profiles.danger_zone">Lebenszyklus &amp; Archivierung</h3>
             </div>
@@ -778,12 +774,12 @@
   </aside>
 
   <!-- Create / Edit Config Modal -->
-  <div id="config-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true">
+  <div id="config-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-labelledby="config-modal-title" aria-hidden="true">
     <div class="modal-backdrop"></div>
     <div class="modal-dialog modal-dialog-wide card">
       <div class="modal-header">
         <h3 id="config-modal-title" class="modal-title" data-i18n="config.modal_create_title">Neues Tracking-Profil anlegen</h3>
-        <button id="config-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
+        <button type="button" id="config-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
       </div>
       <form id="config-form" class="modal-body">
         <div id="config-error" class="alert alert-error" role="alert"></div>
@@ -951,12 +947,12 @@
   </div>
 
   <!-- Share Board Report Modal -->
-  <div id="share-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-hidden="true">
+  <div id="share-modal" class="modal modal-hidden" role="dialog" aria-modal="true" aria-labelledby="share-modal-title" aria-hidden="true">
     <div class="modal-backdrop"></div>
     <div class="modal-dialog card">
       <div class="modal-header">
-        <h3 class="modal-title">Schreibgeschützter GEO-Report-Link</h3>
-        <button id="share-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
+        <h3 id="share-modal-title" class="modal-title">Schreibgeschützter GEO-Report-Link</h3>
+        <button type="button" id="share-modal-close" class="btn-close" aria-label="Schließen">&times;</button>
       </div>
       <div class="modal-body">
         <p class="text-sm text-muted" style="margin-bottom: 12px;">

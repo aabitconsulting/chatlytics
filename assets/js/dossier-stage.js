@@ -961,6 +961,9 @@ export class DossierStageController {
       const active = tab.getAttribute('data-duel-tab') === duelId;
       tab.classList.toggle('is-active', active);
       tab.setAttribute('aria-selected', String(active));
+      if (active && playReveal && typeof tab.scrollIntoView === 'function') {
+        tab.scrollIntoView({ behavior: this.reducedMotion ? 'auto' : 'smooth', inline: 'center', block: 'nearest' });
+      }
     });
 
     this.cancelReveal();
@@ -1098,12 +1101,14 @@ export class DossierStageController {
       pinComp.style.left = `${compPct.toFixed(1)}%`;
       pinComp.style.opacity = oaiRevealedChars >= tl.compPos ? '1' : '0.25';
     }
-    if (pinBrandLabel) {
-      pinBrandLabel.textContent = `${lang === 'de' ? 'Zeichen' : 'Char'} ${tl.brandPos}: ${duel.brand}`;
-    }
-    if (pinCompLabel) {
-      pinCompLabel.textContent = `${lang === 'de' ? 'Zeichen' : 'Char'} ${tl.compPos}: ${duel.competitor}`;
-    }
+    const brandPinText = `${lang === 'de' ? 'Zeichen' : 'Char'} ${tl.brandPos}: ${duel.brand}`;
+    const compPinText = `${lang === 'de' ? 'Zeichen' : 'Char'} ${tl.compPos}: ${duel.competitor}`;
+    if (pinBrandLabel) pinBrandLabel.textContent = brandPinText;
+    if (pinCompLabel) pinCompLabel.textContent = compPinText;
+    const mobBrandEl = document.getElementById('timeline-mobile-brand');
+    const mobCompEl = document.getElementById('timeline-mobile-comp');
+    if (mobBrandEl) mobBrandEl.textContent = brandPinText;
+    if (mobCompEl) mobCompEl.textContent = compPinText;
     if (bracketEl) {
       bracketEl.style.left = `${brandPct.toFixed(1)}%`;
       bracketEl.style.width = `${Math.max(4, compPct - brandPct).toFixed(1)}%`;
@@ -1213,8 +1218,8 @@ export class DossierStageController {
     const spanLenEl = document.getElementById('wb-text-length');
 
     if (badgeEl) {
-      badgeEl.className = `status-badge ${badgeClass}`;
-      badgeEl.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span>${escapeHtml(tKey(`mece.${tierKey}.badge`, tierKey))}</span>`;
+      badgeEl.className = `status-badge ${badgeClass} wb-status-dot-badge`;
+      badgeEl.innerHTML = '<span class="status-dot" aria-hidden="true"></span>';
     }
     if (titleEl) titleEl.textContent = tKey(`mece.${tierKey}.title`, tierKey);
     if (descEl) descEl.textContent = tKey(`mece.${tierKey}.desc`, '');
@@ -1347,11 +1352,17 @@ export class DossierStageController {
     const lang = getLang();
     const duel = DUELS[this.activeDuelId]?.[lang] || DUELS.kosmetik[lang];
     const brandEl = document.getElementById('report-preview-brand');
+    const leadEl = document.getElementById('report-preview-lead');
     const promptEl = document.getElementById('report-preview-prompt');
     const diagEl = document.getElementById('report-preview-diag');
     const srcEl = document.getElementById('report-preview-source');
 
     if (brandEl) brandEl.textContent = `${duel.brand} vs. ${duel.competitor}`;
+    if (leadEl && duel.timeline) {
+      const diff = Number(duel.timeline.compPos) - Number(duel.timeline.brandPos);
+      const sign = diff >= 0 ? '+' : '';
+      leadEl.textContent = lang === 'de' ? `${sign}${diff} Z.` : `${sign}${diff} chars`;
+    }
     if (promptEl) promptEl.textContent = duel.prompt;
     if (diagEl) diagEl.textContent = duel.models.gemini.diagLabel;
     if (srcEl) srcEl.textContent = duel.models.gemini.deltaLabel;

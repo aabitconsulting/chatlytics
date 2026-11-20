@@ -118,6 +118,9 @@ async function initAdminCockpit() {
   const emailEl = document.getElementById('nav-user-email');
   if (emailEl) emailEl.textContent = user.email || 'admin@chatlytics.de';
 
+  // 1b. Sync Light/Dark Theme with Dashboard preference
+  initAdminTheme();
+
   // 2. Bind Event Listeners
   bindAdminEvents();
 
@@ -198,12 +201,29 @@ function bindAdminEvents() {
     });
   }
 
-  // Global Keyboard Navigation (Escape closes active modal)
+  // Theme Toggle Button
+  const themeBtn = document.getElementById('btn-admin-theme-toggle');
+  if (themeBtn) {
+    themeBtn.addEventListener('click', () => {
+      const current = document.documentElement?.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      applyAdminTheme(current === 'dark' ? 'light' : 'dark', true);
+    });
+  }
+
+  // Close open <details class="admin-action-menu"> popovers on outside click
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('details.admin-action-menu[open]').forEach((menu) => {
+      if (!menu.contains(e.target)) menu.removeAttribute('open');
+    });
+  });
+
+  // Global Keyboard Navigation (Escape closes active modal & menus)
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closeCreditModal();
       closeMagicAuditModal();
       closeRunTokenModal();
+      document.querySelectorAll('details.admin-action-menu[open]').forEach((menu) => menu.removeAttribute('open'));
     }
   });
 
@@ -405,38 +425,10 @@ function renderUserTableRows(users) {
     tdStatus.appendChild(spanStatus);
     tr.appendChild(tdStatus);
 
-    // 11. Quick Actions
+    // 11. Quick Actions (3 primary inline + <details> overflow for secondary/destructive)
     const tdActions = document.createElement('td');
     tdActions.setAttribute('data-label', 'Aktionen');
     tdActions.className = 'text-right table-actions admin-quick-actions';
-
-    const btnPauseAll = document.createElement('button');
-    btnPauseAll.type = 'button';
-    btnPauseAll.className = 'btn btn-xs btn-outline';
-    btnPauseAll.textContent = 'Alle pausieren';
-    btnPauseAll.disabled = activeCfg === 0;
-    btnPauseAll.addEventListener('click', () => handlePauseAllUserConfigs(u, btnPauseAll));
-
-    const isSuspended = String(u.status || 'active') === 'suspended';
-    const isSelfAdmin = AdminState.currentUser && Number(AdminState.currentUser.id) === Number(u.id);
-    const btnSuspend = document.createElement('button');
-    btnSuspend.type = 'button';
-    btnSuspend.className = `btn btn-xs ${isSuspended ? 'btn-secondary' : 'btn-outline-danger'}`;
-    btnSuspend.textContent = isSuspended ? 'Entsperren' : 'Sperren';
-    btnSuspend.disabled = Boolean(isSelfAdmin && !isSuspended);
-    btnSuspend.addEventListener('click', () => handleToggleUserStatus(u, btnSuspend));
-
-    const btnTier = document.createElement('button');
-    btnTier.type = 'button';
-    btnTier.className = 'btn btn-xs btn-outline';
-    btnTier.textContent = 'Tarif';
-    btnTier.addEventListener('click', () => openTierModal(u));
-
-    const btnTokens = document.createElement('button');
-    btnTokens.type = 'button';
-    btnTokens.className = 'btn btn-xs btn-outline';
-    btnTokens.textContent = 'Analyse-Läufe & Tokens';
-    btnTokens.addEventListener('click', () => openRunTokenModal(u));
 
     const btnCredit = document.createElement('button');
     btnCredit.type = 'button';
@@ -444,13 +436,70 @@ function renderUserTableRows(users) {
     btnCredit.textContent = 'Credits';
     btnCredit.addEventListener('click', () => openCreditModal(u));
 
+    const btnTokens = document.createElement('button');
+    btnTokens.type = 'button';
+    btnTokens.className = 'btn btn-xs btn-outline';
+    btnTokens.textContent = 'Tokens';
+    btnTokens.title = 'Analyse-Läufe & Tokens';
+    btnTokens.addEventListener('click', () => openRunTokenModal(u));
+
     const btnMagic = document.createElement('button');
     btnMagic.type = 'button';
     btnMagic.className = 'btn btn-xs btn-secondary';
     btnMagic.textContent = 'Report-Link';
     btnMagic.addEventListener('click', () => generateAndOpenMagicAudit(u.id));
 
-    tdActions.append(btnPauseAll, btnSuspend, btnTier, btnCredit, btnTokens, btnMagic);
+    const moreMenu = document.createElement('details');
+    moreMenu.className = 'admin-action-menu';
+    moreMenu.addEventListener('toggle', () => {
+      if (moreMenu.open) {
+        document.querySelectorAll('details.admin-action-menu[open]').forEach((other) => {
+          if (other !== moreMenu) other.removeAttribute('open');
+        });
+      }
+    });
+
+    const moreSummary = document.createElement('summary');
+    moreSummary.className = 'btn btn-xs btn-outline admin-action-menu-trigger';
+    moreSummary.textContent = getAdminLanguage() === 'en' ? 'More ▾' : 'Mehr ▾';
+
+    const moreList = document.createElement('div');
+    moreList.className = 'admin-action-menu-list';
+
+    const btnTier = document.createElement('button');
+    btnTier.type = 'button';
+    btnTier.className = 'admin-action-menu-item';
+    btnTier.textContent = 'Tarif ändern';
+    btnTier.addEventListener('click', () => {
+      moreMenu.removeAttribute('open');
+      openTierModal(u);
+    });
+
+    const btnPauseAll = document.createElement('button');
+    btnPauseAll.type = 'button';
+    btnPauseAll.className = 'admin-action-menu-item';
+    btnPauseAll.textContent = 'Alle pausieren';
+    btnPauseAll.disabled = activeCfg === 0;
+    btnPauseAll.addEventListener('click', () => {
+      moreMenu.removeAttribute('open');
+      handlePauseAllUserConfigs(u, btnPauseAll);
+    });
+
+    const isSuspended = String(u.status || 'active') === 'suspended';
+    const isSelfAdmin = AdminState.currentUser && Number(AdminState.currentUser.id) === Number(u.id);
+    const btnSuspend = document.createElement('button');
+    btnSuspend.type = 'button';
+    btnSuspend.className = `admin-action-menu-item ${isSuspended ? '' : 'is-danger'}`.trim();
+    btnSuspend.textContent = isSuspended ? 'Entsperren' : 'Sperren';
+    btnSuspend.disabled = Boolean(isSelfAdmin && !isSuspended);
+    btnSuspend.addEventListener('click', () => {
+      moreMenu.removeAttribute('open');
+      handleToggleUserStatus(u, btnSuspend);
+    });
+
+    moreList.append(btnTier, btnPauseAll, btnSuspend);
+    moreMenu.append(moreSummary, moreList);
+    tdActions.append(btnCredit, btnTokens, btnMagic, moreMenu);
     tr.appendChild(tdActions);
 
     tbody.appendChild(tr);
@@ -903,6 +952,29 @@ function showToast(message, type = 'info') {
 // 7B. Owner Cockpit v2: Tabs, Quick Actions, Models, Analyse-Sets & Plans
 // -----------------------------------------------------------------------------
 
+function initAdminTheme() {
+  if (typeof document === 'undefined') return;
+  let stored = 'light';
+  try {
+    const val = localStorage.getItem('chatlytics_theme');
+    if (val === 'dark' || val === 'light') stored = val;
+  } catch (_) {}
+  applyAdminTheme(stored, false);
+}
+
+function applyAdminTheme(theme, persist = true) {
+  if (typeof document === 'undefined') return;
+  const next = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement?.setAttribute?.('data-theme', next);
+  if (persist) {
+    try { localStorage.setItem('chatlytics_theme', next); } catch (_) {}
+  }
+  const toggleBtn = document.getElementById('btn-admin-theme-toggle');
+  if (toggleBtn) {
+    toggleBtn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+  }
+}
+
 function getAdminAuthHeaders() {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('chatlytics_token') : null;
   const headers = { 'Content-Type': 'application/json' };
@@ -1066,6 +1138,13 @@ async function handlePauseAllUserConfigs(user, triggerBtn = null) {
 async function handleToggleUserStatus(user, triggerBtn = null) {
   if (!user || !user.id) return;
   const nextStatus = String(user.status || 'active') === 'suspended' ? 'active' : 'suspended';
+  if (nextStatus === 'suspended' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+    const isEn = getAdminLanguage() === 'en';
+    const msg = isEn
+      ? `Suspend tenant "${user.email || user.id}"? All active tracking profiles will be paused.`
+      : `Mandanten "${user.email || user.id}" wirklich sperren? Alle aktiven Tracking-Profile werden pausiert.`;
+    if (!window.confirm(msg)) return;
+  }
   try {
     setAdminButtonLoading(triggerBtn, true, 'Aktualisiere...');
     const res = await fetch('api/admin_users.php?action=set_user_status', {
@@ -1284,6 +1363,7 @@ function renderModelsTable(models) {
     const tr = document.createElement('tr');
 
     const tdId = document.createElement('td');
+    tdId.setAttribute('data-label', 'Modell-ID & Provider');
     const idStrong = document.createElement('div');
     idStrong.className = 'font-mono';
     idStrong.textContent = m.id;
@@ -1317,10 +1397,12 @@ function renderModelsTable(models) {
     tr.appendChild(tdId);
 
     const tdName = document.createElement('td');
+    tdName.setAttribute('data-label', 'Anzeigename');
     tdName.textContent = m.display_name || m.id;
     tr.appendChild(tdName);
 
     const tdStrat = document.createElement('td');
+    tdStrat.setAttribute('data-label', 'Strategie & Capabilities');
     const rawStrat = String(m.execution_strategy || '');
     const displayStrat = (!rawStrat || rawStrat === 'prompt_caching')
       ? (m.supports_batch_api ? 'batch_api' : 'regular')
@@ -1346,8 +1428,9 @@ function renderModelsTable(models) {
     tdStrat.appendChild(toolsBadge);
     tr.appendChild(tdStrat);
 
-    const appendToggleCell = (fieldName, checkedVal) => {
+    const appendToggleCell = (fieldName, checkedVal, labelText) => {
       const td = document.createElement('td');
+      td.setAttribute('data-label', labelText);
       const lbl = document.createElement('label');
       lbl.className = 'admin-switch';
       const input = document.createElement('input');
@@ -1362,11 +1445,12 @@ function renderModelsTable(models) {
       return td;
     };
 
-    tr.appendChild(appendToggleCell('supports_web_search', m.supports_web_search));
-    tr.appendChild(appendToggleCell('is_default', m.is_default));
-    tr.appendChild(appendToggleCell('is_allowed', m.is_allowed));
+    tr.appendChild(appendToggleCell('supports_web_search', m.supports_web_search, 'Live-Websuche'));
+    tr.appendChild(appendToggleCell('is_default', m.is_default, 'Standard'));
+    tr.appendChild(appendToggleCell('is_allowed', m.is_allowed, 'Freigegeben'));
 
     const tdAct = document.createElement('td');
+    tdAct.setAttribute('data-label', 'Aktionen');
     tdAct.className = 'text-right table-actions';
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
@@ -2328,6 +2412,7 @@ function renderOpenRouterProvidersTable(providers = []) {
 
     // Col 1: Relevant switch
     const tdToggle = document.createElement('td');
+    tdToggle.setAttribute('data-label', 'Relevant');
     const lbl = document.createElement('label');
     lbl.className = 'admin-switch';
     const checkbox = document.createElement('input');
@@ -2353,6 +2438,7 @@ function renderOpenRouterProvidersTable(providers = []) {
 
     // Col 2: Display Name + Namespace + Default Badge
     const tdName = document.createElement('td');
+    tdName.setAttribute('data-label', 'Provider & Namespace');
     const titleWrap = document.createElement('div');
     const strongName = document.createElement('strong');
     strongName.textContent = p.display_name || pKey;
@@ -2373,6 +2459,7 @@ function renderOpenRouterProvidersTable(providers = []) {
 
     // Col 3: Model counts
     const tdCounts = document.createElement('td');
+    tdCounts.setAttribute('data-label', 'Modelle');
     const discovered = Number(p.discovered_model_count || 0);
     const catalogCnt = Number(p.catalog_model_count || 0);
     const allowedCnt = Number(p.allowed_model_count || 0);
@@ -2388,6 +2475,7 @@ function renderOpenRouterProvidersTable(providers = []) {
 
     // Col 4: Sample models
     const tdSamples = document.createElement('td');
+    tdSamples.setAttribute('data-label', 'Beispielmodelle');
     const sampleWrap = document.createElement('div');
     sampleWrap.className = 'provider-sample-chips';
     const samples = Array.isArray(p.sample_models) ? p.sample_models.slice(0, 4) : [];
@@ -2410,6 +2498,7 @@ function renderOpenRouterProvidersTable(providers = []) {
 
     // Col 5: Active customer configs & Analyse-Sets usage
     const tdUsage = document.createElement('td');
+    tdUsage.setAttribute('data-label', 'Aktive Profile & Sets');
     if (!hasUsage) {
       const noneTxt = document.createElement('span');
       noneTxt.className = 'text-muted';

@@ -3,12 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script>(function(){try{var t=localStorage.getItem('chatlytics_theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(_){}})();</script>
   <title data-i18n="admin.meta_title">Chatlytics.de — Admin-Cockpit</title>
   <meta name="description" content="Chatlytics Admin-Cockpit: Mandantenverwaltung, Credit-Kontingente, schreibgeschützte Report-Links und Demodaten-Generator.">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body class="admin-body">
+  <a href="#admin-main-content" class="skip-link">Direkt zum Inhalt springen</a>
   <!-- Top Navigation Bar -->
   <header class="navbar">
     <div class="container navbar-inner">
@@ -33,6 +35,14 @@
       </nav>
 
       <div class="navbar-actions">
+        <!-- Light/Dark Theme Switcher -->
+        <button type="button" id="btn-admin-theme-toggle" class="theme-icon-btn" aria-label="Darstellung wechseln" title="Hell / Dunkel wechseln">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+          </svg>
+        </button>
+
         <!-- Language Switcher -->
         <div class="lang-switch">
           <button id="btn-lang-de" type="button" class="btn-lang active" data-lang="de">DE</button>
@@ -43,14 +53,14 @@
         <!-- Current User Profile & Logout -->
         <div class="user-profile-menu">
           <span id="nav-user-email" class="user-email-text">admin@chatlytics.de</span>
-          <button id="btn-logout" type="button" class="btn btn-sm btn-dark-outline" data-i18n="auth.logout">Abmelden</button>
+          <button id="btn-logout" type="button" class="btn btn-sm btn-outline" data-i18n="auth.logout">Abmelden</button>
         </div>
       </div>
     </div>
   </header>
 
   <!-- Main Container -->
-  <main class="container admin-main">
+  <main id="admin-main-content" class="container admin-main">
     <!-- Page Header & Action Bar -->
     <section class="admin-header-section">
       <div class="admin-header-text">
@@ -121,7 +131,7 @@
       <div class="section-toolbar">
         <div class="toolbar-title-group">
           <h2 data-i18n="admin.table_title">Mandantenverzeichnis</h2>
-          <span id="user-count-badge" class="badge badge-secondary">0 Mandanten</span>
+          <span id="user-count-badge" class="results-total-count font-mono">0 Mandanten</span>
         </div>
 
         <div class="toolbar-search-group">
@@ -215,19 +225,19 @@
 
         <div id="provider-credentials-grid" class="provider-credentials-grid" aria-live="polite"></div>
 
-        <div id="models-filter-bar" class="search-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
-          <input type="search" id="model-filter-search" class="form-input" style="max-width: 280px;" placeholder="Modell-ID, Name oder Provider suchen…">
-          <select id="model-filter-provider" class="form-control" style="max-width: 200px;">
+        <div id="models-filter-bar" class="admin-filter-bar">
+          <input type="search" id="model-filter-search" class="form-control" placeholder="Modell-ID, Name oder Provider suchen…">
+          <select id="model-filter-provider" class="form-control form-select">
             <option value="">Alle Provider</option>
           </select>
-          <select id="model-filter-capability" class="form-control" style="max-width: 220px;">
+          <select id="model-filter-capability" class="form-control form-select">
             <option value="">Alle Fähigkeiten</option>
             <option value="batch_api">Nur Batch-API fähig (:batch)</option>
             <option value="tools">Nur Tool-Calling (Web-Search)</option>
             <option value="allowed">Nur Freigegebene</option>
             <option value="pending">Nur Neue / Deaktivierte</option>
           </select>
-          <span id="model-filter-count" class="badge badge-secondary font-mono">0 Modelle</span>
+          <span id="model-filter-count" class="results-total-count font-mono">0 Modelle</span>
         </div>
 
         <div class="table-responsive">
@@ -264,7 +274,7 @@
             <button type="button" id="btn-reset-providers" class="btn btn-outline btn-sm" data-i18n="admin.btn_reset_providers">
               Standard wiederherstellen (inkl. meta)
             </button>
-            <button type="button" id="btn-save-providers" class="btn btn-primary btn-sm" data-i18n="admin.btn_save_providers">
+            <button type="button" id="btn-save-providers" class="btn btn-secondary btn-sm" data-i18n="admin.btn_save_providers">
               Relevantes Set speichern
             </button>
             <button type="button" id="btn-save-sync-providers" class="btn btn-primary btn-sm" data-i18n="admin.btn_save_sync_providers">
@@ -289,15 +299,15 @@
           <div id="providers-impact-warning-body" class="admin-impact-warning-body"></div>
         </div>
 
-        <div id="providers-filter-bar" class="search-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
-          <input type="search" id="provider-filter-search" class="form-input" style="max-width: 300px;" placeholder="Provider, Name oder Beispielmodell suchen…" data-i18n-placeholder="admin.provider_search_placeholder">
-          <select id="provider-filter-mode" class="form-control" style="max-width: 240px;">
+        <div id="providers-filter-bar" class="admin-filter-bar">
+          <input type="search" id="provider-filter-search" class="form-control" placeholder="Provider, Name oder Beispielmodell suchen…" data-i18n-placeholder="admin.provider_search_placeholder">
+          <select id="provider-filter-mode" class="form-control form-select">
             <option value="all" data-i18n="admin.provider_filter_all">Alle Provider</option>
             <option value="relevant" data-i18n="admin.provider_filter_relevant">Nur Relevante (aktiv)</option>
             <option value="default" data-i18n="admin.provider_filter_default">Nur Standard-Provider</option>
             <option value="used" data-i18n="admin.provider_filter_used">Mit aktiven Tracking-Profilen</option>
           </select>
-          <span id="provider-filter-count" class="badge badge-secondary font-mono">0 Provider</span>
+          <span id="provider-filter-count" class="results-total-count font-mono">0 Provider</span>
         </div>
 
         <div class="table-responsive">
@@ -323,7 +333,7 @@
         <div class="section-toolbar">
           <div class="toolbar-title-group">
             <h2 data-i18n="admin.presets_title">Analyse-Sets</h2>
-            <span id="preset-count-badge" class="badge badge-secondary">0 Analyse-Sets</span>
+            <span id="preset-count-badge" class="results-total-count font-mono">0 Analyse-Sets</span>
           </div>
           <div class="admin-toolbar-actions">
             <button type="button" id="btn-new-preset" class="btn btn-primary btn-sm" data-i18n="admin.btn_new_preset">

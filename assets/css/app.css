@@ -6302,3 +6302,600 @@ body.dashboard-body {
     -webkit-overflow-scrolling: touch;
   }
 }
+/* ==========================================================================
+   20. NEON UI/UX AUDIT: ADMIN HARMONY, LANDING MOBILE POLISH & DASHBOARD
+   ========================================================================== */
+
+/* 20A. Admin Light/Dark Surface Header, Theme Parity & WCAG Underline Tabs */
+.admin-body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+}
+
+.admin-body .navbar {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.admin-body .logo,
+.admin-body .logo-mark {
+  color: var(--text-primary);
+}
+
+.admin-body .logo-tld {
+  color: var(--text-secondary);
+}
+
+.admin-body .badge-admin {
+  background-color: var(--color-primary-tint);
+  color: var(--color-primary-link);
+  border: 1px solid var(--color-primary-border);
+}
+
+.admin-body .navbar-nav .nav-link {
+  color: var(--text-secondary);
+}
+
+.admin-body .navbar-nav .nav-link:hover,
+.admin-body .navbar-nav .nav-link.active {
+  color: var(--text-primary);
+}
+
+.admin-body .navbar-nav .nav-link.active {
+  border-bottom: 2px solid var(--color-primary);
+}
+
+.admin-body .lang-switch {
+  border-color: var(--border-default);
+  background-color: var(--bg-canvas);
+}
+
+.admin-body .btn-lang {
+  color: var(--text-secondary);
+}
+
+.admin-body .btn-lang.active {
+  background-color: var(--bg-surface-subtle);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.admin-body .user-email-text {
+  color: var(--text-secondary);
+}
+
+.admin-body .theme-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.admin-body .theme-icon-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-surface-hover);
+}
+
+/* WCAG-Compliant Underline Tabs on Admin Cockpit (matches dashboard.html) */
+.admin-body .admin-tabs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.admin-body .admin-tab-btn {
+  position: relative;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.admin-body .admin-tab-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-surface-subtle);
+}
+
+.admin-body .admin-tab-btn.is-active {
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 700;
+  border-bottom-color: var(--color-primary);
+}
+
+/* Admin Dark-Mode Surface, Table, Input & Modal Harmony */
+.admin-body .kpi-card,
+.admin-body .admin-table-section,
+.admin-body .admin-preset-card,
+.admin-body .admin-plan-card,
+.admin-body .modal-dialog {
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.admin-body .table,
+.admin-body .data-table {
+  color: var(--text-primary);
+}
+
+.admin-body .table th,
+.admin-body .data-table th {
+  background-color: var(--bg-canvas);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.admin-body .table td,
+.admin-body .data-table td {
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+
+.admin-body #users-table th,
+.admin-body #users-table td {
+  padding: 10px 10px;
+  font-size: 0.8125rem;
+}
+
+.admin-body #users-table td.cell-date,
+.admin-body #users-table td:nth-child(4) {
+  white-space: nowrap;
+}
+
+.admin-body .form-input,
+.admin-body .form-control,
+.admin-body .form-select {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.admin-body .btn-outline {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.admin-body .btn-outline:hover:not(:disabled) {
+  background-color: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+}
+
+.admin-body .results-total-count {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.admin-body .admin-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(170px, 1fr)) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--bg-canvas);
+}
+
+.admin-body .admin-filter-bar .form-control {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+}
+
+/* Native <details> Overflow Action Menu in #users-table */
+.admin-body .admin-quick-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.admin-body .admin-action-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.admin-body .admin-action-menu-trigger {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-body .admin-action-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.admin-body .admin-action-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 168px;
+  z-index: 40;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: var(--nav-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-body .admin-action-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  min-height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.admin-body .admin-action-menu-item:hover:not(:disabled) {
+  background-color: var(--bg-surface-subtle);
+}
+
+.admin-body .admin-action-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.admin-body .admin-action-menu-item.is-danger {
+  color: var(--color-error-text);
+}
+
+/* Admin Mobile Ergonomics (< 768px) */
+@media (max-width: 767px) {
+  .admin-body .user-email-text,
+  .admin-body .badge-admin {
+    display: none;
+  }
+
+  .admin-body .navbar-inner {
+    justify-content: space-between;
+    padding-block: 10px;
+    row-gap: 8px;
+  }
+
+  .admin-body .navbar-brand {
+    order: 1;
+  }
+
+  .admin-body .navbar-actions {
+    order: 2;
+    gap: 8px;
+  }
+
+  .admin-body .navbar-nav {
+    order: 3;
+    width: 100%;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-default);
+    gap: 16px;
+  }
+
+  .admin-body #models-table td:first-child,
+  .admin-body #providers-table td:nth-child(2) {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 4px;
+  }
+
+  .admin-body #models-table td:first-child::before,
+  .admin-body #providers-table td:nth-child(2)::before {
+    margin-right: 0;
+  }
+
+  .admin-body .admin-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+
+  .admin-body .admin-kpi-grid .kpi-card {
+    padding: 14px;
+  }
+
+  .admin-body .admin-tabs-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 2px;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+
+  .admin-body .admin-tabs-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-body .admin-tab-btn {
+    flex: 0 0 auto;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .admin-body .admin-filter-bar {
+    grid-template-columns: 1fr;
+    padding: 12px 14px;
+  }
+
+  /* Isolated Horizontal Scroll with Sticky Tenant Column for 11-Col #users-table */
+  .admin-body #users-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-body #users-table {
+    display: table;
+    width: max-content;
+    min-width: 820px;
+  }
+
+  .admin-body #users-table thead {
+    display: table-header-group;
+  }
+
+  .admin-body #users-table tbody tr {
+    display: table-row;
+    padding: 0;
+  }
+
+  .admin-body #users-table td,
+  .admin-body #users-table th {
+    display: table-cell;
+    text-align: left;
+    padding: 10px 12px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  .admin-body #users-table td::before {
+    display: none !important;
+    content: none !important;
+  }
+
+  .admin-body #users-table th:first-child,
+  .admin-body #users-table td:first-child {
+    display: none;
+  }
+
+  .admin-body #users-table th:nth-child(2),
+  .admin-body #users-table td:nth-child(2) {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background-color: var(--bg-surface);
+    border-right: 1px solid var(--border-default);
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .admin-body #users-table th:nth-child(2) {
+    background-color: var(--bg-canvas);
+    z-index: 5;
+  }
+
+  .admin-body .admin-action-menu-item {
+    min-height: 44px;
+  }
+}
+
+/* 20B. Landing Page Mobile Header CTA, Scroll-Snap Controls, Timeline & Quiet Badges */
+.nav-signup-cta .nav-cta-short {
+  display: none;
+}
+
+.timeline-mobile-legend {
+  display: none;
+}
+
+.wb-result-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wb-status-dot-badge {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  min-width: 12px;
+  min-height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.wb-status-dot-badge .status-dot {
+  width: 10px;
+  height: 10px;
+}
+
+.matrix-quad .quad-meta {
+  margin-bottom: 4px;
+}
+
+.matrix-quad .quad-meta .status-badge {
+  background: transparent;
+  border-color: transparent;
+  padding: 0;
+  font-size: 0.78125rem;
+  font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  .industry-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .industry-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .industry-tab {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    white-space: nowrap;
+    min-height: 44px;
+  }
+
+  .preset-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 14px 16px;
+  }
+
+  .preset-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .preset-bar-label {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .preset-btn {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    white-space: nowrap;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 639px) {
+  .dossier-timeline .timeline-track-wrap {
+    padding-top: 16px;
+    padding-bottom: 14px;
+  }
+
+  .dossier-timeline .timeline-bracket-label,
+  .dossier-timeline .timeline-pin-tag {
+    display: none;
+  }
+
+  .dossier-timeline .timeline-bracket {
+    top: -12px;
+    height: 10px;
+  }
+
+  .timeline-mobile-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-default);
+  }
+
+  .timeline-mobile-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    min-width: 0;
+  }
+
+  .timeline-mobile-legend-item span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .timeline-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .timeline-legend-dot.is-brand {
+    background-color: var(--color-success);
+  }
+
+  .timeline-legend-dot.is-comp {
+    background-color: var(--color-error);
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-actions #btn-open-signup.nav-signup-cta {
+    display: inline-flex !important;
+    padding: 0 11px;
+    font-size: 0.78125rem;
+    white-space: nowrap;
+  }
+
+  .nav-signup-cta .nav-cta-full {
+    display: none;
+  }
+
+  .nav-signup-cta .nav-cta-short {
+    display: inline;
+  }
+}
+
+/* 20C. Dashboard Post-Refactor Polish */
+.dashboard-body .section-page-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.dashboard-body .results-reset-btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .dashboard-body .section-page-head-row .btn {
+    width: 100%;
+  }
+
+  .dashboard-body .mobile-range-chip-btn {
+    border: none;
+    background: transparent;
+    padding: 0 4px;
+    min-height: 44px;
+    color: var(--text-secondary);
+  }
+
+  .dashboard-body .user-results-filters .results-reset-btn {
+    grid-column: 1 / -1;
+  }
+}

@@ -450,6 +450,11 @@ class DashboardController {
       if (canDelete) deleteBtn.classList?.remove('hidden'); else deleteBtn.classList?.add('hidden');
       deleteBtn.disabled = !canDelete;
     }
+    const dangerZone = document.getElementById('profile-danger-zone');
+    if (dangerZone) {
+      const anyDangerVisible = [stopBtn, archiveBtn, deleteBtn].some(btn => btn && !btn.classList?.contains('hidden'));
+      if (anyDangerVisible) dangerZone.classList?.remove('hidden'); else dangerZone.classList?.add('hidden');
+    }
     this.syncRunButtonsState();
   }
 
@@ -870,11 +875,25 @@ class DashboardController {
       await this.loadDashboard();
     });
 
-    // 5b-4. Result archive filters, search & pagination
+    // 5b-4. Result archive filters, search, reset & pagination
+    const syncResultsResetBtn = () => {
+      const resetBtn = document.getElementById('btn-results-reset-filters');
+      if (!resetBtn) return;
+      const hasAnyFilter = Boolean(
+        this.userResultsFilterPrompt ||
+        this.userResultsFilterModel ||
+        this.userResultsFilterMece ||
+        this.userResultsSearch
+      );
+      if (hasAnyFilter) resetBtn.classList?.remove('hidden'); else resetBtn.classList?.add('hidden');
+    };
+    this.syncResultsResetBtn = syncResultsResetBtn;
+
     const bindResultsFilter = (id, prop) => {
       document.getElementById(id)?.addEventListener('change', async (e) => {
         this[prop] = e.target.value || '';
         this.userResultsPage = 1;
+        syncResultsResetBtn();
         await this.loadUserResults();
       });
     };
@@ -888,8 +907,23 @@ class DashboardController {
       this._resultsSearchTimer = setTimeout(async () => {
         this.userResultsSearch = val;
         this.userResultsPage = 1;
+        syncResultsResetBtn();
         await this.loadUserResults();
       }, 350);
+    });
+
+    document.getElementById('btn-results-reset-filters')?.addEventListener('click', async () => {
+      this.userResultsFilterPrompt = '';
+      this.userResultsFilterModel = '';
+      this.userResultsFilterMece = '';
+      this.userResultsSearch = '';
+      this.userResultsPage = 1;
+      ['results-prompt-filter', 'results-model-filter', 'results-mece-filter', 'results-search-input'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      syncResultsResetBtn();
+      await this.loadUserResults();
     });
 
     document.getElementById('btn-results-prev')?.addEventListener('click', async (e) => {

@@ -39,7 +39,7 @@
           <span id="current-lang-label">EN</span>
         </button>
         <a href="#login" id="btn-open-login" class="nav-login-link" data-open-modal="auth" data-auth-mode="login" data-i18n="nav.login">Login</a>
-        <button id="btn-open-signup" type="button" class="btn btn-primary btn-sm" data-open-modal="auth" data-auth-mode="signup" data-tier="free" data-i18n="nav.signup">Kostenloses Audit starten</button>
+        <button id="btn-open-signup" type="button" class="btn btn-primary btn-sm nav-signup-cta" data-open-modal="auth" data-auth-mode="signup" data-tier="free"><span class="nav-cta-full" data-i18n="nav.signup">Kostenloses Audit starten</span><span class="nav-cta-short" data-i18n="nav.signup_short">Audit starten</span></button>
 
         <button id="btn-mobile-menu" type="button" class="btn-mobile-menu" aria-label="Menü öffnen" aria-expanded="false" aria-controls="mobile-nav-drawer">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
@@ -69,7 +69,7 @@
       <div class="container hero-inner">
         <h1 class="hero-title" data-i18n="hero.title">Wen empfiehlt die KI, wenn Ihre Kunden nach dem Marktführer fragen?</h1>
         <p class="hero-subhead" data-i18n="hero.subtitle">
-          Zehn blaue Google-Links gehören der Vergangenheit an. Ob Hautpflege-Routine, Handwerkstechnik, B2B-Software oder Strategieberatung: Kunden treffen ihre Vorauswahl heute direkt in ChatGPT (OpenAI), Claude (Anthropic), Gemini (Google) und Mistral. Chatlytics misst Zeichen für Zeichen, ob Ihre Marke als Spitzenreiter direkt empfohlen wird, auf dem Verfolgerplatz landet oder trotz eigener Ratgeber-Artikel komplett verschwiegen wird.
+          Kunden treffen ihre Vorauswahl heute direkt in ChatGPT (OpenAI), Claude (Anthropic), Gemini (Google) und Mistral. Chatlytics misst Zeichen für Zeichen, ob Ihre Marke dort als Spitzenreiter empfohlen wird oder hinter Wettbewerbern verschwindet.
         </p>
 
         <div class="hero-cta-row">
@@ -275,6 +275,17 @@
               <span>150</span>
               <span>200</span>
             </div>
+
+            <div class="timeline-mobile-legend" aria-label="Marken-Positionen auf der Zeitleiste">
+              <div class="timeline-mobile-legend-item">
+                <span class="timeline-legend-dot is-brand" aria-hidden="true"></span>
+                <span id="timeline-mobile-brand" class="font-mono">Zeichen 35: Nøva Skin</span>
+              </div>
+              <div class="timeline-mobile-legend-item">
+                <span class="timeline-legend-dot is-comp" aria-hidden="true"></span>
+                <span id="timeline-mobile-comp" class="font-mono">Zeichen 148: La Roche-Derma</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -322,13 +333,12 @@
             <div class="workbench-output">
               <div class="output-top">
                 <div class="output-kicker" data-i18n="workbench.result_label">Erkannte Empfehlungs-Stufe</div>
-                <div>
-                  <span id="wb-badge" class="status-badge status-win">
-                    <span class="status-dot" aria-hidden="true"></span>
-                    <span>Spitzenreiter · Direkte Empfehlung</span>
+                <div class="wb-result-heading-row">
+                  <span id="wb-badge" class="status-badge status-win wb-status-dot-badge" aria-hidden="true">
+                    <span class="status-dot"></span>
                   </span>
+                  <h3 id="wb-result-title" class="result-title">Spitzenreiter · Direkte Empfehlung</h3>
                 </div>
-                <h3 id="wb-result-title" class="result-title">Spitzenreiter · Direkte Empfehlung</h3>
                 <p id="wb-result-desc" class="result-desc">Ihre Marke wird vor jedem Wettbewerber empfohlen und besetzt den entscheidenden ersten Anker.</p>
               </div>
 
@@ -393,7 +403,7 @@
           <div class="matrix-2x2-grid">
             <!-- Q1 (Top Left: High Citation Authority / Low Text Prominence) -->
             <article class="matrix-quad">
-              <div class="quad-title">
+              <div class="quad-meta">
                 <span class="status-badge status-loss">
                   <span class="status-dot" aria-hidden="true"></span>
                   <span data-i18n="matrix.q1_badge">Diagnose 01 · Priorität Kritisch</span>
@@ -416,7 +426,7 @@
 
             <!-- Q2 (Top Right: High Citation / Zero Brand Mention) -->
             <article class="matrix-quad">
-              <div class="quad-title">
+              <div class="quad-meta">
                 <span class="status-badge status-loss">
                   <span class="status-dot" aria-hidden="true"></span>
                   <span data-i18n="matrix.q2_badge">Diagnose 02 · Priorität Hoch</span>
@@ -439,7 +449,7 @@
 
             <!-- Q3 (Bottom Left: Competitor Always First) -->
             <article class="matrix-quad">
-              <div class="quad-title">
+              <div class="quad-meta">
                 <span class="status-badge status-halo">
                   <span class="status-dot" aria-hidden="true"></span>
                   <span data-i18n="matrix.q3_badge">Diagnose 03 · Priorität Mittel</span>
@@ -462,7 +472,7 @@
 
             <!-- Q4 (Bottom Right: Late Offset) -->
             <article class="matrix-quad">
-              <div class="quad-title">
+              <div class="quad-meta">
                 <span class="status-badge status-halo">
                   <span class="status-dot" aria-hidden="true"></span>
                   <span data-i18n="matrix.q4_badge">Diagnose 04 · Quick Win</span>
@@ -765,7 +775,7 @@
           </div>
           <div class="report-kpi">
             <div class="report-kpi-label">Vorsprung (OpenAI · ChatGPT)</div>
-            <div class="report-kpi-val font-mono">+113 Z.</div>
+            <div id="report-preview-lead" class="report-kpi-val font-mono">+113 Z.</div>
           </div>
         </div>
 
@@ -926,8 +936,7 @@
         const plans = payload?.data?.plans || payload?.plans || [];
         const getLang = () => (localStorage.getItem('chatlytics_lang') === 'en' ? 'en' : 'de');
         applyPublicPricingCatalog(plans, getLang());
-        document.getElementById('btn-lang-de')?.addEventListener('click', () => setTimeout(() => applyPublicPricingCatalog(plans, 'de'), 0));
-        document.getElementById('btn-lang-en')?.addEventListener('click', () => setTimeout(() => applyPublicPricingCatalog(plans, 'en'), 0));
+        window.addEventListener('languageChanged', () => applyPublicPricingCatalog(plans, getLang()));
       } catch (_) {
         // Offline / static SSR fallback remains active
       }
