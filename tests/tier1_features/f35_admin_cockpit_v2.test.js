@@ -163,6 +163,12 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 $pdo->sqliteCreateFunction('NOW', function() { return date('Y-m-d H:i:s'); });
 Database::setConnection($pdo);
+$cfg = Config::get();
+$cfg['n8n']['shared_secret'] = getenv('N8N_SHARED_SECRET') ?: 'f35_watcher_secret';
+if (getenv('N8N_MODEL_WATCHER_WEBHOOK_URL')) {
+  $cfg['n8n']['model_watcher_webhook_url'] = getenv('N8N_MODEL_WATCHER_WEBHOOK_URL');
+}
+Config::set($cfg);
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($uri === '/__health') {
@@ -186,6 +192,49 @@ SQL;
   $pdo->exec($sql);
   header('Content-Type: application/json');
   echo json_encode(['seeded' => true]);
+  exit;
+}
+if ($uri === '/__seed_legacy_presets') {
+  $legacySql = <<<'SQL'
+    CREATE TABLE IF NOT EXISTS model_presets (
+      id TEXT PRIMARY KEY, name_de TEXT NOT NULL, name_en TEXT NOT NULL,
+      description_de TEXT NOT NULL, description_en TEXT NOT NULL,
+      badge_de TEXT NULL, badge_en TEXT NULL, target_llms TEXT NOT NULL,
+      search_enabled INTEGER NOT NULL DEFAULT 1, allowed_tiers TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 100
+    );
+    CREATE TABLE IF NOT EXISTS subscription_plans (
+      tier TEXT PRIMARY KEY, name_de TEXT NOT NULL, name_en TEXT NOT NULL,
+      subtitle_de TEXT NOT NULL, subtitle_en TEXT NOT NULL,
+      price_eur INTEGER NOT NULL DEFAULT 0, price_label_de TEXT NOT NULL DEFAULT '0 €',
+      price_label_en TEXT NOT NULL DEFAULT '€0', billing_period_de TEXT NOT NULL DEFAULT '/ Monat',
+      billing_period_en TEXT NOT NULL DEFAULT '/ month', stripe_product_id TEXT NULL,
+      stripe_price_id TEXT NULL, stripe_checkout_url TEXT NULL,
+      included_credits INTEGER NOT NULL DEFAULT 40, max_configs INTEGER NOT NULL DEFAULT 1,
+      max_competitors_per_config INTEGER NOT NULL DEFAULT 2, max_prompts_per_config INTEGER NOT NULL DEFAULT 5,
+      allowed_intervals TEXT NOT NULL, allow_custom_models INTEGER NOT NULL DEFAULT 0,
+      allowed_preset_ids TEXT NOT NULL, features_de TEXT NOT NULL, features_en TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 10
+    );
+    DELETE FROM model_presets;
+    DELETE FROM subscription_plans;
+    INSERT INTO model_presets (id, name_de, name_en, description_de, description_en, target_llms, search_enabled, allowed_tiers, is_default, is_active, sort_order) VALUES
+      ('dach_core_baseline', 'Old Core', 'Old Core', 'desc', 'desc', '["openai/gpt-6-luna"]', 1, '["free"]', 1, 1, 10),
+      ('parametric_brand_memory', 'Old Param', 'Old Param', 'desc', 'desc', '["openai/gpt-6-luna"]', 0, '["starter"]', 0, 1, 20),
+      ('eu_sovereign_dsgvo', 'Old EU', 'Old EU', 'desc', 'desc', '["mistralai/mistral-medium-3-5"]', 0, '["starter"]', 0, 1, 30),
+      ('executive_full_spectrum', 'Old Exec', 'Old Exec', 'desc', 'desc', '["openai/gpt-6-luna"]', 1, '["growth"]', 0, 1, 40),
+      ('custom_enterprise_panel', 'Custom Panel', 'Custom Panel', 'Custom', 'Custom', '["openai/gpt-6-luna"]', 1, '["enterprise_managed"]', 0, 1, 90);
+    INSERT INTO subscription_plans (tier, name_de, name_en, subtitle_de, subtitle_en, allowed_intervals, allow_custom_models, allowed_preset_ids, features_de, features_en) VALUES
+      ('free', 'Free', 'Free', 's', 's', '["every_120m"]', 0, '["dach_core_baseline"]', '[]', '[]'),
+      ('starter', 'Starter', 'Starter', 's', 's', '["every_120m"]', 0, '["dach_core_baseline","eu_sovereign_dsgvo"]', '[]', '[]'),
+      ('enterprise_managed', 'Enterprise', 'Enterprise', 's', 's', '["every_120m"]', 1, '["dach_core_baseline","custom_enterprise_panel"]', '[]', '[]');
+    INSERT INTO tracking_configs (id, user_id, name, brand_name, brand_domains, keywords_prompts, competitors, preset_id, target_llms, status) VALUES
+      (201, 3, 'Legacy Existing Config', 'LegacyBrand', '["legacy.de"]', '["P1"]', '[]', 'dach_core_baseline', '["openai/gpt-6-luna","google/gemini-3.5-flash"]', 'active');
+SQL;
+  try { $pdo->exec($legacySql); } catch (\Throwable $e) { http_response_code(500); echo json_encode(['err' => $e->getMessage()]); exit; }
+  header('Content-Type: application/json');
+  echo json_encode(['legacy_seeded' => true]);
   exit;
 }
 
@@ -519,7 +568,21 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
       });
       assert.equal(freeCustom.status, 403);
 
-      // 2. Free user rejected on Starter-only preset (eu_sovereign_dsgvo -> 403)
+      // 1b. Verify exact 4 Visibility Tracking presets seeded with 2, 4, 12, 16 models & search_enabled=true
+      const presetsListRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=list_presets`, { headers: admHeaders });
+      const presetsListJson = await presetsListRes.json();
+      assert.equal(presetsListRes.status, 200);
+      assert.deepEqual(
+        presetsListJson.data.presets.map(p => [p.id, p.target_llms.length, p.search_enabled]),
+        [
+          ['default_visibility_tracking', 2, true],
+          ['advanced_visibility_tracking', 4, true],
+          ['360_visibility_tracking', 12, true],
+          ['global_visibility_tracking', 16, true]
+        ]
+      );
+
+      // 2. Free user rejected on Starter+ preset (advanced_visibility_tracking -> 403)
       const freeStarterPreset = await fetch(`${srv.baseUrl}/api/configs.php`, {
         method: 'POST',
         headers: freeHeaders,
@@ -527,12 +590,12 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
           brand_name: 'FreeTest',
           brand_domains: ['freetest.de'],
           keywords_prompts: ['Test Prompt'],
-          preset_id: 'eu_sovereign_dsgvo'
+          preset_id: 'advanced_visibility_tracking'
         })
       });
       assert.equal(freeStarterPreset.status, 403);
 
-      // 3. Free user succeeds with dach_core_baseline preset
+      // 3. Free user succeeds with default_visibility_tracking preset (2 models + live web search)
       const freeValid = await fetch(`${srv.baseUrl}/api/configs.php`, {
         method: 'POST',
         headers: freeHeaders,
@@ -540,15 +603,28 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
           brand_name: 'FreeTest',
           brand_domains: ['freetest.de'],
           keywords_prompts: ['Test Prompt'],
-          preset_id: 'dach_core_baseline'
+          preset_id: 'default_visibility_tracking'
         })
       });
       const freeJson = await freeValid.json();
       assert.equal(freeValid.status, 201);
-      assert.equal(freeJson.data.config.preset_id, 'dach_core_baseline');
+      assert.equal(freeJson.data.config.preset_id, 'default_visibility_tracking');
       assert.equal(freeJson.data.config.search_enabled, true);
+      assert.deepEqual(freeJson.data.config.target_llms, ['google/gemini-4-hydrogen', 'openai/gpt-6-luna']);
 
-      // 4. Starter user succeeds with eu_sovereign_dsgvo and overrides search_enabled -> false
+      // 4. Starter user succeeds with advanced_visibility_tracking (4 models, server enforces search_enabled=true) and is rejected on 360 (403)
+      const starterBlocked360 = await fetch(`${srv.baseUrl}/api/configs.php`, {
+        method: 'POST',
+        headers: starterHeaders,
+        body: JSON.stringify({
+          brand_name: 'Personio',
+          brand_domains: ['personio.de'],
+          keywords_prompts: ['HR Tool'],
+          preset_id: '360_visibility_tracking'
+        })
+      });
+      assert.equal(starterBlocked360.status, 403);
+
       const starterValid = await fetch(`${srv.baseUrl}/api/configs.php`, {
         method: 'POST',
         headers: starterHeaders,
@@ -556,18 +632,19 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
           brand_name: 'Personio',
           brand_domains: ['personio.de'],
           keywords_prompts: ['HR Tool'],
-          preset_id: 'eu_sovereign_dsgvo',
-          search_enabled: true // Server overrides from preset spec
+          preset_id: 'advanced_visibility_tracking',
+          search_enabled: false // Server enforces preset search_enabled=true
         })
       });
       const starterJson = await starterValid.json();
       assert.equal(starterValid.status, 201);
-      assert.equal(starterJson.data.config.preset_id, 'eu_sovereign_dsgvo');
-      assert.equal(starterJson.data.config.search_enabled, false);
+      assert.equal(starterJson.data.config.preset_id, 'advanced_visibility_tracking');
+      assert.equal(starterJson.data.config.search_enabled, true);
       assert.deepEqual(starterJson.data.config.target_llms, [
-        'mistralai/mistral-medium-3-5',
-        'mistralai/mistral-large-4-0',
-        'z-ai/glm-5.3'
+        'google/gemini-4-hydrogen',
+        'openai/gpt-6-luna',
+        'openai/gpt-6.1-terra',
+        'anthropic/claude-sonnet-5.5'
       ]);
 
       // 5. Growth user freely configures custom single model + search_enabled=false
@@ -602,7 +679,7 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
       const delDefaultRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=delete_preset`, {
         method: 'POST',
         headers: admHeaders,
-        body: JSON.stringify({ id: 'dach_core_baseline' })
+        body: JSON.stringify({ id: 'default_visibility_tracking' })
       });
       assert.equal(delDefaultRes.status, 422);
 
@@ -654,7 +731,7 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
           brand_domains: ['personio.de'],
           keywords_prompts: ['HR Software'],
           competitors: ['Comp1', 'Comp2', 'Comp3'],
-          preset_id: 'dach_core_baseline'
+          preset_id: 'default_visibility_tracking'
         })
       });
       assert.equal(compErrRes.status, 403);
@@ -668,7 +745,7 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
           brand_domains: ['personio.de'],
           keywords_prompts: ['HR Software'],
           competitors: ['Comp1'],
-          preset_id: 'dach_core_baseline'
+          preset_id: 'default_visibility_tracking'
         })
       });
       assert.equal(okCfgRes.status, 201);
@@ -681,7 +758,7 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
           brand_domains: ['personio.de'],
           keywords_prompts: ['HR Software 2'],
           competitors: ['Comp1'],
-          preset_id: 'dach_core_baseline'
+          preset_id: 'default_visibility_tracking'
         })
       });
       assert.equal(maxCfgErrRes.status, 403);
@@ -974,6 +1051,189 @@ describe('Feature 35: Admin Cockpit v2 & Model Presets', () => {
     } finally {
       try { mockOpenRouterServer.close(); } catch (_) {}
       try { mockN8nServer.close(); } catch (_) {}
+      srv.close();
+    }
+  });
+
+  it('35.8 Idempotent legacy preset migration removes 4 retired presets while preserving custom presets & tracking_configs', async () => {
+    const srv = await createSqliteBackedPhpServer();
+    try {
+      const admHeaders = { 'Content-Type': 'application/json', 'Authorization': 'Bearer adm_token_f35' };
+      const starterHeaders = { 'Content-Type': 'application/json', 'Authorization': 'Bearer starter_token_f35' };
+
+      const seedLegacyRes = await fetch(`${srv.baseUrl}/__seed_legacy_presets`);
+      assert.equal(seedLegacyRes.status, 200, await seedLegacyRes.text());
+
+      const presetsRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=list_presets`, { headers: admHeaders });
+      const presetsJson = await presetsRes.json();
+      assert.equal(presetsRes.status, 200);
+      const ids = presetsJson.data.presets.map(p => p.id);
+
+      // Retired legacy presets are gone
+      assert.equal(ids.includes('dach_core_baseline'), false);
+      assert.equal(ids.includes('parametric_brand_memory'), false);
+      assert.equal(ids.includes('eu_sovereign_dsgvo'), false);
+      assert.equal(ids.includes('executive_full_spectrum'), false);
+
+      // All 4 new Visibility Tracking presets + existing custom preset exist
+      assert.ok(ids.includes('default_visibility_tracking'));
+      assert.ok(ids.includes('advanced_visibility_tracking'));
+      assert.ok(ids.includes('360_visibility_tracking'));
+      assert.ok(ids.includes('global_visibility_tracking'));
+      assert.ok(ids.includes('custom_enterprise_panel'), 'Custom admin preset must be preserved');
+
+      // Plans migrated cleanly without losing custom preset reference
+      const plansRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=list_plans`, { headers: admHeaders });
+      const plansJson = await plansRes.json();
+      const freePlan = plansJson.data.plans.find(p => p.tier === 'free');
+      const starterPlan = plansJson.data.plans.find(p => p.tier === 'starter');
+      const entPlan = plansJson.data.plans.find(p => p.tier === 'enterprise_managed');
+      assert.deepEqual(freePlan.allowed_preset_ids, ['default_visibility_tracking']);
+      assert.deepEqual(starterPlan.allowed_preset_ids, ['default_visibility_tracking', 'advanced_visibility_tracking']);
+      assert.ok(entPlan.allowed_preset_ids.includes('global_visibility_tracking'));
+      assert.ok(entPlan.allowed_preset_ids.includes('custom_enterprise_panel'), 'Actual entPlan: ' + JSON.stringify(entPlan));
+
+      // Existing tracking_configs row stays completely untouched
+      const cfgsRes = await fetch(`${srv.baseUrl}/api/configs.php`, { headers: starterHeaders });
+      const cfgsJson = await cfgsRes.json();
+      const legacyCfg = cfgsJson.data.configs.find(c => Number(c.id) === 201);
+      assert.ok(legacyCfg);
+      assert.deepEqual(legacyCfg.target_llms, ['openai/gpt-6-luna', 'google/gemini-3.5-flash']);
+    } finally {
+      srv.close();
+    }
+  });
+
+  it('35.9 Model Lifecycle Alerts API (secret auth, dedup ingest, replace_in_presets, dismiss) & n8n watcher workflow integrity', async () => {
+    const srv = await createSqliteBackedPhpServer({ N8N_SHARED_SECRET: 'f35_watcher_secret' });
+    try {
+      await fetch(`${srv.baseUrl}/__seed_telemetry`);
+      const admHeaders = { 'Content-Type': 'application/json', 'Authorization': 'Bearer adm_token_f35' };
+      const n8nHeaders = { 'Content-Type': 'application/json', 'X-N8N-Secret': 'f35_watcher_secret' };
+
+      // 1. Unauthenticated & wrong secret requests strictly rejected (401)
+      const unauthCat = await fetch(`${srv.baseUrl}/api/admin_users.php?action=watcher_catalog`);
+      assert.equal(unauthCat.status, 401);
+      const wrongSec = await fetch(`${srv.baseUrl}/api/admin_users.php?action=ingest_model_alerts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-N8N-Secret': 'wrong_secret' },
+        body: JSON.stringify({ alerts: [] })
+      });
+      assert.equal(wrongSec.status, 401);
+
+      // 2. watcher_catalog returns all 16 canonical models with preset references
+      const catRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=watcher_catalog`, { headers: n8nHeaders });
+      const catJson = await catRes.json();
+      assert.equal(catRes.status, 200);
+      assert.ok(catJson.data.tracked_count >= 16);
+      const luna = catJson.data.tracked_models.find(m => m.id === 'openai/gpt-6-luna');
+      assert.ok(luna && luna.preset_ids.includes('default_visibility_tracking'));
+      assert.equal(luna.active_config_count, 1);
+
+      // 3. ingest_model_alerts stores 2 new alerts and sets should_notify_email=true
+      const alertsPayload = {
+        alerts: [
+          {
+            alert_type: 'successor_available',
+            severity: 'info',
+            current_model_id: 'openai/gpt-6-luna',
+            suggested_model_id: 'openai/gpt-6.5-luna',
+            suggested_display_name: 'OpenAI · GPT-6.5 Luna',
+            confidence_score: 92,
+            reason_de: 'Direkter Nachfolger der Luna-Familie auf OpenRouter veröffentlicht.',
+            reason_en: 'Direct successor in the Luna family released on OpenRouter.',
+            source_url: 'https://openrouter.ai/openai/gpt-6.5-luna'
+          },
+          {
+            alert_type: 'model_missing_openrouter',
+            severity: 'critical',
+            current_model_id: 'x-ai/grok-4.7',
+            confidence_score: 100,
+            reason_de: 'Modell-Slug nicht mehr auf OpenRouter gelistet.',
+            reason_en: 'Model slug missing from OpenRouter.'
+          }
+        ]
+      };
+      const ing1Res = await fetch(`${srv.baseUrl}/api/admin_users.php?action=ingest_model_alerts`, {
+        method: 'POST',
+        headers: n8nHeaders,
+        body: JSON.stringify(alertsPayload)
+      });
+      const ing1Json = await ing1Res.json();
+      assert.equal(ing1Res.status, 200);
+      assert.equal(ing1Json.data.new_count, 2);
+      assert.equal(ing1Json.data.should_notify_email, true);
+      assert.ok(ing1Json.data.admin_emails.includes('admin@chatlytics.de'));
+      const lunaAlert = ing1Json.data.new_alerts.find(a => a.current_model_id === 'openai/gpt-6-luna');
+      const grokAlert = ing1Json.data.new_alerts.find(a => a.current_model_id === 'x-ai/grok-4.7');
+      assert.ok(lunaAlert && lunaAlert.affected_presets.includes('Default Visibility Tracking'));
+      assert.equal(lunaAlert.affected_configs_count, 2); // Cfg A active + Cfg B paused
+
+      // 4. Duplicate ingest is deduplicated -> new_count=0, should_notify_email=false
+      const ing2Res = await fetch(`${srv.baseUrl}/api/admin_users.php?action=ingest_model_alerts`, {
+        method: 'POST',
+        headers: n8nHeaders,
+        body: JSON.stringify(alertsPayload)
+      });
+      const ing2Json = await ing2Res.json();
+      assert.equal(ing2Res.status, 200);
+      assert.equal(ing2Json.data.new_count, 0);
+      assert.equal(ing2Json.data.should_notify_email, false);
+
+      // 5. Admin resolves successor with replace_in_presets: enables new model & swaps in all 4 presets without modifying tracking_configs
+      const resolveRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=resolve_model_alert`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({ id: lunaAlert.id, resolution: 'replace_in_presets' })
+      });
+      const resolveJson = await resolveRes.json();
+      assert.equal(resolveRes.status, 200);
+      assert.equal(resolveJson.data.alert.status, 'applied');
+      assert.equal(resolveJson.data.enabled_model.id, 'openai/gpt-6.5-luna');
+      assert.equal(resolveJson.data.enabled_model.is_allowed, true);
+      assert.equal(resolveJson.data.updated_presets.length, 4);
+      const updatedDefault = resolveJson.data.presets.find(p => p.id === 'default_visibility_tracking');
+      assert.ok(updatedDefault.target_llms.includes('openai/gpt-6.5-luna'));
+      assert.equal(updatedDefault.target_llms.includes('openai/gpt-6-luna'), false);
+
+      // Existing tracking_config Cfg A was NOT silently modified
+      const starterCfgs = await (await fetch(`${srv.baseUrl}/api/configs.php`, {
+        headers: { 'Authorization': 'Bearer starter_token_f35' }
+      })).json();
+      const cfgA = starterCfgs.data.configs.find(c => Number(c.id) === 101);
+      assert.deepEqual(cfgA.target_llms, ['openai/gpt-6-luna']);
+
+      // 6. Admin dismisses Grok EOL alert -> re-ingest does NOT reopen or re-email
+      const dismissRes = await fetch(`${srv.baseUrl}/api/admin_users.php?action=resolve_model_alert`, {
+        method: 'POST',
+        headers: admHeaders,
+        body: JSON.stringify({ id: grokAlert.id, resolution: 'dismiss' })
+      });
+      assert.equal(dismissRes.status, 200);
+      assert.equal((await dismissRes.json()).data.open_count, 0);
+
+      const ing3Json = await (await fetch(`${srv.baseUrl}/api/admin_users.php?action=ingest_model_alerts`, {
+        method: 'POST',
+        headers: n8nHeaders,
+        body: JSON.stringify(alertsPayload)
+      })).json();
+      assert.equal(ing3Json.data.new_count, 0);
+      assert.equal(ing3Json.data.should_notify_email, false);
+      assert.equal(ing3Json.data.open_alerts_count, 0);
+
+      // 7. Validate n8n/chatlytics_model_watcher.json structure
+      const watcherJson = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'n8n/chatlytics_model_watcher.json'), 'utf8'));
+      assert.ok(Array.isArray(watcherJson.nodes) && watcherJson.nodes.length >= 12);
+      const nodeTypes = watcherJson.nodes.map(n => n.type);
+      assert.ok(nodeTypes.includes('n8n-nodes-base.scheduleTrigger'));
+      assert.ok(nodeTypes.includes('n8n-nodes-base.webhook'));
+      assert.ok(nodeTypes.includes('n8n-nodes-base.emailSend'));
+      const serialized = JSON.stringify(watcherJson);
+      assert.ok(serialized.includes('action=watcher_catalog'));
+      assert.ok(serialized.includes('action=ingest_model_alerts'));
+      assert.ok(serialized.includes('https://openrouter.ai/api/v1/models'));
+      assert.ok(serialized.includes('tjmYBMIQa9Fo3kYL'));
+    } finally {
       srv.close();
     }
   });

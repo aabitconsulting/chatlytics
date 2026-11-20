@@ -724,7 +724,7 @@ function validateAndSanitizeConfigInput(array $data, bool $isUpdate = false, ?ar
         $existingLLMs = json_decode($existing['target_llms'] ?: '[]', true);
         $targetLLMs = normalizeTargetLlmsList(is_array($existingLLMs) ? $existingLLMs : []);
     } else {
-        $targetLLMs = ['openai/gpt-6-luna', 'google/gemini-3.5-flash'];
+        $targetLLMs = ['google/gemini-4-hydrogen', 'openai/gpt-6-luna'];
     }
 
     // 6. schedule_interval (Data Mining Accuracy: every_120m, every_60m, every_30m, every_15m)
@@ -919,7 +919,7 @@ function enforcePlanAndPresetPolicy(
 
     $allowCustomModels = !empty($plan['allow_custom_models']);
     $allActivePresets = getModelPresetsCatalog($db, true);
-    $allowedPresetIds = decodeCatalogJsonArray($plan['allowed_preset_ids'] ?? [], ['dach_core_baseline']);
+    $allowedPresetIds = decodeCatalogJsonArray($plan['allowed_preset_ids'] ?? [], ['default_visibility_tracking']);
     $allowedPresets = array_values(array_filter($allActivePresets, function (array $p) use ($allowedPresetIds, $userTier): bool {
         if (in_array($p['id'], $allowedPresetIds, true)) {
             return true;

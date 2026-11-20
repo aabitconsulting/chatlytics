@@ -754,126 +754,51 @@ function decodeCatalogJsonArray(mixed $raw, array $fallback = []): array
  */
 function getDefaultLlmModelsSeed(): array
 {
+    $make = static function (
+        string $id,
+        string $provider,
+        string $modelName,
+        string $displayName,
+        bool $supportsBatch,
+        bool $isDefault,
+        int $sortOrder
+    ): array {
+        return [
+            'id'                  => $id,
+            'provider'            => $provider,
+            'model_name'          => $modelName,
+            'display_name'        => $displayName,
+            'eu_hosted'           => false,
+            'supports_web_search' => true,
+            'supports_batch_api'  => $supportsBatch,
+            'supports_tools'      => true,
+            'execution_strategy'  => $supportsBatch ? 'batch_api' : 'regular',
+            'is_allowed'          => true,
+            'is_default'          => $isDefault,
+            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
+            'n8n_sync_status'     => 'seeded',
+            'last_synced_at'      => null,
+            'sort_order'          => $sortOrder,
+        ];
+    };
+
     return [
-        [
-            'id'                  => 'openai/gpt-6-luna',
-            'provider'            => 'openai',
-            'model_name'          => 'gpt-6-luna',
-            'display_name'        => 'OpenAI · GPT-6 Luna',
-            'eu_hosted'           => false,
-            'supports_web_search' => true,
-            'supports_batch_api'  => true,
-            'supports_tools'      => true,
-            'execution_strategy'  => 'batch_api',
-            'is_allowed'          => true,
-            'is_default'          => true,
-            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
-            'n8n_sync_status'     => 'seeded',
-            'last_synced_at'      => null,
-            'sort_order'          => 10,
-        ],
-        [
-            'id'                  => 'google/gemini-3.5-flash',
-            'provider'            => 'google',
-            'model_name'          => 'gemini-3.5-flash',
-            'display_name'        => 'Google · Gemini 3.5 Flash',
-            'eu_hosted'           => false,
-            'supports_web_search' => true,
-            'supports_batch_api'  => true,
-            'supports_tools'      => true,
-            'execution_strategy'  => 'batch_api',
-            'is_allowed'          => true,
-            'is_default'          => true,
-            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
-            'n8n_sync_status'     => 'seeded',
-            'last_synced_at'      => null,
-            'sort_order'          => 20,
-        ],
-        [
-            'id'                  => 'mistralai/mistral-medium-3-5',
-            'provider'            => 'mistralai',
-            'model_name'          => 'mistral-medium-3-5',
-            'display_name'        => 'Mistral · Medium 3.5',
-            'eu_hosted'           => false,
-            'supports_web_search' => true,
-            'supports_batch_api'  => true,
-            'supports_tools'      => true,
-            'execution_strategy'  => 'batch_api',
-            'is_allowed'          => true,
-            'is_default'          => true,
-            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
-            'n8n_sync_status'     => 'seeded',
-            'last_synced_at'      => null,
-            'sort_order'          => 30,
-        ],
-        [
-            'id'                  => 'mistralai/mistral-large-4-0',
-            'provider'            => 'mistralai',
-            'model_name'          => 'mistral-large-4-0',
-            'display_name'        => 'Mistral · Large 4.0',
-            'eu_hosted'           => false,
-            'supports_web_search' => true,
-            'supports_batch_api'  => false,
-            'supports_tools'      => true,
-            'execution_strategy'  => 'regular',
-            'is_allowed'          => true,
-            'is_default'          => false,
-            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
-            'n8n_sync_status'     => 'seeded',
-            'last_synced_at'      => null,
-            'sort_order'          => 40,
-        ],
-        [
-            'id'                  => 'z-ai/glm-5.3',
-            'provider'            => 'z-ai',
-            'model_name'          => 'glm-5.3',
-            'display_name'        => 'Z.ai · GLM 5.3',
-            'eu_hosted'           => false,
-            'supports_web_search' => true,
-            'supports_batch_api'  => true,
-            'supports_tools'      => true,
-            'execution_strategy'  => 'batch_api',
-            'is_allowed'          => true,
-            'is_default'          => true,
-            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
-            'n8n_sync_status'     => 'seeded',
-            'last_synced_at'      => null,
-            'sort_order'          => 50,
-        ],
-        [
-            'id'                  => 'z-ai/glm-5.3-flash',
-            'provider'            => 'z-ai',
-            'model_name'          => 'glm-5.3-flash',
-            'display_name'        => 'Z.ai · GLM 5.3 Flash',
-            'eu_hosted'           => false,
-            'supports_web_search' => true,
-            'supports_batch_api'  => true,
-            'supports_tools'      => true,
-            'execution_strategy'  => 'batch_api',
-            'is_allowed'          => true,
-            'is_default'          => false,
-            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
-            'n8n_sync_status'     => 'seeded',
-            'last_synced_at'      => null,
-            'sort_order'          => 60,
-        ],
-        [
-            'id'                  => 'anthropic/claude-sonnet-5.5',
-            'provider'            => 'anthropic',
-            'model_name'          => 'claude-sonnet-5.5',
-            'display_name'        => 'Anthropic · Claude Sonnet 5.5',
-            'eu_hosted'           => false,
-            'supports_web_search' => true,
-            'supports_batch_api'  => true,
-            'supports_tools'      => true,
-            'execution_strategy'  => 'batch_api',
-            'is_allowed'          => true,
-            'is_default'          => false,
-            'n8n_credential_name' => 'OpenRouter - Chatlytics - Chatlytics-dev-1',
-            'n8n_sync_status'     => 'seeded',
-            'last_synced_at'      => null,
-            'sort_order'          => 70,
-        ],
+        $make('google/gemini-4-hydrogen', 'google', 'gemini-4-hydrogen', 'Google · Gemini 4 Hydrogen', true, true, 10),
+        $make('openai/gpt-6-luna', 'openai', 'gpt-6-luna', 'OpenAI · GPT-6 Luna', true, true, 20),
+        $make('openai/gpt-6.1-terra', 'openai', 'gpt-6.1-terra', 'OpenAI · GPT-6.1 Terra', true, false, 30),
+        $make('anthropic/claude-sonnet-5.5', 'anthropic', 'claude-sonnet-5.5', 'Anthropic · Claude Sonnet 5.5', true, false, 40),
+        $make('google/gemini-4-neon', 'google', 'gemini-4-neon', 'Google · Gemini 4 Neon', true, false, 50),
+        $make('openai/gpt-6.2-sol', 'openai', 'gpt-6.2-sol', 'OpenAI · GPT-6.2 Sol', true, false, 60),
+        $make('anthropic/claude-opus-5.5', 'anthropic', 'claude-opus-5.5', 'Anthropic · Claude Opus 5.5', true, false, 70),
+        $make('mistralai/mistral-large-4-0', 'mistralai', 'mistral-large-4-0', 'Mistral · Large 4.0', false, false, 80),
+        $make('mistralai/mistral-medium-3-5', 'mistralai', 'mistral-medium-3-5', 'Mistral · Medium 3.5', true, false, 90),
+        $make('meta/muse-spark-1.3', 'meta', 'muse-spark-1.3', 'Meta · Muse Spark 1.3', false, false, 100),
+        $make('meta/muse-ember', 'meta', 'muse-ember', 'Meta · Muse Ember', false, false, 110),
+        $make('x-ai/grok-4.7', 'x-ai', 'grok-4.7', 'xAI · Grok 4.7', false, false, 120),
+        $make('deepseek/deepseek-v4.1-flash', 'deepseek', 'deepseek-v4.1-flash', 'DeepSeek · V4.1 Flash', false, false, 130),
+        $make('minimax/minimax-m3.1-flash', 'minimax', 'minimax-m3.1-flash', 'MiniMax · M3.1 Flash', false, false, 140),
+        $make('z-ai/glm-5.3-flash', 'z-ai', 'glm-5.3-flash', 'Z.ai · GLM 5.3 Flash', true, false, 150),
+        $make('qwen/qwen-3.8-flash', 'qwen', 'qwen-3.8-flash', 'Qwen · 3.8 Flash', false, false, 160),
     ];
 }
 
@@ -884,16 +809,38 @@ function getDefaultLlmModelsSeed(): array
  */
 function getDefaultModelPresetsSeed(): array
 {
+    $models360 = [
+        'google/gemini-4-hydrogen',
+        'google/gemini-4-neon',
+        'openai/gpt-6-luna',
+        'openai/gpt-6.1-terra',
+        'openai/gpt-6.2-sol',
+        'anthropic/claude-sonnet-5.5',
+        'anthropic/claude-opus-5.5',
+        'mistralai/mistral-large-4-0',
+        'mistralai/mistral-medium-3-5',
+        'meta/muse-spark-1.3',
+        'meta/muse-ember',
+        'x-ai/grok-4.7',
+    ];
+
+    $modelsGlobal = array_merge($models360, [
+        'deepseek/deepseek-v4.1-flash',
+        'minimax/minimax-m3.1-flash',
+        'z-ai/glm-5.3-flash',
+        'qwen/qwen-3.8-flash',
+    ]);
+
     return [
         [
-            'id'             => 'dach_core_baseline',
-            'name_de'        => 'Basis-Radar (Live-Suche)',
-            'name_en'        => 'Core Radar (Live Search)',
-            'description_de' => 'Direktvergleich über OpenAI GPT-6 Luna und Google Gemini 3.5 Flash via OpenRouter inkl. Live-Websuche & Quellenzitaten.',
-            'description_en' => 'Head-to-head benchmark across OpenAI GPT-6 Luna and Google Gemini 3.5 Flash via OpenRouter with live web search & citations.',
-            'badge_de'       => 'Standard',
-            'badge_en'       => 'Default',
-            'target_llms'    => ['openai/gpt-6-luna', 'google/gemini-3.5-flash'],
+            'id'             => 'default_visibility_tracking',
+            'name_de'        => 'Default Visibility Tracking',
+            'name_en'        => 'Default Visibility Tracking',
+            'description_de' => 'Kern-Benchmark über Google Gemini 4 Hydrogen und OpenAI GPT-6 Luna inkl. Live-Websuche & Quellenzitaten.',
+            'description_en' => 'Core visibility benchmark across Google Gemini 4 Hydrogen and OpenAI GPT-6 Luna with live web search & citations.',
+            'badge_de'       => 'Standard · 2 Modelle',
+            'badge_en'       => 'Default · 2 Models',
+            'target_llms'    => ['google/gemini-4-hydrogen', 'openai/gpt-6-luna'],
             'search_enabled' => true,
             'allowed_tiers'  => ['free', 'starter', 'growth', 'enterprise_managed'],
             'is_default'     => true,
@@ -901,46 +848,51 @@ function getDefaultModelPresetsSeed(): array
             'sort_order'     => 10,
         ],
         [
-            'id'             => 'parametric_brand_memory',
-            'name_de'        => 'Trainingswissen-Radar (Batch-API)',
-            'name_en'        => 'Pre-Trained Knowledge Radar (Batch API)',
-            'description_de' => 'Prüft das reine Trainingswissen über OpenAI, Google Gemini und Mistral via OpenRouter Batch-API ohne Live-Websuche.',
-            'description_en' => 'Evaluates pure parametric training memory across OpenAI, Google Gemini, and Mistral via OpenRouter Batch API without live web search.',
-            'badge_de'       => 'Batch-API',
-            'badge_en'       => 'Batch API',
-            'target_llms'    => ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5'],
-            'search_enabled' => false,
+            'id'             => 'advanced_visibility_tracking',
+            'name_de'        => 'Advanced Visibility Tracking',
+            'name_en'        => 'Advanced Visibility Tracking',
+            'description_de' => 'Erweitertes Sichtbarkeits-Tracking über Google Gemini 4 Hydrogen, OpenAI GPT-6 Luna, GPT-6.1 Terra und Anthropic Claude Sonnet 5.5 inkl. Live-Websuche.',
+            'description_en' => 'Extended visibility tracking across Google Gemini 4 Hydrogen, OpenAI GPT-6 Luna, GPT-6.1 Terra, and Anthropic Claude Sonnet 5.5 with live web search.',
+            'badge_de'       => 'Starter+ · 4 Modelle',
+            'badge_en'       => 'Starter+ · 4 Models',
+            'target_llms'    => [
+                'google/gemini-4-hydrogen',
+                'openai/gpt-6-luna',
+                'openai/gpt-6.1-terra',
+                'anthropic/claude-sonnet-5.5',
+            ],
+            'search_enabled' => true,
             'allowed_tiers'  => ['starter', 'growth', 'enterprise_managed'],
             'is_default'     => false,
             'is_active'      => true,
             'sort_order'     => 20,
         ],
         [
-            'id'             => 'eu_sovereign_dsgvo',
-            'name_de'        => 'Europäisches Modell-Radar',
-            'name_en'        => 'European Model Radar',
-            'description_de' => 'Vergleich europäischer und globaler Sprachmodelle via OpenRouter (Mistral Medium 3.5, Mistral Large 4.0 & Z.ai GLM 5.3).',
-            'description_en' => 'Benchmark across European and global language models via OpenRouter (Mistral Medium 3.5, Mistral Large 4.0 & Z.ai GLM 5.3).',
-            'badge_de'       => 'Mistral & GLM',
-            'badge_en'       => 'Mistral & GLM',
-            'target_llms'    => ['mistralai/mistral-medium-3-5', 'mistralai/mistral-large-4-0', 'z-ai/glm-5.3'],
-            'search_enabled' => false,
-            'allowed_tiers'  => ['starter', 'growth', 'enterprise_managed'],
+            'id'             => '360_visibility_tracking',
+            'name_de'        => '360 Visibility Tracking',
+            'name_en'        => '360 Visibility Tracking',
+            'description_de' => 'Umfassendes 12-Modell-Panel über Google Gemini, OpenAI GPT-6, Anthropic Claude, Mistral, Meta Muse und xAI Grok 4.7 inkl. Live-Websuche.',
+            'description_en' => 'Comprehensive 12-model panel covering Google Gemini, OpenAI GPT-6, Anthropic Claude, Mistral, Meta Muse, and xAI Grok 4.7 with live web search.',
+            'badge_de'       => '360° · 12 Modelle',
+            'badge_en'       => '360° · 12 Models',
+            'target_llms'    => $models360,
+            'search_enabled' => true,
+            'allowed_tiers'  => ['growth', 'enterprise_managed'],
             'is_default'     => false,
             'is_active'      => true,
             'sort_order'     => 30,
         ],
         [
-            'id'             => 'executive_full_spectrum',
-            'name_de'        => '360°-Radar (Alle Kernmodelle + Suche)',
-            'name_en'        => '360° Radar (All Core Models + Search)',
-            'description_de' => 'Umfassende Multi-LLM-Abdeckung über führende Frontier- und Open-Weights-Modelle via OpenRouter mit Live-Websuche.',
-            'description_en' => 'Complete multi-LLM coverage combining frontier and open-weights models via OpenRouter with live web search.',
-            'badge_de'       => 'Vollabdeckung',
-            'badge_en'       => 'Full Coverage',
-            'target_llms'    => ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5', 'z-ai/glm-5.3'],
+            'id'             => 'global_visibility_tracking',
+            'name_de'        => 'Global Visibility Tracking',
+            'name_en'        => 'Global Visibility Tracking',
+            'description_de' => 'Vollständiges 16-Modell-Weltpanel: alle 12 Modelle aus 360 Visibility Tracking plus DeepSeek V4.1 Flash, MiniMax M3.1 Flash, GLM 5.3 Flash und Qwen 3.8 Flash inkl. Live-Websuche.',
+            'description_en' => 'Complete 16-model global panel: all 12 models from 360 Visibility Tracking plus DeepSeek V4.1 Flash, MiniMax M3.1 Flash, GLM 5.3 Flash, and Qwen 3.8 Flash with live web search.',
+            'badge_de'       => 'Global · 16 Modelle',
+            'badge_en'       => 'Global · 16 Models',
+            'target_llms'    => $modelsGlobal,
             'search_enabled' => true,
-            'allowed_tiers'  => ['starter', 'growth', 'enterprise_managed'],
+            'allowed_tiers'  => ['growth', 'enterprise_managed'],
             'is_default'     => false,
             'is_active'      => true,
             'sort_order'     => 40,
@@ -976,18 +928,18 @@ function getDefaultSubscriptionPlansSeed(): array
             'max_prompts_per_config'     => 10,
             'allowed_intervals'          => ['every_120m'],
             'allow_custom_models'        => false,
-            'allowed_preset_ids'         => ['dach_core_baseline'],
+            'allowed_preset_ids'         => ['default_visibility_tracking'],
             'features_de'                => [
                 '40 Live-Analyse-Läufe (40 Gratis-Credits)',
                 '1 Tracking-Profil',
-                'Basis-Analyse-Set: Basis-Radar (Live-Suche)',
+                'Analyse-Set: Default Visibility Tracking (Live-Suche)',
                 'Basis-Ergebnis nach Empfehlungs-Stufen',
                 'Zugang über geschäftliche E-Mail-Adresse',
             ],
             'features_en'                => [
                 '40 Live Analysis Runs (40 Free Credits)',
                 '1 Tracking Profile',
-                'Core Model Preset: Core Radar (Live Search)',
+                'Model Preset: Default Visibility Tracking (Live Search)',
                 'Basic visibility rating by recommendation tiers',
                 'Access via business email address',
             ],
@@ -1013,12 +965,12 @@ function getDefaultSubscriptionPlansSeed(): array
             'max_prompts_per_config'     => 15,
             'allowed_intervals'          => ['every_120m', 'every_60m', 'every_30m', 'every_15m'],
             'allow_custom_models'        => false,
-            'allowed_preset_ids'         => ['dach_core_baseline', 'parametric_brand_memory', 'eu_sovereign_dsgvo', 'executive_full_spectrum'],
+            'allowed_preset_ids'         => ['default_visibility_tracking', 'advanced_visibility_tracking'],
             'features_de'                => [
                 '500 Live-Analyse-Läufe / Monat · inkl. 40 Gratis-Credits vorab',
                 '3 Tracking-Profile oder Produktlinien',
                 'Bis zu 5 Wettbewerber pro Profil',
-                'Alle kuratierten Analyse-Sets (Trainingswissen-Radar, Europäisches Modell-Radar & 360°-Radar)',
+                'Analyse-Sets: Default Visibility Tracking & Advanced Visibility Tracking (Live-Suche)',
                 'Volle GEO Ursachen-Matrix',
                 'CSV-/JSON-Export für eigenes Reporting',
             ],
@@ -1026,7 +978,7 @@ function getDefaultSubscriptionPlansSeed(): array
                 '500 Live Analysis Runs / month · incl. 40 Free Credits upfront',
                 '3 Tracking Profiles or product lines',
                 'Up to 5 competitors per profile',
-                'All curated Model Presets (Pre-Trained Knowledge Radar, European Model Radar & 360° Radar)',
+                'Model Presets: Default Visibility Tracking & Advanced Visibility Tracking (Live Search)',
                 'Full GEO Root-Cause Matrix',
                 'CSV / JSON export for custom reporting',
             ],
@@ -1052,12 +1004,12 @@ function getDefaultSubscriptionPlansSeed(): array
             'max_prompts_per_config'     => 25,
             'allowed_intervals'          => ['every_120m', 'every_60m', 'every_30m', 'every_15m'],
             'allow_custom_models'        => true,
-            'allowed_preset_ids'         => ['dach_core_baseline', 'parametric_brand_memory', 'eu_sovereign_dsgvo', 'executive_full_spectrum'],
+            'allowed_preset_ids'         => ['default_visibility_tracking', 'advanced_visibility_tracking', '360_visibility_tracking', 'global_visibility_tracking'],
             'features_de'                => [
                 '2.000 Live-Analyse-Läufe / Monat',
                 '10 Tracking-Profile / Märkte',
                 'Bis zu 10 Wettbewerber pro Profil',
-                'Freie Modellwahl & Live-Websuche-Steuerung (alle OpenRouter-Modelle & Analyse-Sets)',
+                'Alle 4 Analyse-Sets (inkl. 360 Visibility Tracking & Global Visibility Tracking) sowie freie Modellwahl',
                 'GEO-Reports per Link teilen (schreibgeschützt)',
                 'Historischer Sichtbarkeits-Trend über alle Modelle',
                 'Priorisierte Content- & Schema.org-Maßnahmen',
@@ -1066,7 +1018,7 @@ function getDefaultSubscriptionPlansSeed(): array
                 '2,000 Live Analysis Runs / month',
                 '10 Tracking Profiles / markets',
                 'Up to 10 competitors per profile',
-                'Free custom model & live web search control (all OpenRouter models & Model Presets)',
+                'All 4 Model Presets (incl. 360 Visibility Tracking & Global Visibility Tracking) plus custom model control',
                 'Shareable read-only GEO Reports via link',
                 'Historical visibility trends across all models',
                 'Prioritized content & Schema.org actions',
@@ -1093,17 +1045,17 @@ function getDefaultSubscriptionPlansSeed(): array
             'max_prompts_per_config'     => 100,
             'allowed_intervals'          => ['every_120m', 'every_60m', 'every_30m', 'every_15m'],
             'allow_custom_models'        => true,
-            'allowed_preset_ids'         => ['dach_core_baseline', 'parametric_brand_memory', 'eu_sovereign_dsgvo', 'executive_full_spectrum'],
+            'allowed_preset_ids'         => ['default_visibility_tracking', 'advanced_visibility_tracking', '360_visibility_tracking', 'global_visibility_tracking'],
             'features_de'                => [
                 '10.000+ Live-Analyse-Läufe / Monat (Multi-Region)',
-                'Unbegrenzte freie Modellwahl & individuelle Analyse-Sets',
+                'Unbegrenzte freie Modellwahl & alle Analyse-Sets inkl. Global Visibility Tracking',
                 'Monatlicher Editorial- & Schema.org-Umsetzungsplan',
                 'Direkte Content-Optimierung gegen Q1: Quelle zitiert, Konkurrent empfohlen',
                 'Quartalsweises Executive Briefing mit Geschäftsführung & dedizierter GEO-Stratege',
             ],
             'features_en'                => [
                 '10,000+ Live Analysis Runs / month (Multi-Region)',
-                'Unlimited custom model control & bespoke Model Presets',
+                'Unlimited custom model control & all Model Presets incl. Global Visibility Tracking',
                 'Monthly editorial & Schema.org implementation plan',
                 'Direct content optimization against Q1: Source Cited, Rival Recommended',
                 'Quarterly executive briefing & dedicated GEO strategist',
@@ -1209,6 +1161,27 @@ function ensureAdminCatalogTables(PDO $db): void
                     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             ");
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS `model_lifecycle_alerts` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+                    `alert_key` TEXT NOT NULL UNIQUE,
+                    `alert_type` TEXT NOT NULL,
+                    `severity` TEXT NOT NULL DEFAULT 'info',
+                    `current_model_id` TEXT NOT NULL,
+                    `suggested_model_id` TEXT NULL DEFAULT NULL,
+                    `suggested_display_name` TEXT NULL DEFAULT NULL,
+                    `confidence_score` INTEGER NOT NULL DEFAULT 80,
+                    `reason_de` TEXT NOT NULL DEFAULT '',
+                    `reason_en` TEXT NOT NULL DEFAULT '',
+                    `source_url` TEXT NULL DEFAULT NULL,
+                    `affected_presets_json` TEXT NOT NULL DEFAULT '[]',
+                    `affected_configs_count` INTEGER NOT NULL DEFAULT 0,
+                    `status` TEXT NOT NULL DEFAULT 'open',
+                    `email_sent_at` DATETIME NULL DEFAULT NULL,
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `resolved_at` DATETIME NULL DEFAULT NULL
+                )
+            ");
         } else {
             $db->exec("
                 CREATE TABLE IF NOT EXISTS `llm_models` (
@@ -1297,6 +1270,30 @@ function ensureAdminCatalogTables(PDO $db): void
                     KEY `idx_op_relevant` (`is_relevant`, `provider_key`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ");
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS `model_lifecycle_alerts` (
+                    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    `alert_key` VARCHAR(191) COLLATE utf8mb4_unicode_ci NOT NULL,
+                    `alert_type` VARCHAR(48) COLLATE utf8mb4_unicode_ci NOT NULL,
+                    `severity` VARCHAR(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'info',
+                    `current_model_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+                    `suggested_model_id` VARCHAR(128) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+                    `suggested_display_name` VARCHAR(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+                    `confidence_score` INT NOT NULL DEFAULT 80,
+                    `reason_de` TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
+                    `reason_en` TEXT COLLATE utf8mb4_unicode_ci NOT NULL,
+                    `source_url` VARCHAR(512) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+                    `affected_presets_json` JSON NOT NULL,
+                    `affected_configs_count` INT NOT NULL DEFAULT 0,
+                    `status` VARCHAR(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
+                    `email_sent_at` TIMESTAMP NULL DEFAULT NULL,
+                    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `resolved_at` TIMESTAMP NULL DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `uq_mla_alert_key` (`alert_key`),
+                    KEY `idx_mla_status_created` (`status`, `created_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
         }
 
         // Upgrade existing llm_models schema idempotently
@@ -1324,27 +1321,91 @@ function ensureAdminCatalogTables(PDO $db): void
             }
         }
 
-        // Seed default models when table is empty
+        $legacyPresetIds = [
+            'dach_core_baseline',
+            'parametric_brand_memory',
+            'eu_sovereign_dsgvo',
+            'executive_full_spectrum',
+        ];
+        $legacyFoundCount = (int)$db->query(
+            "SELECT COUNT(*) FROM model_presets WHERE id IN ('dach_core_baseline','parametric_brand_memory','eu_sovereign_dsgvo','executive_full_spectrum')"
+        )->fetchColumn();
+
+        // Seed default models when table is empty, or top-up missing canonical models during legacy preset migration
         $mCount = (int)$db->query("SELECT COUNT(*) FROM llm_models")->fetchColumn();
         if ($mCount === 0) {
             foreach (getDefaultLlmModelsSeed() as $modelSeed) {
                 upsertLlmModel($db, $modelSeed, false);
             }
-        }
-
-        // Seed default presets when table is empty
-        $pCount = (int)$db->query("SELECT COUNT(*) FROM model_presets")->fetchColumn();
-        if ($pCount === 0) {
-            foreach (getDefaultModelPresetsSeed() as $presetSeed) {
-                upsertModelPreset($db, $presetSeed);
+        } elseif ($legacyFoundCount > 0) {
+            $existingModelIds = array_flip($db->query("SELECT id FROM llm_models")->fetchAll(PDO::FETCH_COLUMN));
+            foreach (getDefaultLlmModelsSeed() as $modelSeed) {
+                if (!isset($existingModelIds[$modelSeed['id']])) {
+                    upsertLlmModel($db, $modelSeed, true);
+                }
             }
         }
 
-        // Seed default subscription plans when table is empty
+        // Idempotent migration: remove ONLY the 4 retired legacy preset IDs and seed the 4 Visibility Tracking sets
+        // (Preserves any custom admin presets and never touches existing tracking_configs)
+        if ($legacyFoundCount > 0) {
+            $db->exec(
+                "DELETE FROM model_presets WHERE id IN ('dach_core_baseline','parametric_brand_memory','eu_sovereign_dsgvo','executive_full_spectrum')"
+            );
+            $existingPresetIds = array_flip($db->query("SELECT id FROM model_presets")->fetchAll(PDO::FETCH_COLUMN));
+            foreach (getDefaultModelPresetsSeed() as $presetSeed) {
+                if (!isset($existingPresetIds[$presetSeed['id']])) {
+                    upsertModelPreset($db, $presetSeed);
+                }
+            }
+        } else {
+            $pCount = (int)$db->query("SELECT COUNT(*) FROM model_presets")->fetchColumn();
+            if ($pCount === 0) {
+                foreach (getDefaultModelPresetsSeed() as $presetSeed) {
+                    upsertModelPreset($db, $presetSeed);
+                }
+            }
+        }
+
+        // Seed default subscription plans when table is empty, or migrate legacy preset IDs in existing plans
         $sCount = (int)$db->query("SELECT COUNT(*) FROM subscription_plans")->fetchColumn();
         if ($sCount === 0) {
             foreach (getDefaultSubscriptionPlansSeed() as $planSeed) {
                 upsertSubscriptionPlan($db, $planSeed);
+            }
+        } else {
+            $planRows = $db->query("SELECT * FROM subscription_plans")->fetchAll();
+            $tierDefaultsMap = [
+                'free'               => ['default_visibility_tracking'],
+                'starter'            => ['default_visibility_tracking', 'advanced_visibility_tracking'],
+                'growth'             => ['default_visibility_tracking', 'advanced_visibility_tracking', '360_visibility_tracking', 'global_visibility_tracking'],
+                'enterprise_managed' => ['default_visibility_tracking', 'advanced_visibility_tracking', '360_visibility_tracking', 'global_visibility_tracking'],
+            ];
+            foreach ($planRows as $pRow) {
+                $tierKey = strtolower((string)($pRow['tier'] ?? 'free'));
+                $currentAllowed = decodeCatalogJsonArray($pRow['allowed_preset_ids'] ?? [], []);
+                $hasLegacy = false;
+                foreach ($currentAllowed as $pid) {
+                    if (in_array((string)$pid, $legacyPresetIds, true)) {
+                        $hasLegacy = true;
+                        break;
+                    }
+                }
+                if ($hasLegacy) {
+                    $customOnly = array_values(array_filter(
+                        $currentAllowed,
+                        static fn($pid) => !in_array((string)$pid, $legacyPresetIds, true)
+                    ));
+                    $mapped = array_values(array_unique(array_merge(
+                        $tierDefaultsMap[$tierKey] ?? ['default_visibility_tracking'],
+                        $customOnly
+                    )));
+                    $updPlan = $db->prepare("UPDATE subscription_plans SET allowed_preset_ids = :ids WHERE tier = :tier");
+                    $updPlan->execute([
+                        ':ids'  => json_encode($mapped, JSON_UNESCAPED_UNICODE),
+                        ':tier' => (string)$pRow['tier'],
+                    ]);
+                }
             }
         }
 
@@ -1437,7 +1498,7 @@ function formatSubscriptionPlanRow(array $row): array
         'max_prompts_per_config'     => max(1, (int)($row['max_prompts_per_config'] ?? 5)),
         'allowed_intervals'          => decodeCatalogJsonArray($row['allowed_intervals'] ?? [], ['every_120m']),
         'allow_custom_models'        => !empty($row['allow_custom_models']),
-        'allowed_preset_ids'         => decodeCatalogJsonArray($row['allowed_preset_ids'] ?? [], ['dach_core_baseline']),
+        'allowed_preset_ids'         => decodeCatalogJsonArray($row['allowed_preset_ids'] ?? [], ['default_visibility_tracking']),
         'features_de'                => decodeCatalogJsonArray($row['features_de'] ?? [], []),
         'features_en'                => decodeCatalogJsonArray($row['features_en'] ?? [], []),
         'sort_order'                 => (int)($row['sort_order'] ?? 10),
@@ -1726,7 +1787,7 @@ function upsertSubscriptionPlan(PDO $db, array $data): array
             sort_order = VALUES(sort_order)";
 
     $allowedIntervals = decodeCatalogJsonArray($data['allowed_intervals'] ?? [], ['every_120m']);
-    $allowedPresets = decodeCatalogJsonArray($data['allowed_preset_ids'] ?? [], ['dach_core_baseline']);
+    $allowedPresets = decodeCatalogJsonArray($data['allowed_preset_ids'] ?? [], ['default_visibility_tracking']);
     $featuresDe = decodeCatalogJsonArray($data['features_de'] ?? [], []);
     $featuresEn = decodeCatalogJsonArray($data['features_en'] ?? [], []);
 
@@ -2659,3 +2720,455 @@ function resetOpenRouterProvidersToDefault(PDO $db): array
 
     return saveRelevantOpenRouterProviders($db, $defaults);
 }
+
+/**
+ * Formats a `model_lifecycle_alerts` database row for API responses.
+ *
+ * @param array<string, mixed> $row
+ * @return array<string, mixed>
+ */
+function formatModelLifecycleAlertRow(array $row): array
+{
+    return [
+        'id'                     => (int)($row['id'] ?? 0),
+        'alert_key'              => (string)($row['alert_key'] ?? ''),
+        'alert_type'             => (string)($row['alert_type'] ?? 'successor_available'),
+        'severity'               => (string)($row['severity'] ?? 'info'),
+        'current_model_id'       => (string)($row['current_model_id'] ?? ''),
+        'suggested_model_id'     => ($row['suggested_model_id'] ?? null) !== null && trim((string)$row['suggested_model_id']) !== ''
+            ? trim((string)$row['suggested_model_id'])
+            : null,
+        'suggested_display_name' => ($row['suggested_display_name'] ?? null) !== null && trim((string)$row['suggested_display_name']) !== ''
+            ? trim((string)$row['suggested_display_name'])
+            : null,
+        'confidence_score'       => max(0, min(100, (int)($row['confidence_score'] ?? 80))),
+        'reason_de'              => (string)($row['reason_de'] ?? ''),
+        'reason_en'              => (string)($row['reason_en'] ?? ''),
+        'source_url'             => ($row['source_url'] ?? null) !== null && trim((string)$row['source_url']) !== ''
+            ? trim((string)$row['source_url'])
+            : null,
+        'affected_presets'       => decodeCatalogJsonArray($row['affected_presets_json'] ?? ($row['affected_presets'] ?? []), []),
+        'affected_configs_count' => max(0, (int)($row['affected_configs_count'] ?? 0)),
+        'status'                 => (string)($row['status'] ?? 'open'),
+        'email_sent_at'          => $row['email_sent_at'] ?? null,
+        'created_at'             => $row['created_at'] ?? null,
+        'resolved_at'            => $row['resolved_at'] ?? null,
+    ];
+}
+
+/**
+ * Builds a deterministic deduplication key for a model lifecycle alert.
+ */
+function buildModelLifecycleAlertKey(string $alertType, string $currentModelId, ?string $suggestedModelId = null): string
+{
+    $raw = strtolower(trim($alertType)) . '|' . strtolower(trim($currentModelId)) . '|' . strtolower(trim((string)$suggestedModelId));
+    if (strlen($raw) <= 185) {
+        return $raw;
+    }
+    return substr($raw, 0, 120) . '|' . substr(hash('sha256', $raw), 0, 32);
+}
+
+/**
+ * Computes which active presets and active/paused tracking_configs reference a given model ID.
+ *
+ * @return array{affected_presets:array<int,string>,affected_configs_count:int}
+ */
+function computeModelLifecycleImpact(PDO $db, string $modelId): array
+{
+    $needle = strtolower(trim($modelId));
+    if ($needle === '') {
+        return ['affected_presets' => [], 'affected_configs_count' => 0];
+    }
+
+    $affectedPresets = [];
+    foreach (getModelPresetsCatalog($db, true) as $preset) {
+        $llms = array_map(static fn($x) => strtolower(trim((string)$x)), $preset['target_llms'] ?? []);
+        if (in_array($needle, $llms, true)) {
+            $affectedPresets[] = (string)$preset['name_de'];
+        }
+    }
+
+    $usage = getModelActiveUsageStats($db);
+    $configsCount = 0;
+    foreach (($usage['by_model'] ?? []) as $mid => $meta) {
+        if (strtolower((string)$mid) === $needle) {
+            $configsCount = (int)($meta['total_config_count'] ?? 0);
+            break;
+        }
+    }
+
+    return [
+        'affected_presets'       => array_values(array_unique($affectedPresets)),
+        'affected_configs_count' => $configsCount,
+    ];
+}
+
+/**
+ * Builds the tracked model catalog snapshot consumed by the n8n Predecessor/Successor Watcher.
+ *
+ * @return array<string, mixed>
+ */
+function getWatcherCatalogSnapshot(PDO $db): array
+{
+    ensureAdminCatalogTables($db);
+
+    $modelsCatalog = getAdminModelsCatalog($db, false);
+    $modelsById = [];
+    foreach ($modelsCatalog as $m) {
+        $modelsById[strtolower((string)$m['id'])] = $m;
+    }
+
+    $presets = getModelPresetsCatalog($db, true);
+    $usage = getModelActiveUsageStats($db);
+    $usageByModel = $usage['by_model'] ?? [];
+
+    $trackedMap = [];
+    $addTracked = static function (string $rawId) use (&$trackedMap, $modelsById, $usageByModel): void {
+        $clean = trim($rawId);
+        if ($clean === '') {
+            return;
+        }
+        $lower = strtolower($clean);
+        if (isset($trackedMap[$lower])) {
+            return;
+        }
+        $meta = $modelsById[$lower] ?? null;
+        $provider = $meta['provider'] ?? (str_contains($clean, '/') ? strtolower(explode('/', $clean, 2)[0]) : '');
+        $modelName = $meta['model_name'] ?? (str_contains($clean, '/') ? explode('/', $clean, 2)[1] : $clean);
+        $u = $usageByModel[$clean] ?? ($usageByModel[$lower] ?? null);
+
+        $trackedMap[$lower] = [
+            'id'                  => $meta['id'] ?? $clean,
+            'provider'            => $provider,
+            'model_name'          => $modelName,
+            'display_name'        => $meta['display_name'] ?? $clean,
+            'is_allowed'          => $meta ? !empty($meta['is_allowed']) : true,
+            'preset_ids'          => [],
+            'preset_names'        => [],
+            'active_config_count' => (int)($u['active_config_count'] ?? 0),
+            'paused_config_count' => (int)($u['paused_config_count'] ?? 0),
+        ];
+    };
+
+    foreach ($presets as $preset) {
+        foreach (($preset['target_llms'] ?? []) as $mid) {
+            $addTracked((string)$mid);
+            $k = strtolower(trim((string)$mid));
+            if (isset($trackedMap[$k])) {
+                $trackedMap[$k]['preset_ids'][] = (string)$preset['id'];
+                $trackedMap[$k]['preset_names'][] = (string)$preset['name_de'];
+            }
+        }
+    }
+
+    foreach ($usageByModel as $mid => $u) {
+        if (((int)($u['total_config_count'] ?? 0)) > 0) {
+            $addTracked((string)$mid);
+        }
+    }
+
+    foreach ($modelsCatalog as $m) {
+        if (!empty($m['is_allowed'])) {
+            $addTracked((string)$m['id']);
+        }
+    }
+
+    $trackedModels = array_values($trackedMap);
+    usort($trackedModels, static fn($a, $b) => strcmp((string)$a['id'], (string)$b['id']));
+
+    $relevantProviders = function_exists('getAllowedOpenRouterProviders') ? getAllowedOpenRouterProviders($db) : [];
+    $allCatalogIds = array_values(array_unique(array_map(static fn($m) => (string)$m['id'], $modelsCatalog)));
+
+    return [
+        'generated_at'       => gmdate('c'),
+        'tracked_count'      => count($trackedModels),
+        'tracked_models'     => $trackedModels,
+        'relevant_providers' => $relevantProviders,
+        'catalog_model_ids'  => $allCatalogIds,
+        'presets_count'      => count($presets),
+    ];
+}
+
+/**
+ * Inserts or refreshes a model lifecycle alert with deduplication by `alert_key`.
+ * Already dismissed or applied alerts are never reopened and do not trigger new email notifications.
+ *
+ * @param array<string, mixed> $alert
+ * @return array{alert:array<string,mixed>,is_new:bool}
+ */
+function upsertModelLifecycleAlert(PDO $db, array $alert): array
+{
+    ensureAdminCatalogTables($db);
+
+    $validTypes = ['successor_available', 'model_eol', 'model_missing_openrouter'];
+    $alertType = strtolower(trim((string)($alert['alert_type'] ?? 'successor_available')));
+    if (!in_array($alertType, $validTypes, true)) {
+        $alertType = 'successor_available';
+    }
+
+    $validSeverities = ['critical', 'warning', 'info'];
+    $defaultSeverity = ($alertType === 'successor_available') ? 'info' : 'critical';
+    $severity = strtolower(trim((string)($alert['severity'] ?? $defaultSeverity)));
+    if (!in_array($severity, $validSeverities, true)) {
+        $severity = $defaultSeverity;
+    }
+
+    $currentModelId = trim((string)($alert['current_model_id'] ?? ''));
+    $suggestedModelId = trim((string)($alert['suggested_model_id'] ?? ''));
+    $suggestedModelOrNull = $suggestedModelId !== '' ? $suggestedModelId : null;
+    $suggestedDisplayName = trim((string)($alert['suggested_display_name'] ?? ''));
+    $suggestedDisplayOrNull = $suggestedDisplayName !== '' ? $suggestedDisplayName : null;
+
+    $confidence = max(0, min(100, (int)($alert['confidence_score'] ?? ($alertType === 'successor_available' ? 85 : 100))));
+    $reasonDe = trim((string)($alert['reason_de'] ?? ''));
+    $reasonEn = trim((string)($alert['reason_en'] ?? $reasonDe));
+    if ($reasonDe === '' && $reasonEn !== '') {
+        $reasonDe = $reasonEn;
+    }
+
+    $sourceUrlRaw = trim((string)($alert['source_url'] ?? ''));
+    $sourceUrl = ($sourceUrlRaw !== '' && preg_match('#^https?://#i', $sourceUrlRaw) === 1) ? $sourceUrlRaw : null;
+
+    $alertKey = trim((string)($alert['alert_key'] ?? ''));
+    if ($alertKey === '') {
+        $alertKey = buildModelLifecycleAlertKey($alertType, $currentModelId, $suggestedModelOrNull);
+    }
+
+    $impact = computeModelLifecycleImpact($db, $currentModelId);
+    $affectedPresetsJson = json_encode($impact['affected_presets'], JSON_UNESCAPED_UNICODE) ?: '[]';
+    $affectedConfigsCount = $impact['affected_configs_count'];
+
+    $existingStmt = $db->prepare("SELECT * FROM model_lifecycle_alerts WHERE alert_key = :k LIMIT 1");
+    $existingStmt->execute([':k' => $alertKey]);
+    $existing = $existingStmt->fetch();
+
+    if ($existing) {
+        if (($existing['status'] ?? 'open') === 'open') {
+            $upd = $db->prepare("
+                UPDATE model_lifecycle_alerts
+                SET severity = :severity,
+                    suggested_display_name = :suggested_display_name,
+                    confidence_score = :confidence_score,
+                    reason_de = :reason_de,
+                    reason_en = :reason_en,
+                    source_url = :source_url,
+                    affected_presets_json = :affected_presets_json,
+                    affected_configs_count = :affected_configs_count
+                WHERE id = :id
+            ");
+            $upd->execute([
+                ':severity'               => $severity,
+                ':suggested_display_name' => $suggestedDisplayOrNull ?? ($existing['suggested_display_name'] ?? null),
+                ':confidence_score'       => $confidence,
+                ':reason_de'              => $reasonDe !== '' ? $reasonDe : (string)$existing['reason_de'],
+                ':reason_en'              => $reasonEn !== '' ? $reasonEn : (string)$existing['reason_en'],
+                ':source_url'             => $sourceUrl ?? ($existing['source_url'] ?? null),
+                ':affected_presets_json'  => $affectedPresetsJson,
+                ':affected_configs_count' => $affectedConfigsCount,
+                ':id'                     => (int)$existing['id'],
+            ]);
+            $reStmt = $db->prepare("SELECT * FROM model_lifecycle_alerts WHERE id = :id LIMIT 1");
+            $reStmt->execute([':id' => (int)$existing['id']]);
+            $existing = $reStmt->fetch() ?: $existing;
+        }
+        return [
+            'alert'  => formatModelLifecycleAlertRow($existing),
+            'is_new' => false,
+        ];
+    }
+
+    $ins = $db->prepare("
+        INSERT INTO model_lifecycle_alerts (
+            alert_key, alert_type, severity, current_model_id, suggested_model_id,
+            suggested_display_name, confidence_score, reason_de, reason_en, source_url,
+            affected_presets_json, affected_configs_count, status
+        ) VALUES (
+            :alert_key, :alert_type, :severity, :current_model_id, :suggested_model_id,
+            :suggested_display_name, :confidence_score, :reason_de, :reason_en, :source_url,
+            :affected_presets_json, :affected_configs_count, 'open'
+        )
+    ");
+    $ins->execute([
+        ':alert_key'              => $alertKey,
+        ':alert_type'             => $alertType,
+        ':severity'               => $severity,
+        ':current_model_id'       => $currentModelId,
+        ':suggested_model_id'     => $suggestedModelOrNull,
+        ':suggested_display_name' => $suggestedDisplayOrNull,
+        ':confidence_score'       => $confidence,
+        ':reason_de'              => $reasonDe,
+        ':reason_en'              => $reasonEn,
+        ':source_url'             => $sourceUrl,
+        ':affected_presets_json'  => $affectedPresetsJson,
+        ':affected_configs_count' => $affectedConfigsCount,
+    ]);
+
+    $newId = (int)$db->lastInsertId();
+    $fetchStmt = $db->prepare("SELECT * FROM model_lifecycle_alerts WHERE id = :id LIMIT 1");
+    $fetchStmt->execute([':id' => $newId]);
+    $created = $fetchStmt->fetch();
+
+    return [
+        'alert'  => formatModelLifecycleAlertRow($created ?: [
+            'id'                     => $newId,
+            'alert_key'              => $alertKey,
+            'alert_type'             => $alertType,
+            'severity'               => $severity,
+            'current_model_id'       => $currentModelId,
+            'suggested_model_id'     => $suggestedModelOrNull,
+            'suggested_display_name' => $suggestedDisplayOrNull,
+            'confidence_score'       => $confidence,
+            'reason_de'              => $reasonDe,
+            'reason_en'              => $reasonEn,
+            'source_url'             => $sourceUrl,
+            'affected_presets_json'  => $affectedPresetsJson,
+            'affected_configs_count' => $affectedConfigsCount,
+            'status'                 => 'open',
+        ]),
+        'is_new' => true,
+    ];
+}
+
+/**
+ * Lists model lifecycle alerts ordered by open status, severity, and recency.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function listModelLifecycleAlerts(PDO $db, bool $includeResolved = false): array
+{
+    ensureAdminCatalogTables($db);
+
+    $where = $includeResolved ? '' : "WHERE status = 'open'";
+    $rows = $db->query("
+        SELECT * FROM model_lifecycle_alerts
+        {$where}
+        ORDER BY
+            CASE status WHEN 'open' THEN 0 ELSE 1 END ASC,
+            CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END ASC,
+            created_at DESC,
+            id DESC
+    ")->fetchAll();
+
+    $result = [];
+    foreach ($rows as $row) {
+        $formatted = formatModelLifecycleAlertRow($row);
+        if ($formatted['status'] === 'open' && $formatted['current_model_id'] !== '') {
+            $liveImpact = computeModelLifecycleImpact($db, $formatted['current_model_id']);
+            $formatted['affected_presets'] = $liveImpact['affected_presets'];
+            $formatted['affected_configs_count'] = $liveImpact['affected_configs_count'];
+        }
+        $result[] = $formatted;
+    }
+
+    return $result;
+}
+
+/**
+ * Resolves a model lifecycle alert with an explicit Admin action:
+ * - replace_in_presets: enables suggested model & swaps current -> suggested across model_presets (never modifies tracking_configs)
+ * - enable_model_only: enables suggested model in llm_models & marks alert applied
+ * - dismiss: marks alert dismissed so the same alert_key is not re-raised
+ *
+ * @return array{alert:array<string,mixed>,updated_presets:array<int,string>,enabled_model:?array<string,mixed>}
+ */
+function resolveModelLifecycleAlert(PDO $db, int $alertId, string $resolution): array
+{
+    ensureAdminCatalogTables($db);
+
+    $validResolutions = ['replace_in_presets', 'enable_model_only', 'dismiss'];
+    if (!in_array($resolution, $validResolutions, true)) {
+        throw new InvalidArgumentException("Invalid resolution '{$resolution}'.");
+    }
+
+    $stmt = $db->prepare("SELECT * FROM model_lifecycle_alerts WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $alertId]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        throw new RuntimeException("Model lifecycle alert #{$alertId} not found.", 404);
+    }
+
+    $alert = formatModelLifecycleAlertRow($row);
+    $updatedPresets = [];
+    $enabledModel = null;
+    $nowSql = gmdate('Y-m-d H:i:s');
+
+    $ensureSuggestedEnabled = static function () use ($db, $alert): array {
+        $suggestedId = trim((string)($alert['suggested_model_id'] ?? ''));
+        if ($suggestedId === '') {
+            throw new InvalidArgumentException('This alert has no suggested successor model ID.');
+        }
+        $provider = str_contains($suggestedId, '/') ? strtolower(explode('/', $suggestedId, 2)[0]) : 'openai';
+        $modelName = str_contains($suggestedId, '/') ? explode('/', $suggestedId, 2)[1] : $suggestedId;
+        $displayName = $alert['suggested_display_name']
+            ?: (getOpenRouterProviderDisplayName($provider) . ' · ' . $modelName);
+
+        $savedModel = upsertLlmModel($db, [
+            'id'                  => $suggestedId,
+            'provider'            => $provider,
+            'model_name'          => $modelName,
+            'display_name'        => $displayName,
+            'supports_web_search' => true,
+            'supports_tools'      => true,
+            'supports_batch_api'  => in_array($provider, ['openai', 'google', 'anthropic', 'mistralai', 'z-ai'], true),
+            'execution_strategy'  => in_array($provider, ['openai', 'google', 'anthropic', 'mistralai', 'z-ai'], true) ? 'batch_api' : 'regular',
+            'is_allowed'          => true,
+            'n8n_sync_status'     => 'watcher_enabled',
+        ], true);
+
+        // Explicitly guarantee is_allowed = 1 even if the model existed disabled before
+        $allowStmt = $db->prepare("UPDATE llm_models SET is_allowed = 1 WHERE id = :id");
+        $allowStmt->execute([':id' => $savedModel['id']]);
+        $savedModel['is_allowed'] = true;
+
+        return $savedModel;
+    };
+
+    if ($resolution === 'replace_in_presets') {
+        $enabledModel = $ensureSuggestedEnabled();
+        $oldIdLower = strtolower(trim($alert['current_model_id']));
+        $newId = (string)$enabledModel['id'];
+
+        foreach (getModelPresetsCatalog($db, false) as $preset) {
+            $llms = $preset['target_llms'] ?? [];
+            $changed = false;
+            $nextLlms = [];
+            foreach ($llms as $tok) {
+                $cleanTok = trim((string)$tok);
+                if (strtolower($cleanTok) === $oldIdLower) {
+                    $changed = true;
+                    if (!in_array($newId, $nextLlms, true)) {
+                        $nextLlms[] = $newId;
+                    }
+                } elseif ($cleanTok !== '' && !in_array($cleanTok, $nextLlms, true)) {
+                    $nextLlms[] = $cleanTok;
+                }
+            }
+            if ($changed) {
+                $preset['target_llms'] = $nextLlms;
+                upsertModelPreset($db, $preset);
+                $updatedPresets[] = (string)$preset['id'];
+            }
+        }
+
+        $upd = $db->prepare("UPDATE model_lifecycle_alerts SET status = 'applied', resolved_at = :ts WHERE id = :id");
+        $upd->execute([':ts' => $nowSql, ':id' => $alertId]);
+    } elseif ($resolution === 'enable_model_only') {
+        $enabledModel = $ensureSuggestedEnabled();
+        $upd = $db->prepare("UPDATE model_lifecycle_alerts SET status = 'applied', resolved_at = :ts WHERE id = :id");
+        $upd->execute([':ts' => $nowSql, ':id' => $alertId]);
+    } else {
+        $upd = $db->prepare("UPDATE model_lifecycle_alerts SET status = 'dismissed', resolved_at = :ts WHERE id = :id");
+        $upd->execute([':ts' => $nowSql, ':id' => $alertId]);
+    }
+
+    $afterStmt = $db->prepare("SELECT * FROM model_lifecycle_alerts WHERE id = :id LIMIT 1");
+    $afterStmt->execute([':id' => $alertId]);
+    $afterRow = $afterStmt->fetch() ?: $row;
+
+    return [
+        'alert'           => formatModelLifecycleAlertRow($afterRow),
+        'updated_presets' => $updatedPresets,
+        'enabled_model'   => $enabledModel,
+    ];
+}
+

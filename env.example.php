@@ -36,6 +36,7 @@ return [
     ],
     'n8n' => [
         'webhook_url' => 'https://n8n.chatlytics.de/webhook/chatlytics-run',
+        'model_watcher_webhook_url' => 'https://n8n.chatlytics.de/webhook/chatlytics-model-watcher',
         'shared_secret' => 'n8n_sec_99a8b7c6d5e4f3a2b1c0e9f8a7b6c5d4',
         'api_timeout_seconds' => 15,
     ],

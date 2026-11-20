@@ -76,6 +76,9 @@ const AdminState = {
   activeTab: 'users',
   platformKpis: null,
   models: [],
+  modelAlerts: [],
+  modelAlertsMeta: { open_count: 0, critical_count: 0, successor_count: 0, eol_count: 0 },
+  isRunningModelWatcher: false,
   modelFilters: { search: '', provider: '', capability: '' },
   providerCredentials: [],
   providers: [],
@@ -126,6 +129,13 @@ async function initAdminCockpit() {
 
   // 3. Initial Load of Users and Telemetry
   await loadAdminUsers(1, '');
+
+  // 4. Preload Open Model Lifecycle Alerts & respect #models / #presets hash deep-links (e.g. from alert email)
+  loadModelLifecycleAlerts().catch(() => {});
+  const hashTab = String(window.location?.hash || '').replace(/^#/, '').toLowerCase();
+  if (['users', 'models', 'providers', 'presets', 'plans'].includes(hashTab) && hashTab !== 'users') {
+    await switchAdminTab(hashTab);
+  }
 }
 
 /**
@@ -762,12 +772,40 @@ function renderRunTokenInspector(data) {
     return;
   }
 
-  results.forEach((r) => {
+  const mdApi = (typeof window !== 'undefined' && window.ChatlyticsMarkdown) ? window.ChatlyticsMarkdown : null;
+  if (mdApi && typeof mdApi.bindMarkdownCopyDelegation === 'function') {
+    mdApi.bindMarkdownCopyDelegation(tbody, (mode, ok) => {
+      if (ok) {
+        showToast(
+          mode === 'markdown'
+            ? 'Als Markdown (.md) in die Zwischenablage kopiert.'
+            : 'Formatierte KI-Antwort in die Zwischenablage kopiert.',
+          'success'
+        );
+      } else {
+        showToast('Kopieren fehlgeschlagen. Bitte manuell markieren.', 'error');
+      }
+    });
+  }
+
+  results.forEach((r, idx) => {
     const tr = document.createElement('tr');
+    tr.className = 'admin-token-row';
+    const detailRowId = `admin-token-detail-${r.id || idx}`;
 
     const tdDate = document.createElement('td');
-    tdDate.className = 'font-mono text-muted';
-    tdDate.textContent = (r.created_at || '').substring(0, 16);
+    tdDate.className = 'font-mono text-muted admin-token-date-cell';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'admin-token-expand-btn';
+    toggleBtn.setAttribute('aria-expanded', 'false');
+    toggleBtn.setAttribute('aria-controls', detailRowId);
+    toggleBtn.setAttribute('title', 'Vollständige KI-Antwort ein-/ausblenden');
+    toggleBtn.textContent = '▸';
+    const dateSpan = document.createElement('span');
+    dateSpan.textContent = (r.created_at || '').substring(0, 16);
+    tdDate.appendChild(toggleBtn);
+    tdDate.appendChild(dateSpan);
     tr.appendChild(tdDate);
 
     const tdCfg = document.createElement('td');
@@ -811,7 +849,67 @@ function renderRunTokenInspector(data) {
     tdCached.textContent = Number(r.cached_tokens || 0).toLocaleString();
     tr.appendChild(tdCached);
 
+    // Expandable detail row with full Prompt & Markdown-rendered AI Answer (+ 2 copy mini-icons)
+    const detailTr = document.createElement('tr');
+    detailTr.id = detailRowId;
+    detailTr.className = 'admin-token-answer-row';
+    detailTr.hidden = true;
+    const detailTd = document.createElement('td');
+    detailTd.colSpan = 7;
+
+    const panel = document.createElement('div');
+    panel.className = 'admin-token-answer-panel';
+
+    const promptHeading = document.createElement('h4');
+    promptHeading.className = 'accordion-detail-title';
+    promptHeading.textContent = 'Ausgeführter User-Prompt';
+    const promptPre = document.createElement('pre');
+    promptPre.className = 'accordion-pre';
+    promptPre.textContent = String(r.prompt || '—');
+    panel.appendChild(promptHeading);
+    panel.appendChild(promptPre);
+
+    const answerHeading = document.createElement('h4');
+    answerHeading.className = 'accordion-detail-title';
+    answerHeading.style.marginTop = '0.75rem';
+    answerHeading.textContent = 'Vollständige KI-Antwort';
+    panel.appendChild(answerHeading);
+
+    const answerRaw = r.status === 'failed'
+      ? String(r.error_message || 'Fehlgeschlagen')
+      : String(r.llm_answer || '—');
+
+    if (r.status !== 'failed' && mdApi && typeof mdApi.createMarkdownAnswerViewer === 'function') {
+      panel.appendChild(mdApi.createMarkdownAnswerViewer(answerRaw, {
+        copyRich: 'Alles kopieren (formatiert)',
+        copyMarkdown: 'Als Markdown (.md) kopieren',
+        toolbarLabel: 'KI-Antwort kopieren'
+      }));
+    } else {
+      const ansPre = document.createElement('pre');
+      ansPre.className = 'accordion-pre';
+      ansPre.textContent = answerRaw;
+      panel.appendChild(ansPre);
+    }
+
+    detailTd.appendChild(panel);
+    detailTr.appendChild(detailTd);
+
+    const toggleRow = (e) => {
+      if (e?.target?.closest?.('a')) return;
+      const nextOpen = Boolean(detailTr.hidden);
+      detailTr.hidden = !nextOpen;
+      toggleBtn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+      toggleBtn.textContent = nextOpen ? '▾' : '▸';
+      if (tr.classList) {
+        if (nextOpen) tr.classList.add('is-open');
+        else tr.classList.remove('is-open');
+      }
+    };
+    tr.addEventListener('click', toggleRow);
+
     tbody.appendChild(tr);
+    tbody.appendChild(detailTr);
   });
 }
 
@@ -1010,6 +1108,16 @@ function bindAdminV2Events() {
     });
   }
 
+  // Model Lifecycle Alerts Banner & Watcher Controls
+  document.getElementById('btn-open-model-alerts')?.addEventListener('click', () => {
+    switchAdminTab('models');
+    const panel = document.getElementById('admin-model-alerts-panel');
+    if (panel && typeof panel.scrollIntoView === 'function') {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  });
+  document.getElementById('btn-run-model-watcher')?.addEventListener('click', () => triggerModelWatcherRun());
+
   // Model Management Controls & Modal
   document.getElementById('btn-sync-n8n-models')?.addEventListener('click', () => triggerN8nModelSync());
   document.getElementById('model-filter-search')?.addEventListener('input', (e) => {
@@ -1097,8 +1205,9 @@ async function switchAdminTab(tabKey) {
     if (panel) panel.hidden = (key !== nextTab);
   });
 
-  if (nextTab === 'models' && !AdminState.loadedTabs.models) {
-    await loadAdminModels();
+  if (nextTab === 'models') {
+    if (!AdminState.loadedTabs.models) await loadAdminModels();
+    await loadModelLifecycleAlerts();
   } else if (nextTab === 'providers') {
     await loadOpenRouterProviders();
   } else if (nextTab === 'presets') {
@@ -1765,7 +1874,7 @@ function renderPresetsGrid(presets) {
     delBtn.type = 'button';
     delBtn.className = 'btn btn-xs btn-outline-danger';
     delBtn.textContent = 'Löschen';
-    delBtn.disabled = Boolean(preset.is_default || preset.id === 'dach_core_baseline');
+    delBtn.disabled = Boolean(preset.is_default || preset.id === 'default_visibility_tracking');
     delBtn.addEventListener('click', () => handleDeletePreset(preset));
     footer.append(editBtn, delBtn);
 
@@ -1802,12 +1911,22 @@ function openPresetModal(preset = null) {
 
   const selectedLlms = new Set(preset?.target_llms || []);
   const availableModels = AdminState.models.length > 0 ? AdminState.models : [
+    { id: 'google/gemini-4-hydrogen', display_name: 'Google · Gemini 4 Hydrogen' },
     { id: 'openai/gpt-6-luna', display_name: 'OpenAI · GPT-6 Luna' },
-    { id: 'gemini/models/gemini-3.5-flash', display_name: 'Google · Gemini 3.5 Flash' },
-    { id: 'mistral/mistral-medium-latest', display_name: 'Mistral Medium Latest' },
-    { id: 'mistral/mistral-large-latest', display_name: 'Mistral Large Latest' },
-    { id: 'mistral/zai-glm-5-3', display_name: 'Z.ai · GLM 5.3' },
-    { id: 'mistral/zai-glm-5-3-flash', display_name: 'Z.ai · GLM 5.3 Flash' }
+    { id: 'openai/gpt-6.1-terra', display_name: 'OpenAI · GPT-6.1 Terra' },
+    { id: 'anthropic/claude-sonnet-5.5', display_name: 'Anthropic · Claude Sonnet 5.5' },
+    { id: 'google/gemini-4-neon', display_name: 'Google · Gemini 4 Neon' },
+    { id: 'openai/gpt-6.2-sol', display_name: 'OpenAI · GPT-6.2 Sol' },
+    { id: 'anthropic/claude-opus-5.5', display_name: 'Anthropic · Claude Opus 5.5' },
+    { id: 'mistralai/mistral-large-4-0', display_name: 'Mistral · Large 4.0' },
+    { id: 'mistralai/mistral-medium-3-5', display_name: 'Mistral · Medium 3.5' },
+    { id: 'meta/muse-spark-1.3', display_name: 'Meta · Muse Spark 1.3' },
+    { id: 'meta/muse-ember', display_name: 'Meta · Muse Ember' },
+    { id: 'x-ai/grok-4.7', display_name: 'xAI · Grok 4.7' },
+    { id: 'deepseek/deepseek-v4.1-flash', display_name: 'DeepSeek · V4.1 Flash' },
+    { id: 'minimax/minimax-m3.1-flash', display_name: 'MiniMax · M3.1 Flash' },
+    { id: 'z-ai/glm-5.3-flash', display_name: 'Z.ai · GLM 5.3 Flash' },
+    { id: 'qwen/qwen-3.8-flash', display_name: 'Qwen · 3.8 Flash' }
   ];
   if (modelsWrap) {
     modelsWrap.replaceChildren();
@@ -2723,6 +2842,291 @@ async function handleResetOpenRouterProviders() {
 }
 
 // -----------------------------------------------------------------------------
+// 8b. Model Lifecycle Alerts (Predecessor/Successor & EOL Watcher UI)
+// -----------------------------------------------------------------------------
+
+async function loadModelLifecycleAlerts() {
+  try {
+    const res = await fetch('api/admin_users.php?action=list_model_alerts', {
+      headers: getAdminAuthHeaders()
+    });
+    const json = await res.json();
+    if (!res.ok || json.status === 'error') {
+      return [];
+    }
+    const d = json.data || {};
+    AdminState.modelAlerts = Array.isArray(d.alerts) ? d.alerts : [];
+    AdminState.modelAlertsMeta = {
+      open_count: Number(d.open_count ?? AdminState.modelAlerts.filter((a) => a.status === 'open').length),
+      critical_count: Number(d.critical_count ?? 0),
+      successor_count: Number(d.successor_count ?? 0),
+      eol_count: Number(d.eol_count ?? 0)
+    };
+    renderModelAlertsBanner();
+    renderModelAlertsPanel();
+    return AdminState.modelAlerts;
+  } catch (err) {
+    console.error('loadModelLifecycleAlerts error:', err);
+    return [];
+  }
+}
+
+function renderModelAlertsBanner() {
+  const banner = document.getElementById('admin-model-alerts-banner');
+  const summaryEl = document.getElementById('admin-alerts-banner-summary');
+  const tabBadge = document.getElementById('admin-tab-models-alert-badge');
+  const openAlerts = (AdminState.modelAlerts || []).filter((a) => a && a.status === 'open');
+  const openCount = openAlerts.length;
+
+  if (tabBadge) {
+    tabBadge.textContent = String(openCount);
+    tabBadge.hidden = openCount === 0;
+  }
+
+  if (!banner) return;
+  if (openCount === 0) {
+    banner.hidden = true;
+    return;
+  }
+
+  const lang = getAdminLanguage();
+  const eolCount = openAlerts.filter((a) => a.alert_type !== 'successor_available').length;
+  const succCount = openAlerts.filter((a) => a.alert_type === 'successor_available').length;
+  const hasCritical = openAlerts.some((a) => a.severity === 'critical' || a.alert_type !== 'successor_available');
+
+  if (banner.classList) {
+    if (hasCritical) banner.classList.add('is-critical');
+    else banner.classList.remove('is-critical');
+  }
+
+  if (summaryEl) {
+    const parts = [];
+    if (eolCount > 0) parts.push(lang === 'en' ? `${eolCount} EOL / missing` : `${eolCount} EOL / fehlt`);
+    if (succCount > 0) parts.push(lang === 'en' ? `${succCount} successor(s) available` : `${succCount} Nachfolger verfügbar`);
+    summaryEl.textContent = lang === 'en'
+      ? `${openCount} open model alert(s): ${parts.join(' · ')}`
+      : (openCount === 1
+        ? `1 offener Modell-Hinweis: ${parts.join(' · ')}`
+        : `${openCount} offene Modell-Hinweise: ${parts.join(' · ')}`);
+  }
+
+  banner.hidden = false;
+}
+
+function renderModelAlertsPanel() {
+  const panel = document.getElementById('admin-model-alerts-panel');
+  const list = document.getElementById('admin-model-alerts-list');
+  const countBadge = document.getElementById('admin-model-alerts-count');
+  if (!panel || !list) return;
+
+  const openAlerts = (AdminState.modelAlerts || []).filter((a) => a && a.status === 'open');
+  const lang = getAdminLanguage();
+
+  if (countBadge) {
+    countBadge.textContent = lang === 'en' ? `${openAlerts.length} open` : `${openAlerts.length} offen`;
+  }
+
+  list.textContent = '';
+  if (openAlerts.length === 0) {
+    panel.hidden = true;
+    return;
+  }
+
+  panel.hidden = false;
+
+  openAlerts.forEach((alert) => {
+    const card = document.createElement('article');
+    const sev = alert.severity === 'critical' ? 'critical' : (alert.severity === 'warning' ? 'warning' : 'info');
+    card.className = `admin-alert-card is-${sev}`;
+    card.setAttribute('data-alert-id', String(alert.id || ''));
+
+    const head = document.createElement('div');
+    head.className = 'admin-alert-card-head';
+
+    const typeBadge = document.createElement('span');
+    typeBadge.className = `badge ${sev === 'critical' ? 'badge-danger' : (sev === 'warning' ? 'badge-warning' : 'badge-active')}`;
+    if (alert.alert_type === 'model_missing_openrouter') {
+      typeBadge.textContent = lang === 'en' ? 'Missing on OpenRouter' : 'Fehlt auf OpenRouter';
+    } else if (alert.alert_type === 'model_eol') {
+      typeBadge.textContent = lang === 'en' ? 'End-of-Life Notice' : 'End-of-Life Hinweis';
+    } else {
+      typeBadge.textContent = lang === 'en' ? 'Successor Available' : 'Nachfolger verfügbar';
+    }
+
+    const confBadge = document.createElement('span');
+    confBadge.className = 'badge badge-secondary font-mono';
+    confBadge.textContent = `${Number(alert.confidence_score || 0)}% Konfidenz`;
+    if (lang === 'en') confBadge.textContent = `${Number(alert.confidence_score || 0)}% confidence`;
+
+    head.appendChild(typeBadge);
+    head.appendChild(confBadge);
+
+    const transition = document.createElement('div');
+    transition.className = 'admin-alert-model-transition font-mono';
+    const curCode = document.createElement('code');
+    curCode.className = 'admin-alert-model-old';
+    curCode.textContent = alert.current_model_id || '—';
+    transition.appendChild(curCode);
+
+    if (alert.suggested_model_id) {
+      const arrow = document.createElement('span');
+      arrow.className = 'admin-alert-arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = '→';
+      const nextCode = document.createElement('code');
+      nextCode.className = 'admin-alert-model-new';
+      nextCode.textContent = alert.suggested_model_id;
+      transition.appendChild(arrow);
+      transition.appendChild(nextCode);
+    }
+
+    const reason = document.createElement('p');
+    reason.className = 'admin-alert-reason';
+    reason.textContent = (lang === 'en' ? (alert.reason_en || alert.reason_de) : (alert.reason_de || alert.reason_en)) || '—';
+
+    if (alert.source_url && /^https?:\/\//i.test(String(alert.source_url))) {
+      const link = document.createElement('a');
+      link.href = String(alert.source_url);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'admin-alert-source-link';
+      link.textContent = lang === 'en' ? 'Provider notice ↗' : 'Anbieter-Quelle ↗';
+      reason.appendChild(document.createTextNode(' '));
+      reason.appendChild(link);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'admin-alert-meta';
+    const presets = Array.isArray(alert.affected_presets) ? alert.affected_presets : [];
+    if (presets.length > 0) {
+      const pLabel = document.createElement('span');
+      pLabel.className = 'text-xs text-muted';
+      pLabel.textContent = lang === 'en' ? 'Affected presets:' : 'Betroffene Sets:';
+      meta.appendChild(pLabel);
+      presets.forEach((pName) => {
+        const pill = document.createElement('span');
+        pill.className = 'badge badge-outline';
+        pill.textContent = String(pName);
+        meta.appendChild(pill);
+      });
+    }
+    const cfgCount = Number(alert.affected_configs_count || 0);
+    const cfgPill = document.createElement('span');
+    cfgPill.className = 'badge badge-secondary font-mono';
+    cfgPill.textContent = lang === 'en'
+      ? `${cfgCount} active profile(s)`
+      : `${cfgCount} aktive Tracking-Profile`;
+    meta.appendChild(cfgPill);
+
+    const actions = document.createElement('div');
+    actions.className = 'admin-alert-card-actions';
+
+    if (alert.suggested_model_id) {
+      const replaceBtn = document.createElement('button');
+      replaceBtn.type = 'button';
+      replaceBtn.className = 'btn btn-xs btn-primary';
+      replaceBtn.textContent = lang === 'en' ? 'Replace in Presets' : 'In Analyse-Sets ersetzen';
+      replaceBtn.addEventListener('click', () => handleResolveModelAlert(alert.id, 'replace_in_presets', replaceBtn));
+      actions.appendChild(replaceBtn);
+
+      const enableBtn = document.createElement('button');
+      enableBtn.type = 'button';
+      enableBtn.className = 'btn btn-xs btn-outline';
+      enableBtn.textContent = lang === 'en' ? 'Enable Model Only' : 'Modell freigeben';
+      enableBtn.addEventListener('click', () => handleResolveModelAlert(alert.id, 'enable_model_only', enableBtn));
+      actions.appendChild(enableBtn);
+    }
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.className = 'btn btn-xs btn-outline';
+    dismissBtn.textContent = lang === 'en' ? 'Dismiss' : 'Ignorieren';
+    dismissBtn.addEventListener('click', () => handleResolveModelAlert(alert.id, 'dismiss', dismissBtn));
+    actions.appendChild(dismissBtn);
+
+    card.appendChild(head);
+    card.appendChild(transition);
+    card.appendChild(reason);
+    card.appendChild(meta);
+    card.appendChild(actions);
+    list.appendChild(card);
+  });
+}
+
+async function triggerModelWatcherRun() {
+  if (AdminState.isRunningModelWatcher) return;
+  AdminState.isRunningModelWatcher = true;
+  const btn = document.getElementById('btn-run-model-watcher');
+  try {
+    setAdminButtonLoading(btn, true, 'Prüfe Modelle…');
+    const res = await fetch('api/admin_users.php?action=trigger_model_watcher', {
+      method: 'POST',
+      headers: getAdminAuthHeaders(),
+      body: JSON.stringify({})
+    });
+    const json = await res.json();
+    if (!res.ok || json.status === 'error') {
+      showToast(json.message || 'Fehler bei der Modell-Überwachung.', 'error');
+      return;
+    }
+    const d = json.data || {};
+    if (Array.isArray(d.alerts)) {
+      AdminState.modelAlerts = d.alerts;
+      renderModelAlertsBanner();
+      renderModelAlertsPanel();
+    } else {
+      await loadModelLifecycleAlerts();
+    }
+    showToast(d.message || 'Modell-Überwachung abgeschlossen.', d.triggered ? 'success' : 'info');
+  } catch (err) {
+    console.error('triggerModelWatcherRun error:', err);
+    showToast('Netzwerkfehler bei der Modell-Überwachung.', 'error');
+  } finally {
+    AdminState.isRunningModelWatcher = false;
+    setAdminButtonLoading(btn, false);
+  }
+}
+
+async function handleResolveModelAlert(alertId, resolution, triggerBtn = null) {
+  if (!alertId || !resolution) return;
+  try {
+    setAdminButtonLoading(triggerBtn, true, 'Übernehme…');
+    const res = await fetch('api/admin_users.php?action=resolve_model_alert', {
+      method: 'POST',
+      headers: getAdminAuthHeaders(),
+      body: JSON.stringify({ id: Number(alertId), resolution })
+    });
+    const json = await res.json();
+    if (!res.ok || json.status === 'error') {
+      showToast(json.message || 'Aktion konnte nicht ausgeführt werden.', 'error');
+      return;
+    }
+    const d = json.data || {};
+    if (Array.isArray(d.alerts)) {
+      AdminState.modelAlerts = d.alerts;
+      renderModelAlertsBanner();
+      renderModelAlertsPanel();
+    }
+    if (Array.isArray(d.models)) {
+      AdminState.models = d.models;
+      AdminState.loadedTabs.models = true;
+      renderModelsTable(AdminState.models);
+    }
+    if (Array.isArray(d.presets)) {
+      AdminState.presets = d.presets;
+      AdminState.loadedTabs.presets = true;
+      renderPresetsGrid(AdminState.presets);
+    }
+    showToast(d.message || 'Modell-Hinweis aktualisiert.', 'success');
+  } catch (err) {
+    console.error('handleResolveModelAlert error:', err);
+    showToast('Netzwerkfehler beim Aktualisieren des Hinweises.', 'error');
+  } finally {
+    setAdminButtonLoading(triggerBtn, false);
+  }
+}
+
+// -----------------------------------------------------------------------------
 // 9. Universal Module Exports (Node.js Test Runner & Browser Global)
 // -----------------------------------------------------------------------------
 if (typeof window !== 'undefined') {
@@ -2769,7 +3173,12 @@ if (typeof window !== 'undefined') {
     closeProviderImpactModal,
     confirmProviderImpactModal,
     handleSaveOpenRouterProviders,
-    handleResetOpenRouterProviders
+    handleResetOpenRouterProviders,
+    loadModelLifecycleAlerts,
+    renderModelAlertsBanner,
+    renderModelAlertsPanel,
+    triggerModelWatcherRun,
+    handleResolveModelAlert
   };
   window.buildCreditPayload = buildCreditPayload;
 }
@@ -2811,6 +3220,11 @@ if (typeof module !== 'undefined' && module.exports) {
     confirmProviderImpactModal,
     handleSaveOpenRouterProviders,
     handleResetOpenRouterProviders,
+    loadModelLifecycleAlerts,
+    renderModelAlertsBanner,
+    renderModelAlertsPanel,
+    triggerModelWatcherRun,
+    handleResolveModelAlert,
     AdminState
   };
 }

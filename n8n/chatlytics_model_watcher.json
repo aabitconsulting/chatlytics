@@ -1,0 +1,531 @@
+{
+  "name": "Chatlytics Predecessor/Successor & EOL Model Watcher",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "mw-0001-4000-8000-000000000001",
+      "name": "Weekly Schedule Trigger (Mon 07:00 CET)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        220
+      ],
+      "notes": "Runs every Monday at 07:00 Europe/Berlin to check OpenRouter for EOL models and newer successors."
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatlytics-model-watcher",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "mw-0001-4000-8000-000000000002",
+      "name": "Manual Admin Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        440
+      ],
+      "webhookId": "b8c4e190-5f2a-4d3b-9e6c-1a2b3c4d5e6f",
+      "notes": "Triggered on demand from Admin Cockpit ('Nachfolger/EOL jetzt prüfen'). Protected by X-N8N-Secret header."
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first()?.json || {};\nconst headers = item.headers || {};\nconst isWebhook = Boolean(item.headers && (item.body !== undefined || item.webhookUrl));\n\nif (isWebhook) {\n  const expected = ($env && $env.CHATLYTICS_N8N_SECRET) ? String($env.CHATLYTICS_N8N_SECRET).trim() : '';\n  const provided = String(headers['x-n8n-secret'] || headers['X-N8N-Secret'] || headers['x-chatlytics-cron-key'] || '').trim();\n  if (expected && provided !== expected) {\n    throw new Error('Unauthorized webhook invocation: invalid X-N8N-Secret header');\n  }\n}\n\nreturn [{\n  json: {\n    trigger_source: isWebhook ? 'webhook' : 'schedule',\n    requested_by: isWebhook ? String(item.body?.requested_by || 'admin') : 'weekly_cron',\n    started_at: new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "mw-0001-4000-8000-000000000003",
+      "name": "Normalize & Verify Trigger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://chatlytics.de/api/admin_users.php?action=watcher_catalog",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "mw-0001-4000-8000-000000000004",
+      "name": "Fetch Tracked Catalog (Chatlytics PHP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "chatlytics-header-auth",
+          "name": "Chatlytics Backend Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://openrouter.ai/api/v1/models",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "mw-0001-4000-8000-000000000005",
+      "name": "Fetch OpenRouter Live Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        320
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "tjmYBMIQa9Fo3kYL",
+          "name": "OpenRouter - Chatlytics - Chatlytics-dev-1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const triggerMeta = $('Normalize & Verify Trigger').first().json || {};\nconst catalogResp = $('Fetch Tracked Catalog (Chatlytics PHP)').first().json || {};\nconst catalogData = catalogResp.data || catalogResp;\nconst trackedModels = Array.isArray(catalogData.tracked_models) ? catalogData.tracked_models : [];\nconst knownCatalogIds = new Set(\n  (Array.isArray(catalogData.catalog_model_ids) ? catalogData.catalog_model_ids : [])\n    .map(id => String(id || '').trim().toLowerCase())\n    .filter(Boolean)\n);\n\nconst orResp = $input.first()?.json || {};\nconst rawOrModels = Array.isArray(orResp.data) ? orResp.data : [];\n\nconst blockedFragments = [\n  'embedding', 'embed', 'tts', 'whisper', 'dall-e', 'sora', 'imagen',\n  'veo', 'lyria', 'music', 'moderation', 'guard', 'realtime',\n  '-image', 'image-preview', 'flux', 'midjourney', 'audio', 'speech', ':free'\n];\n\nconst liveMap = new Map();\nfor (const m of rawOrModels) {\n  if (!m || typeof m.id !== 'string') continue;\n  const rawId = m.id.trim();\n  if (!rawId || rawId.includes('~')) continue;\n  const baseId = rawId.replace(/:(batch|online)$/i, '');\n  const lower = baseId.toLowerCase();\n  if (!liveMap.has(lower)) {\n    liveMap.set(lower, {\n      id: baseId,\n      name: m.name || baseId,\n      description: String(m.description || ''),\n      created: Number(m.created || 0),\n      expiration_date: m.expiration_date || m.deprecated_at || null,\n      is_deprecated: Boolean(m.deprecated || m.is_deprecated),\n      architecture: m.architecture || {}\n    });\n  }\n}\n\nconst deterministicAlerts = [];\nconst trackedProviders = new Set();\nconst eolRegex = /\\b(deprecated|end[- ]of[- ]life|will be retired|sunset(?:ting)?|discontinued)\\b/i;\n\nfor (const tm of trackedModels) {\n  const id = String(tm.id || '').trim();\n  if (!id) continue;\n  const lower = id.toLowerCase();\n  const provider = String(tm.provider || (id.includes('/') ? id.split('/')[0] : '')).toLowerCase();\n  if (provider) trackedProviders.add(provider);\n  knownCatalogIds.add(lower);\n\n  const live = liveMap.get(lower);\n  if (!live) {\n    deterministicAlerts.push({\n      alert_type: 'model_missing_openrouter',\n      severity: 'critical',\n      current_model_id: id,\n      suggested_model_id: null,\n      suggested_display_name: null,\n      confidence_score: 100,\n      reason_de: `Der Modell-Slug '${id}' ist nicht mehr im Live-Katalog von OpenRouter gelistet (möglicherweise abgeschaltet oder umbenannt).`,\n      reason_en: `Model slug '${id}' is no longer listed in the live OpenRouter catalog (possibly retired or renamed).`,\n      source_url: 'https://openrouter.ai/models'\n    });\n    continue;\n  }\n\n  if (live.is_deprecated || live.expiration_date || eolRegex.test(live.description)) {\n    const expInfo = live.expiration_date ? ` (Ablaufdatum: ${live.expiration_date})` : '';\n    deterministicAlerts.push({\n      alert_type: 'model_eol',\n      severity: 'critical',\n      current_model_id: id,\n      suggested_model_id: null,\n      suggested_display_name: null,\n      confidence_score: 95,\n      reason_de: `OpenRouter meldet einen Deprecation-/EOL-Hinweis für '${id}'${expInfo}.`,\n      reason_en: `OpenRouter metadata flags '${id}' as deprecated or approaching end-of-life${expInfo}.`,\n      source_url: `https://openrouter.ai/${id}`\n    });\n  }\n}\n\n// Collect genuinely new text models from the same provider namespaces\nconst candidatesByProvider = {};\nfor (const [lower, live] of liveMap.entries()) {\n  if (knownCatalogIds.has(lower)) continue;\n  if (!live.id.includes('/')) continue;\n  const prov = live.id.split('/')[0].toLowerCase();\n  if (!trackedProviders.has(prov)) continue;\n  if (blockedFragments.some(frag => lower.includes(frag))) continue;\n\n  const arch = live.architecture || {};\n  const inMods = Array.isArray(arch.input_modalities) ? arch.input_modalities.map(x => String(x).toLowerCase()) : ['text'];\n  const outMods = Array.isArray(arch.output_modalities) ? arch.output_modalities.map(x => String(x).toLowerCase()) : ['text'];\n  if (!inMods.includes('text') || !outMods.includes('text')) continue;\n  if (outMods.includes('image') || outMods.includes('audio') || outMods.includes('video')) continue;\n\n  if (!candidatesByProvider[prov]) candidatesByProvider[prov] = [];\n  candidatesByProvider[prov].push({\n    id: live.id,\n    name: live.name,\n    created: live.created\n  });\n}\n\nlet candidateCount = 0;\nfor (const prov of Object.keys(candidatesByProvider)) {\n  candidatesByProvider[prov].sort((a, b) => (b.created - a.created) || a.id.localeCompare(b.id));\n  candidatesByProvider[prov] = candidatesByProvider[prov].slice(0, 12);\n  candidateCount += candidatesByProvider[prov].length;\n}\n\nreturn [{\n  json: {\n    trigger_source: triggerMeta.trigger_source || 'schedule',\n    tracked_models: trackedModels,\n    deterministic_alerts: deterministicAlerts,\n    candidates_by_provider: candidatesByProvider,\n    live_model_ids: Array.from(liveMap.values()).map(m => ({ id: m.id, name: m.name })),\n    candidate_count: candidateCount,\n    has_candidates: candidateCount > 0 && trackedModels.length > 0\n  }\n}];\n"
+      },
+      "id": "mw-0001-4000-8000-000000000006",
+      "name": "Deterministic EOL & Candidate Diff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        320
+      ],
+      "notes": "Stage 1: Zero-token deterministic check for missing slugs, OpenRouter EOL metadata, and newly added same-provider candidate models."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-candidates",
+              "leftValue": "={{ $json.has_candidates }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "mw-0001-4000-8000-000000000007",
+      "name": "Has New Provider Candidates?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'google/gemini-4-hydrogen:online', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a strict LLM Model Lifecycle & Predecessor/Successor Auditor for Chatlytics.de. Given currently tracked OpenRouter models and newly discovered candidate models from the same providers, identify ONLY genuine direct version/generation successors within the SAME provider and SAME model family/tier (e.g., gpt-6-luna -> gpt-6.5-luna, claude-sonnet-5.5 -> claude-sonnet-6.0, deepseek-v4.1-flash -> deepseek-v4.2-flash). NEVER map across different tiers (e.g. never map a flash/mini model to an opus/pro flagship or vice versa). Also check via web search if any tracked model has an officially announced deprecation/EOL date. Output ONLY valid JSON: {\"alerts\": [{\"alert_type\": \"successor_available\" | \"model_eol\", \"severity\": \"info\" | \"warning\" | \"critical\", \"current_model_id\": \"provider/model\", \"suggested_model_id\": \"provider/new-model or null\", \"suggested_display_name\": \"Provider · Model Name or null\", \"confidence_score\": 75..100, \"reason_de\": \"Kurze deutsche Begründung\", \"reason_en\": \"Short English reason\", \"source_url\": \"https://... or null\"}]}. Omit anything with confidence_score < 75.' }, { role: 'user', content: JSON.stringify({ tracked_models: $json.tracked_models.map(m => ({ id: m.id, provider: m.provider, display_name: m.display_name, presets: m.preset_names })), new_candidates_by_provider: $json.candidates_by_provider }) } ] }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 45000
+        }
+      },
+      "id": "mw-0001-4000-8000-000000000008",
+      "name": "Predecessor/Successor AI Classifier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        200
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "tjmYBMIQa9Fo3kYL",
+          "name": "OpenRouter - Chatlytics - Chatlytics-dev-1"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Stage 2: Runs ONLY when new provider candidates exist. Uses structured JSON output + OpenRouter web search (:online) to map direct family successors and official provider EOL notices."
+    },
+    {
+      "parameters": {
+        "jsCode": "const diffData = $('Deterministic EOL & Candidate Diff').first().json || {};\nconst deterministic = Array.isArray(diffData.deterministic_alerts) ? diffData.deterministic_alerts : [];\nconst liveNameById = new Map(\n  (Array.isArray(diffData.live_model_ids) ? diffData.live_model_ids : [])\n    .map(m => [String(m.id || '').toLowerCase(), m.name || m.id])\n);\nconst trackedIds = new Set(\n  (Array.isArray(diffData.tracked_models) ? diffData.tracked_models : [])\n    .map(m => String(m.id || '').toLowerCase())\n);\n\nlet llmAlerts = [];\nconst inputJson = $input.first()?.json || {};\nif (inputJson.choices && Array.isArray(inputJson.choices) && inputJson.choices[0]?.message?.content) {\n  try {\n    const rawContent = String(inputJson.choices[0].message.content).trim();\n    const cleaned = rawContent.replace(/^```json\\s*/i, '').replace(/```$/i, '').trim();\n    const parsed = JSON.parse(cleaned);\n    if (Array.isArray(parsed.alerts)) {\n      llmAlerts = parsed.alerts;\n    }\n  } catch (_) {\n    llmAlerts = [];\n  }\n}\n\nconst merged = [];\nconst seenKeys = new Set();\n\nconst addAlert = (a) => {\n  if (!a || typeof a !== 'object') return;\n  const currentId = String(a.current_model_id || '').trim();\n  if (!currentId || !trackedIds.has(currentId.toLowerCase())) return;\n\n  const alertType = ['successor_available', 'model_eol', 'model_missing_openrouter'].includes(a.alert_type)\n    ? a.alert_type\n    : 'successor_available';\n  const confidence = Number(a.confidence_score ?? 85);\n  if (alertType === 'successor_available' && confidence < 75) return;\n\n  let suggestedId = a.suggested_model_id ? String(a.suggested_model_id).trim() : null;\n  if (alertType === 'successor_available') {\n    if (!suggestedId || !liveNameById.has(suggestedId.toLowerCase())) return;\n    if (suggestedId.toLowerCase() === currentId.toLowerCase()) return;\n  }\n\n  const key = `${alertType}|${currentId.toLowerCase()}|${(suggestedId || '').toLowerCase()}`;\n  if (seenKeys.has(key)) return;\n  seenKeys.add(key);\n\n  merged.push({\n    alert_type: alertType,\n    severity: ['critical', 'warning', 'info'].includes(a.severity)\n      ? a.severity\n      : (alertType === 'successor_available' ? 'info' : 'critical'),\n    current_model_id: currentId,\n    suggested_model_id: suggestedId,\n    suggested_display_name: a.suggested_display_name || (suggestedId ? (liveNameById.get(suggestedId.toLowerCase()) || suggestedId) : null),\n    confidence_score: Math.max(0, Math.min(100, Math.round(confidence))),\n    reason_de: String(a.reason_de || a.reason_en || ''),\n    reason_en: String(a.reason_en || a.reason_de || ''),\n    source_url: typeof a.source_url === 'string' && /^https?:\\/\\//i.test(a.source_url) ? a.source_url : null\n  });\n};\n\ndeterministic.forEach(addAlert);\nllmAlerts.forEach(addAlert);\n\nreturn [{\n  json: {\n    trigger_source: diffData.trigger_source || 'schedule',\n    alerts: merged,\n    mark_email_notified: true\n  }\n}];\n"
+      },
+      "id": "mw-0001-4000-8000-000000000009",
+      "name": "Merge & Validate Lifecycle Alerts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1940,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chatlytics.de/api/admin_users.php?action=ingest_model_alerts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ alerts: $json.alerts, mark_email_notified: true }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "mw-0001-4000-8000-000000000010",
+      "name": "Ingest Alerts to Chatlytics PHP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2180,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "chatlytics-header-auth",
+          "name": "Chatlytics Backend Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-notify-email",
+              "leftValue": "={{ Boolean($json.data?.should_notify_email ?? $json.should_notify_email) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "mw-0001-4000-8000-000000000011",
+      "name": "New Alerts Require Admin Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first()?.json || {};\nconst payload = resp.data || resp;\nconst newAlerts = Array.isArray(payload.new_alerts) ? payload.new_alerts : [];\nconst adminEmails = Array.isArray(payload.admin_emails) && payload.admin_emails.length > 0\n  ? payload.admin_emails\n  : ['admin@chatlytics.de'];\nconst dashboardUrl = String(payload.dashboard_url || 'https://chatlytics.de/admin.html#models');\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\n\nconst eolCount = newAlerts.filter(a => a.alert_type !== 'successor_available').length;\nconst succCount = newAlerts.filter(a => a.alert_type === 'successor_available').length;\nconst subject = `[Chatlytics Model-Watcher] ${newAlerts.length} neue Modell-Hinweise (${eolCount} EOL / ${succCount} Nachfolger)`;\n\nconst rowsHtml = newAlerts.map(a => {\n  const badge = a.alert_type === 'successor_available' ? 'Nachfolger verfügbar' : 'EOL / Fehlt auf OpenRouter';\n  const arrow = a.suggested_model_id ? ` &rarr; <code>${esc(a.suggested_model_id)}</code>` : '';\n  const presets = Array.isArray(a.affected_presets) && a.affected_presets.length > 0\n    ? `<br><small style=\"color:#475569\">Betroffene Analyse-Sets: ${esc(a.affected_presets.join(', '))} · Aktive Profile: ${Number(a.affected_configs_count || 0)}</small>`\n    : '';\n  return `<li style=\"margin-bottom:14px;padding:12px;border:1px solid #e2e8f0;border-radius:8px;\"><strong>[${esc(badge)}]</strong> <code>${esc(a.current_model_id)}</code>${arrow} <span style=\"color:#64748b\">(${Number(a.confidence_score || 0)}%)</span><br><span style=\"color:#0f172a\">${esc(a.reason_de || a.reason_en || '')}</span>${presets}</li>`;\n}).join('');\n\nconst htmlBody = `\n<div style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:640px;margin:0 auto;color:#0f172a;\">\n  <h2 style=\"margin-bottom:8px;\">Chatlytics Modell-Überwachung</h2>\n  <p style=\"color:#475569;margin-top:0;\">Der automatische Predecessor/Successor-Watcher hat <strong>${newAlerts.length} neue(n) Hinweis(e)</strong> für Ihre überwachten OpenRouter-Modelle gefunden:</p>\n  <ul style=\"list-style:none;padding:0;margin:16px 0;\">${rowsHtml}</ul>\n  <p style=\"margin-top:20px;\"><a href=\"${esc(dashboardUrl)}\" style=\"display:inline-block;padding:10px 18px;background:#0f172a;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;\">Im Admin-Cockpit prüfen &amp; anwenden &rarr;</a></p>\n  <p style=\"font-size:12px;color:#64748b;margin-top:24px;\">Keine automatische Umstellung durchgeführt. Sie können im Admin-Cockpit per 1-Klick entscheiden, ob das Modell in Analyse-Sets ersetzt, freigegeben oder ignoriert werden soll.</p>\n</div>`;\n\nconst textLines = newAlerts.map(a => `- [${a.alert_type}] ${a.current_model_id}${a.suggested_model_id ? ' -> ' + a.suggested_model_id : ''} (${a.confidence_score}%): ${a.reason_de || a.reason_en || ''}`);\nconst textBody = `Chatlytics Model-Watcher: ${newAlerts.length} neue Modell-Hinweise\\n\\n${textLines.join('\\n')}\\n\\nAdmin-Cockpit: ${dashboardUrl}`;\n\nreturn [{\n  json: {\n    to_email: adminEmails.join(', '),\n    subject,\n    html_body: htmlBody,\n    text_body: textBody,\n    ingest_result: payload\n  }\n}];\n"
+      },
+      "id": "mw-0001-4000-8000-000000000012",
+      "name": "Format Admin Email Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "alerts@chatlytics.de",
+        "toEmail": "={{ $json.to_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "both",
+        "text": "={{ $json.text_body }}",
+        "html": "={{ $json.html_body }}",
+        "options": {}
+      },
+      "id": "mw-0001-4000-8000-000000000013",
+      "name": "Send Admin Notification Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2900,
+        200
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "chatlytics-smtp-alerts",
+          "name": "Chatlytics Alerts SMTP (or swap to Resend/Gmail)"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Connect your SMTP, Resend, or Gmail credential in n8n. Runs ONLY when Chatlytics PHP confirms new unseen alerts (should_notify_email === true)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const triggerMeta = $('Normalize & Verify Trigger').first().json || {};\nconst ingestResp = $('Ingest Alerts to Chatlytics PHP').first().json || {};\nconst payload = ingestResp.data || ingestResp;\nreturn [{\n  json: {\n    status: 'ok',\n    trigger_source: triggerMeta.trigger_source || 'schedule',\n    ingested_count: Number(payload.ingested_count || 0),\n    new_count: Number(payload.new_count || 0),\n    open_alerts_count: Number(payload.open_alerts_count || 0),\n    should_notify_email: Boolean(payload.should_notify_email)\n  }\n}];\n"
+      },
+      "id": "mw-0001-4000-8000-000000000014",
+      "name": "Build Watcher Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3140,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "mw-0001-4000-8000-000000000015",
+      "name": "Respond to Manual Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3380,
+        320
+      ]
+    }
+  ],
+  "connections": {
+    "Weekly Schedule Trigger (Mon 07:00 CET)": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Verify Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Admin Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Verify Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Verify Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Tracked Catalog (Chatlytics PHP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Tracked Catalog (Chatlytics PHP)": {
+      "main": [
+        [
+          {
+            "node": "Fetch OpenRouter Live Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch OpenRouter Live Models": {
+      "main": [
+        [
+          {
+            "node": "Deterministic EOL & Candidate Diff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deterministic EOL & Candidate Diff": {
+      "main": [
+        [
+          {
+            "node": "Has New Provider Candidates?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Provider Candidates?": {
+      "main": [
+        [
+          {
+            "node": "Predecessor/Successor AI Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge & Validate Lifecycle Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Predecessor/Successor AI Classifier": {
+      "main": [
+        [
+          {
+            "node": "Merge & Validate Lifecycle Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge & Validate Lifecycle Alerts": {
+      "main": [
+        [
+          {
+            "node": "Ingest Alerts to Chatlytics PHP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ingest Alerts to Chatlytics PHP": {
+      "main": [
+        [
+          {
+            "node": "New Alerts Require Admin Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Alerts Require Admin Email?": {
+      "main": [
+        [
+          {
+            "node": "Format Admin Email Digest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Watcher Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Admin Email Digest": {
+      "main": [
+        [
+          {
+            "node": "Send Admin Notification Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Admin Notification Email": {
+      "main": [
+        [
+          {
+            "node": "Build Watcher Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Watcher Summary": {
+      "main": [
+        [
+          {
+            "node": "Respond to Manual Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  },
+  "versionId": "chatlytics-model-watcher-v1",
+  "meta": {
+    "instanceId": "chatlytics-prod-v1"
+  },
+  "tags": [
+    {
+      "name": "chatlytics"
+    },
+    {
+      "name": "model-watcher"
+    }
+  ]
+}

@@ -850,7 +850,7 @@
           <span class="form-label" data-i18n="config.presets_label">Analyse-Set wählen</span>
           <span id="cfg-preset-mode-badge" class="badge badge-secondary" data-i18n="config.presets_badge_tier">Kuratiertes Analyse-Set</span>
           <p id="cfg-presets-hint" class="form-hint" data-i18n="config.presets_hint">Kuratiertes KI-Modell- und Live-Websuche-Profil für konsistente Wettbewerbs-Benchmarks.</p>
-          <input type="hidden" id="cfg-preset-id" name="preset_id" value="dach_core_baseline">
+          <input type="hidden" id="cfg-preset-id" name="preset_id" value="default_visibility_tracking">
           <div id="cfg-presets-grid" class="preset-selector-grid" role="radiogroup" aria-label="Analyse-Sets"></div>
           <div id="cfg-custom-locked-banner" class="cfg-custom-locked-banner hidden" role="note" data-i18n="config.custom_models_locked_hint">
             Freie Einzelmodell- &amp; Live-Websuche-Auswahl ist ab dem Tarif Growth verfügbar. Ihr aktueller Tarif nutzt vordefinierte Analyse-Sets.
@@ -864,60 +864,40 @@
           <div id="cfg-llms-list" class="llm-selector-grid">
             <label class="llm-option-card">
               <span class="llm-option-main">
+                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="google/gemini-4-hydrogen" checked>
+                <span>
+                  <span class="llm-option-title">Google · Gemini 4 Hydrogen</span>
+                  <span class="llm-option-meta">google/gemini-4-hydrogen · Live-Websuche</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="llm-option-card">
+              <span class="llm-option-main">
                 <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="openai/gpt-6-luna" checked>
                 <span>
                   <span class="llm-option-title">OpenAI · GPT-6 Luna</span>
-                  <span class="llm-option-meta">openai/gpt-6-luna · OpenRouter Batch-API</span>
+                  <span class="llm-option-meta">openai/gpt-6-luna · Live-Websuche</span>
                 </span>
               </span>
             </label>
 
             <label class="llm-option-card">
               <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="google/gemini-3.5-flash" checked>
+                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="openai/gpt-6.1-terra">
                 <span>
-                  <span class="llm-option-title">Google · Gemini 3.5 Flash</span>
-                  <span class="llm-option-meta">google/gemini-3.5-flash · OpenRouter Batch-API</span>
+                  <span class="llm-option-title">OpenAI · GPT-6.1 Terra</span>
+                  <span class="llm-option-meta">openai/gpt-6.1-terra · Live-Websuche</span>
                 </span>
               </span>
             </label>
 
             <label class="llm-option-card">
               <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistralai/mistral-medium-3-5" checked>
+                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="anthropic/claude-sonnet-5.5">
                 <span>
-                  <span class="llm-option-title">Mistral · Medium 3.5</span>
-                  <span class="llm-option-meta">mistralai/mistral-medium-3-5 · OpenRouter Batch-API</span>
-                </span>
-              </span>
-            </label>
-
-            <label class="llm-option-card">
-              <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="mistralai/mistral-large-4-0">
-                <span>
-                  <span class="llm-option-title">Mistral · Large 4.0</span>
-                  <span class="llm-option-meta">mistralai/mistral-large-4-0 · OpenRouter Standard-Lauf</span>
-                </span>
-              </span>
-            </label>
-
-            <label class="llm-option-card">
-              <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="z-ai/glm-5.3" checked>
-                <span>
-                  <span class="llm-option-title">Z.ai · GLM 5.3</span>
-                  <span class="llm-option-meta">z-ai/glm-5.3 · OpenRouter Batch-API</span>
-                </span>
-              </span>
-            </label>
-
-            <label class="llm-option-card">
-              <span class="llm-option-main">
-                <input type="checkbox" class="cfg-llm-checkbox" name="target_llms" value="z-ai/glm-5.3-flash">
-                <span>
-                  <span class="llm-option-title">Z.ai · GLM 5.3 Flash</span>
-                  <span class="llm-option-meta">z-ai/glm-5.3-flash · OpenRouter Batch-API</span>
+                  <span class="llm-option-title">Anthropic · Claude Sonnet 5.5</span>
+                  <span class="llm-option-meta">anthropic/claude-sonnet-5.5 · Live-Websuche</span>
                 </span>
               </span>
             </label>

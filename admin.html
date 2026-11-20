@@ -106,13 +106,28 @@
       </div>
     </section>
 
+    <!-- Model Lifecycle Alerts Banner (hidden when 0 open alerts) -->
+    <section id="admin-model-alerts-banner" class="admin-alerts-banner" role="region" aria-live="polite" hidden>
+      <div class="admin-alerts-banner-main">
+        <span class="admin-alerts-banner-dot" aria-hidden="true"></span>
+        <div class="admin-alerts-banner-copy">
+          <strong id="admin-alerts-banner-title" data-i18n="admin.alerts_banner_title">Modell-Hinweise verfügbar</strong>
+          <span id="admin-alerts-banner-summary" class="text-muted"></span>
+        </div>
+      </div>
+      <button type="button" id="btn-open-model-alerts" class="btn btn-sm btn-outline" data-i18n="admin.alerts_banner_cta">
+        Hinweise prüfen →
+      </button>
+    </section>
+
     <!-- Admin-Cockpit Navigation Tabs -->
     <nav class="admin-tabs-bar" role="tablist" aria-label="Admin-Cockpit Bereiche">
       <button type="button" id="admin-tab-users" class="admin-tab-btn is-active" role="tab" aria-selected="true" data-tab="users" data-i18n="admin.tab_users">
         Mandanten &amp; Telemetrie
       </button>
-      <button type="button" id="admin-tab-models" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="models" data-i18n="admin.tab_models">
-        KI-Modelle &amp; Live-Engine Sync
+      <button type="button" id="admin-tab-models" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="models">
+        <span data-i18n="admin.tab_models">KI-Modelle &amp; Live-Engine Sync</span>
+        <span id="admin-tab-models-alert-badge" class="admin-tab-badge" hidden>0</span>
       </button>
       <button type="button" id="admin-tab-providers" class="admin-tab-btn" role="tab" aria-selected="false" data-tab="providers" data-i18n="admin.tab_providers">
         OpenRouter Provider
@@ -214,6 +229,9 @@
             <span id="n8n-sync-status-badge" class="badge badge-secondary" data-i18n="admin.sync_status_idle">Status: Bereit</span>
           </div>
           <div class="admin-toolbar-actions">
+            <button type="button" id="btn-run-model-watcher" class="btn btn-outline btn-sm" data-i18n="admin.btn_run_watcher">
+              Nachfolger/EOL jetzt prüfen
+            </button>
             <button type="button" id="btn-sync-n8n-models" class="btn btn-primary btn-sm" data-i18n="admin.btn_sync_n8n">
               Modelle live aus Worker-Engine abrufen
             </button>
@@ -222,6 +240,19 @@
             </button>
           </div>
         </div>
+
+        <section id="admin-model-alerts-panel" class="admin-model-alerts-panel" aria-live="polite" hidden>
+          <div class="admin-model-alerts-header">
+            <div>
+              <h3 class="admin-model-alerts-title" data-i18n="admin.alerts_panel_title">Nachfolger- &amp; End-of-Life-Hinweise</h3>
+              <p class="admin-model-alerts-desc" data-i18n="admin.alerts_panel_desc">
+                Automatisch erkannte Nachfolgemodelle und EOL-Meldungen. Keine stille Umstellung — Sie entscheiden per 1-Klick, ob Analyse-Sets aktualisiert werden.
+              </p>
+            </div>
+            <span id="admin-model-alerts-count" class="badge badge-warning font-mono">0 offen</span>
+          </div>
+          <div id="admin-model-alerts-list" class="admin-model-alerts-list"></div>
+        </section>
 
         <div id="provider-credentials-grid" class="provider-credentials-grid" aria-live="polite"></div>
 
@@ -626,7 +657,7 @@
         <div class="admin-form-grid-2">
           <div class="form-group">
             <label for="preset-id" class="form-label">Slug / ID</label>
-            <input type="text" id="preset-id" class="form-input font-mono" placeholder="z.B. dach_core_baseline" required>
+            <input type="text" id="preset-id" class="form-input font-mono" placeholder="z.B. default_visibility_tracking" required>
           </div>
           <div class="form-group">
             <label for="preset-sort-order" class="form-label">Sortierung</label>
@@ -716,6 +747,7 @@
   <script type="module" src="assets/js/i18n.js"></script>
   <script type="module" src="assets/js/api-client.js"></script>
   <script type="module" src="assets/js/auth.js"></script>
+  <script type="module" src="assets/js/markdown.js"></script>
   <script defer src="assets/js/admin.js"></script>
 </body>
 </html>

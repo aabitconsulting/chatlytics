@@ -126,74 +126,105 @@ export function getScheduleLabel(interval) {
 }
 
 export const LLM_CATALOG = [
+  { id: 'google/gemini-4-hydrogen', provider: 'google', model: 'gemini-4-hydrogen', label: 'Google · Gemini 4 Hydrogen', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
   { id: 'openai/gpt-6-luna', provider: 'openai', model: 'gpt-6-luna', label: 'OpenAI · GPT-6 Luna', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
-  { id: 'google/gemini-3.5-flash', provider: 'google', model: 'gemini-3.5-flash', label: 'Google · Gemini 3.5 Flash', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
-  { id: 'mistralai/mistral-medium-3-5', provider: 'mistralai', model: 'mistral-medium-3-5', label: 'Mistral · Medium 3.5', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'openai/gpt-6.1-terra', provider: 'openai', model: 'gpt-6.1-terra', label: 'OpenAI · GPT-6.1 Terra', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'anthropic/claude-sonnet-5.5', provider: 'anthropic', model: 'claude-sonnet-5.5', label: 'Anthropic · Claude Sonnet 5.5', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'google/gemini-4-neon', provider: 'google', model: 'gemini-4-neon', label: 'Google · Gemini 4 Neon', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'openai/gpt-6.2-sol', provider: 'openai', model: 'gpt-6.2-sol', label: 'OpenAI · GPT-6.2 Sol', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'anthropic/claude-opus-5.5', provider: 'anthropic', model: 'claude-opus-5.5', label: 'Anthropic · Claude Opus 5.5', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
   { id: 'mistralai/mistral-large-4-0', provider: 'mistralai', model: 'mistral-large-4-0', label: 'Mistral · Large 4.0', euHosted: false, defaultChecked: false, supportsBatchApi: false, supportsTools: true, executionStrategy: 'regular' },
-  { id: 'z-ai/glm-5.3', provider: 'z-ai', model: 'glm-5.3', label: 'Z.ai · GLM 5.3', euHosted: false, defaultChecked: true, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
-  { id: 'z-ai/glm-5.3-flash', provider: 'z-ai', model: 'glm-5.3-flash', label: 'Z.ai · GLM 5.3 Flash', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' }
+  { id: 'mistralai/mistral-medium-3-5', provider: 'mistralai', model: 'mistral-medium-3-5', label: 'Mistral · Medium 3.5', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'meta/muse-spark-1.3', provider: 'meta', model: 'muse-spark-1.3', label: 'Meta · Muse Spark 1.3', euHosted: false, defaultChecked: false, supportsBatchApi: false, supportsTools: true, executionStrategy: 'regular' },
+  { id: 'meta/muse-ember', provider: 'meta', model: 'muse-ember', label: 'Meta · Muse Ember', euHosted: false, defaultChecked: false, supportsBatchApi: false, supportsTools: true, executionStrategy: 'regular' },
+  { id: 'x-ai/grok-4.7', provider: 'x-ai', model: 'grok-4.7', label: 'xAI · Grok 4.7', euHosted: false, defaultChecked: false, supportsBatchApi: false, supportsTools: true, executionStrategy: 'regular' },
+  { id: 'deepseek/deepseek-v4.1-flash', provider: 'deepseek', model: 'deepseek-v4.1-flash', label: 'DeepSeek · V4.1 Flash', euHosted: false, defaultChecked: false, supportsBatchApi: false, supportsTools: true, executionStrategy: 'regular' },
+  { id: 'minimax/minimax-m3.1-flash', provider: 'minimax', model: 'minimax-m3.1-flash', label: 'MiniMax · M3.1 Flash', euHosted: false, defaultChecked: false, supportsBatchApi: false, supportsTools: true, executionStrategy: 'regular' },
+  { id: 'z-ai/glm-5.3-flash', provider: 'z-ai', model: 'glm-5.3-flash', label: 'Z.ai · GLM 5.3 Flash', euHosted: false, defaultChecked: false, supportsBatchApi: true, supportsTools: true, executionStrategy: 'batch_api' },
+  { id: 'qwen/qwen-3.8-flash', provider: 'qwen', model: 'qwen-3.8-flash', label: 'Qwen · 3.8 Flash', euHosted: false, defaultChecked: false, supportsBatchApi: false, supportsTools: true, executionStrategy: 'regular' }
+];
+
+const MODELS_360_SET = [
+  'google/gemini-4-hydrogen',
+  'google/gemini-4-neon',
+  'openai/gpt-6-luna',
+  'openai/gpt-6.1-terra',
+  'openai/gpt-6.2-sol',
+  'anthropic/claude-sonnet-5.5',
+  'anthropic/claude-opus-5.5',
+  'mistralai/mistral-large-4-0',
+  'mistralai/mistral-medium-3-5',
+  'meta/muse-spark-1.3',
+  'meta/muse-ember',
+  'x-ai/grok-4.7'
 ];
 
 export const DEFAULT_PRESETS = [
   {
-    id: 'dach_core_baseline',
-    name_de: 'Basis-Radar (Live-Suche)',
-    name_en: 'Core Radar (Live Search)',
-    description_de: 'Direktvergleich über OpenAI GPT-6 Luna und Google Gemini 3.5 Flash via OpenRouter inkl. Live-Websuche & Quellenzitaten.',
-    description_en: 'Head-to-head benchmark across OpenAI GPT-6 Luna and Google Gemini 3.5 Flash via OpenRouter with live web search & citations.',
-    badge_de: 'Standard',
-    badge_en: 'Default',
-    target_llms: ['openai/gpt-6-luna', 'google/gemini-3.5-flash'],
+    id: 'default_visibility_tracking',
+    name_de: 'Default Visibility Tracking',
+    name_en: 'Default Visibility Tracking',
+    description_de: 'Kern-Benchmark über Google Gemini 4 Hydrogen und OpenAI GPT-6 Luna inkl. Live-Websuche & Quellenzitaten.',
+    description_en: 'Core visibility benchmark across Google Gemini 4 Hydrogen and OpenAI GPT-6 Luna with live web search & citations.',
+    badge_de: 'Standard · 2 Modelle',
+    badge_en: 'Default · 2 Models',
+    target_llms: ['google/gemini-4-hydrogen', 'openai/gpt-6-luna'],
     search_enabled: true,
     allowed_tiers: ['free', 'starter', 'growth', 'enterprise_managed'],
     is_default: true,
     is_active: true
   },
   {
-    id: 'parametric_brand_memory',
-    name_de: 'Trainingswissen-Radar (Batch-API)',
-    name_en: 'Pre-Trained Knowledge Radar (Batch API)',
-    description_de: 'Prüft das reine Trainingswissen über OpenAI, Google Gemini und Mistral via OpenRouter Batch-API ohne Live-Websuche.',
-    description_en: 'Evaluates pure pre-trained knowledge memory across OpenAI, Google Gemini, and Mistral via OpenRouter Batch API without live web search.',
-    badge_de: 'Starter & höher',
-    badge_en: 'Starter+',
-    target_llms: ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5'],
-    search_enabled: false,
-    allowed_tiers: ['starter', 'growth', 'enterprise_managed'],
-    is_default: false,
-    is_active: true
-  },
-  {
-    id: 'eu_sovereign_dsgvo',
-    name_de: 'Europäisches Modell-Radar',
-    name_en: 'European Model Radar',
-    description_de: 'Modell-Mix aus Mistral Medium 3.5, Mistral Large 4.0 und Z.ai GLM 5.3 über das OpenRouter-Gateway.',
-    description_en: 'Balanced comparison across Mistral Medium 3.5, Mistral Large 4.0, and Z.ai GLM 5.3 via OpenRouter.',
-    badge_de: 'EU & GLM',
-    badge_en: 'EU & GLM',
-    target_llms: ['mistralai/mistral-medium-3-5', 'mistralai/mistral-large-4-0', 'z-ai/glm-5.3'],
-    search_enabled: false,
-    allowed_tiers: ['starter', 'growth', 'enterprise_managed'],
-    is_default: false,
-    is_active: true
-  },
-  {
-    id: 'executive_full_spectrum',
-    name_de: '360°-Radar (Alle Kernmodelle + Suche)',
-    name_en: '360° Radar (All Core Models + Search)',
-    description_de: 'Umfassende Multi-LLM-Abdeckung über OpenAI, Google Gemini, Mistral und Z.ai GLM inkl. Live-Websuche.',
-    description_en: 'Complete multi-LLM coverage combining OpenAI, Google Gemini, Mistral, and Z.ai GLM with live web search.',
-    badge_de: 'Vollabdeckung',
-    badge_en: 'Full Coverage',
-    target_llms: ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-medium-3-5', 'z-ai/glm-5.3'],
+    id: 'advanced_visibility_tracking',
+    name_de: 'Advanced Visibility Tracking',
+    name_en: 'Advanced Visibility Tracking',
+    description_de: 'Erweitertes Sichtbarkeits-Tracking über Google Gemini 4 Hydrogen, OpenAI GPT-6 Luna, GPT-6.1 Terra und Anthropic Claude Sonnet 5.5 inkl. Live-Websuche.',
+    description_en: 'Extended visibility tracking across Google Gemini 4 Hydrogen, OpenAI GPT-6 Luna, GPT-6.1 Terra, and Anthropic Claude Sonnet 5.5 with live web search.',
+    badge_de: 'Starter+ · 4 Modelle',
+    badge_en: 'Starter+ · 4 Models',
+    target_llms: ['google/gemini-4-hydrogen', 'openai/gpt-6-luna', 'openai/gpt-6.1-terra', 'anthropic/claude-sonnet-5.5'],
     search_enabled: true,
     allowed_tiers: ['starter', 'growth', 'enterprise_managed'],
+    is_default: false,
+    is_active: true
+  },
+  {
+    id: '360_visibility_tracking',
+    name_de: '360 Visibility Tracking',
+    name_en: '360 Visibility Tracking',
+    description_de: 'Umfassendes 12-Modell-Panel über Google Gemini, OpenAI GPT-6, Anthropic Claude, Mistral, Meta Muse und xAI Grok 4.7 inkl. Live-Websuche.',
+    description_en: 'Comprehensive 12-model panel covering Google Gemini, OpenAI GPT-6, Anthropic Claude, Mistral, Meta Muse, and xAI Grok 4.7 with live web search.',
+    badge_de: '360° · 12 Modelle',
+    badge_en: '360° · 12 Models',
+    target_llms: MODELS_360_SET.slice(),
+    search_enabled: true,
+    allowed_tiers: ['growth', 'enterprise_managed'],
+    is_default: false,
+    is_active: true
+  },
+  {
+    id: 'global_visibility_tracking',
+    name_de: 'Global Visibility Tracking',
+    name_en: 'Global Visibility Tracking',
+    description_de: 'Vollständiges 16-Modell-Weltpanel: alle 12 Modelle aus 360 Visibility Tracking plus DeepSeek V4.1 Flash, MiniMax M3.1 Flash, GLM 5.3 Flash und Qwen 3.8 Flash inkl. Live-Websuche.',
+    description_en: 'Complete 16-model global panel: all 12 models from 360 Visibility Tracking plus DeepSeek V4.1 Flash, MiniMax M3.1 Flash, GLM 5.3 Flash, and Qwen 3.8 Flash with live web search.',
+    badge_de: 'Global · 16 Modelle',
+    badge_en: 'Global · 16 Models',
+    target_llms: [
+      ...MODELS_360_SET,
+      'deepseek/deepseek-v4.1-flash',
+      'minimax/minimax-m3.1-flash',
+      'z-ai/glm-5.3-flash',
+      'qwen/qwen-3.8-flash'
+    ],
+    search_enabled: true,
+    allowed_tiers: ['growth', 'enterprise_managed'],
     is_default: false,
     is_active: true
   }
 ];
 
-const DEFAULT_FALLBACK_LLMS = ['openai/gpt-6-luna', 'google/gemini-3.5-flash'];
+const DEFAULT_FALLBACK_LLMS = ['google/gemini-4-hydrogen', 'openai/gpt-6-luna'];
 
 function parseConfigArray(val) {
   if (Array.isArray(val)) return val;
@@ -233,9 +264,14 @@ export function mapSavedTokenToCatalogId(token) {
   const clean = String(token || '').trim().toLowerCase();
   if (!clean) return '';
   if (clean === 'openai') return 'openai/gpt-6-luna';
-  if (clean === 'gemini' || clean === 'google' || clean === 'gemini/models/gemini-3.5-flash' || clean === 'models/gemini-3.5-flash') {
+  if (clean === 'gemini' || clean === 'google') {
+    return 'google/gemini-4-hydrogen';
+  }
+  if (clean === 'gemini/models/gemini-3.5-flash' || clean === 'models/gemini-3.5-flash') {
     return 'google/gemini-3.5-flash';
   }
+  if (clean.startsWith('muse-')) return 'meta/' + clean;
+  if (clean.startsWith('minimax-')) return 'minimax/' + clean;
   if (clean.startsWith('gemini/models/')) return 'google/' + clean.slice(14);
   if (clean.startsWith('gemini/')) return 'google/' + clean.slice(7);
   if (clean === 'mistral' || clean === 'mistral/mistral-medium-latest' || clean === 'mistral-medium-latest') {
@@ -524,8 +560,10 @@ export class ConfigManager {
         allow_custom_models: tier === 'growth' || tier === 'enterprise_managed',
         allowed_intervals: tier === 'free' ? ['every_120m'] : ['every_120m', 'every_60m', 'every_30m', 'every_15m'],
         allowed_preset_ids: tier === 'free'
-          ? ['dach_core_baseline']
-          : ['dach_core_baseline', 'parametric_brand_memory', 'eu_sovereign_dsgvo', 'executive_full_spectrum']
+          ? ['default_visibility_tracking']
+          : (tier === 'starter'
+            ? ['default_visibility_tracking', 'advanced_visibility_tracking']
+            : ['default_visibility_tracking', 'advanced_visibility_tracking', '360_visibility_tracking', 'global_visibility_tracking'])
       };
     };
 

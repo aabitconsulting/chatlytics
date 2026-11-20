@@ -15,15 +15,24 @@ declare(strict_types=1);
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/db.php';
 
-// Enforce Admin Role Authorization Guard
-$adminUser = requireAdmin();
-
 $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $requestData = getRequestData();
 $action = (string)($_GET['action'] ?? $requestData['action'] ?? '');
 
 if ($action === '') {
     $action = ($requestMethod === 'GET') ? 'list' : 'adjust_credits';
+}
+
+// Machine-to-machine n8n Model Watcher endpoints accept constant-time X-N8N-Secret OR Admin Bearer
+$watcherServiceActions = ['watcher_catalog', 'ingest_model_alerts'];
+$adminUser = null;
+if (in_array($action, $watcherServiceActions, true)) {
+    if (!verifyAdminWatcherSecret()) {
+        $adminUser = requireAdmin();
+    }
+} else {
+    // Enforce Admin Role Authorization Guard
+    $adminUser = requireAdmin();
 }
 
 switch ($action) {
@@ -106,6 +115,26 @@ switch ($action) {
 
     case 'save_plan':
         handleSavePlan($requestData);
+        break;
+
+    case 'watcher_catalog':
+        handleWatcherCatalog();
+        break;
+
+    case 'ingest_model_alerts':
+        handleIngestModelAlerts($requestData);
+        break;
+
+    case 'list_model_alerts':
+        handleListModelAlerts();
+        break;
+
+    case 'trigger_model_watcher':
+        handleTriggerModelWatcher($adminUser);
+        break;
+
+    case 'resolve_model_alert':
+        handleResolveModelAlert($requestData);
         break;
 
     default:
@@ -438,7 +467,7 @@ function handleSeedDemoData(): void {
                     ['name' => 'Kenjo', 'domain' => 'kenjo.io']
                 ],
                 'market_region'     => 'DACH',
-                'target_llms'       => ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-large-4-0'],
+                'target_llms'       => ['google/gemini-4-hydrogen', 'openai/gpt-6-luna', 'openai/gpt-6.1-terra', 'anthropic/claude-sonnet-5.5'],
                 'schedule_interval' => 'every_60m',
                 'datasets_per_day'  => 24,
                 'search_enabled'    => 1,
@@ -464,7 +493,7 @@ function handleSeedDemoData(): void {
                     ['name' => 'ARIS', 'domain' => 'softwareag.com']
                 ],
                 'market_region'     => 'DACH',
-                'target_llms'       => ['openai/gpt-6-luna', 'google/gemini-3.5-flash', 'mistralai/mistral-large-4-0'],
+                'target_llms'       => ['google/gemini-4-hydrogen', 'openai/gpt-6-luna', 'mistralai/mistral-large-4-0'],
                 'schedule_interval' => 'every_15m',
                 'datasets_per_day'  => 96,
                 'search_enabled'    => 1,
@@ -490,7 +519,7 @@ function handleSeedDemoData(): void {
                     ['name' => 'NeuroFlash', 'domain' => 'neuroflash.com']
                 ],
                 'market_region'     => 'DACH',
-                'target_llms'       => ['openai/gpt-6-luna', 'google/gemini-3.5-flash'],
+                'target_llms'       => ['google/gemini-4-hydrogen', 'openai/gpt-6-luna'],
                 'schedule_interval' => 'every_120m',
                 'datasets_per_day'  => 12,
                 'search_enabled'    => 1,
@@ -1969,7 +1998,7 @@ function handleSavePreset(array $data): void
         'target_llms'    => $normalizedLlms,
         'search_enabled' => !empty($data['search_enabled']),
         'allowed_tiers'  => $allowedTiers,
-        'is_default'     => !empty($data['is_default']) || $rawId === 'dach_core_baseline',
+        'is_default'     => !empty($data['is_default']) || $rawId === 'default_visibility_tracking',
         'is_active'      => !isset($data['is_active']) || !empty($data['is_active']),
         'sort_order'     => (int)($data['sort_order'] ?? 100),
     ]);
@@ -2017,7 +2046,7 @@ function handleDeletePreset(array $data): void
         jsonError("Model Preset '{$id}' not found.", 404);
     }
 
-    if (!empty($preset['is_default']) || $id === 'dach_core_baseline') {
+    if (!empty($preset['is_default']) || $id === 'default_visibility_tracking') {
         jsonError("The default Model Preset cannot be deleted.", 422);
     }
 
@@ -2142,3 +2171,279 @@ function handleSavePlan(array $data): void
         'message' => "Plan '{$tier}' saved.",
     ]);
 }
+
+/**
+ * Verifies the configured n8n shared secret via constant-time comparison for Model Watcher callbacks.
+ */
+function verifyAdminWatcherSecret(): bool
+{
+    $header = $_SERVER['HTTP_X_N8N_SECRET']
+        ?? $_SERVER['HTTP_X_CHATLYTICS_CRON_KEY']
+        ?? null;
+    if (!is_string($header) || trim($header) === '') {
+        return false;
+    }
+    $clean = trim($header);
+    $cfg = getConfig();
+    $expected = trim((string)($cfg['n8n']['shared_secret'] ?? ''));
+    if ($expected !== '' && hash_equals($expected, $clean)) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Returns tracked models, relevant providers, and active preset/config mappings for the n8n Model Watcher.
+ */
+function handleWatcherCatalog(): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+    $snapshot = getWatcherCatalogSnapshot($db);
+    jsonResponse($snapshot);
+}
+
+/**
+ * Ingests successor/EOL findings from the n8n Model Watcher, deduplicating by alert_key
+ * and returning `should_notify_email` so n8n sends Admin emails strictly for unseen findings.
+ */
+function handleIngestModelAlerts(array $data): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+
+    $rawAlerts = $data['alerts'] ?? [];
+    if (!is_array($rawAlerts)) {
+        jsonError("Field 'alerts' must be an array.", 422);
+    }
+
+    $processed = [];
+    $newAlerts = [];
+    $markNotified = !array_key_exists('mark_email_notified', $data) || !empty($data['mark_email_notified']);
+    $nowSql = gmdate('Y-m-d H:i:s');
+
+    foreach ($rawAlerts as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $currentModelId = trim((string)($entry['current_model_id'] ?? ''));
+        if ($currentModelId === '') {
+            continue;
+        }
+        $res = upsertModelLifecycleAlert($db, $entry);
+        $processed[] = $res['alert'];
+        if ($res['is_new']) {
+            if ($markNotified && !empty($res['alert']['id'])) {
+                $markStmt = $db->prepare("UPDATE model_lifecycle_alerts SET email_sent_at = :ts WHERE id = :id");
+                $markStmt->execute([':ts' => $nowSql, ':id' => (int)$res['alert']['id']]);
+                $res['alert']['email_sent_at'] = $nowSql;
+            }
+            $newAlerts[] = $res['alert'];
+        }
+    }
+
+    $adminEmails = [];
+    try {
+        $adminEmails = $db->query("SELECT email FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $adminEmails = array_values(array_filter(array_map('trim', $adminEmails)));
+    } catch (Throwable $e) {
+        $adminEmails = [];
+    }
+
+    $openAlerts = listModelLifecycleAlerts($db, false);
+    $cfg = getConfig();
+    $baseUrl = rtrim((string)($cfg['app']['base_url'] ?? 'https://chatlytics.de'), '/');
+
+    jsonResponse([
+        'success'             => true,
+        'ingested_count'      => count($processed),
+        'new_count'           => count($newAlerts),
+        'new_alerts'          => $newAlerts,
+        'open_alerts_count'   => count($openAlerts),
+        'should_notify_email' => count($newAlerts) > 0,
+        'admin_emails'        => $adminEmails,
+        'dashboard_url'       => $baseUrl . '/admin.html#models',
+    ]);
+}
+
+/**
+ * Lists model lifecycle alerts for the Admin Cockpit banner and KI-Modelle panel.
+ */
+function handleListModelAlerts(): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+
+    $includeResolved = !empty($_GET['include_resolved']) && $_GET['include_resolved'] !== '0';
+    $alerts = listModelLifecycleAlerts($db, $includeResolved);
+    $openAlerts = array_values(array_filter($alerts, static fn($a) => ($a['status'] ?? '') === 'open'));
+
+    $criticalCount = 0;
+    $successorCount = 0;
+    $eolCount = 0;
+    foreach ($openAlerts as $a) {
+        if (($a['severity'] ?? '') === 'critical') {
+            $criticalCount++;
+        }
+        if (($a['alert_type'] ?? '') === 'successor_available') {
+            $successorCount++;
+        } else {
+            $eolCount++;
+        }
+    }
+
+    jsonResponse([
+        'alerts'          => $alerts,
+        'open_count'      => count($openAlerts),
+        'critical_count'  => $criticalCount,
+        'successor_count' => $successorCount,
+        'eol_count'       => $eolCount,
+    ]);
+}
+
+/**
+ * Triggers the n8n Model Watcher webhook manually from the Admin Cockpit.
+ */
+function handleTriggerModelWatcher(?array $adminUser): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+
+    $cfg = getConfig();
+    $watcherUrl = trim((string)(getenv('N8N_MODEL_WATCHER_WEBHOOK_URL') ?: ($cfg['n8n']['model_watcher_webhook_url'] ?? '')));
+    if ($watcherUrl === '') {
+        $runWebhook = trim((string)($cfg['n8n']['webhook_url'] ?? ''));
+        if ($runWebhook !== '' && str_contains($runWebhook, '/webhook/')) {
+            $watcherUrl = preg_replace('#/webhook/[^/?]+.*$#', '/webhook/chatlytics-model-watcher', $runWebhook);
+        }
+    }
+
+    $sharedSecret = trim((string)($cfg['n8n']['shared_secret'] ?? ''));
+    $timeout = max(5, min(30, (int)($cfg['n8n']['api_timeout_seconds'] ?? 15)));
+    $triggered = false;
+    $httpCode = 0;
+    $watcherResponse = null;
+    $errorDetail = null;
+
+    if ($watcherUrl !== '' && preg_match('#^https?://#i', $watcherUrl) === 1) {
+        $payload = json_encode([
+            'trigger'      => 'admin_manual',
+            'requested_by' => (string)($adminUser['email'] ?? 'admin'),
+            'requested_at' => gmdate('c'),
+        ], JSON_UNESCAPED_UNICODE);
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($watcherUrl);
+            $headers = ['Content-Type: application/json', 'Accept: application/json'];
+            if ($sharedSecret !== '') {
+                $headers[] = 'X-N8N-Secret: ' . $sharedSecret;
+            }
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $payload,
+                CURLOPT_HTTPHEADER     => $headers,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => $timeout,
+                CURLOPT_CONNECTTIMEOUT => min(5, $timeout),
+            ]);
+            $rawResp = curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErr = curl_error($ch);
+            curl_close($ch);
+
+            if ($rawResp !== false && $httpCode >= 200 && $httpCode < 300) {
+                $triggered = true;
+                $decoded = json_decode((string)$rawResp, true);
+                $watcherResponse = is_array($decoded) ? $decoded : ['raw' => (string)$rawResp];
+            } else {
+                $errorDetail = $curlErr !== '' ? $curlErr : "HTTP {$httpCode}";
+            }
+        } else {
+            $headerLines = "Content-Type: application/json
+Accept: application/json
+";
+            if ($sharedSecret !== '') {
+                $headerLines .= "X-N8N-Secret: {$sharedSecret}
+";
+            }
+            $ctx = stream_context_create([
+                'http' => [
+                    'method'        => 'POST',
+                    'header'        => $headerLines,
+                    'content'       => $payload,
+                    'timeout'       => $timeout,
+                    'ignore_errors' => true,
+                ],
+            ]);
+            $rawResp = @file_get_contents($watcherUrl, false, $ctx);
+            if ($rawResp !== false) {
+                $triggered = true;
+                $decoded = json_decode((string)$rawResp, true);
+                $watcherResponse = is_array($decoded) ? $decoded : ['raw' => (string)$rawResp];
+            } else {
+                $errorDetail = 'Webhook request failed';
+            }
+        }
+    } else {
+        $errorDetail = 'model_watcher_webhook_url is not configured in env.php';
+    }
+
+    $alerts = listModelLifecycleAlerts($db, false);
+
+    jsonResponse([
+        'success'          => true,
+        'triggered'        => $triggered,
+        'webhook_url'      => $watcherUrl,
+        'http_status'      => $httpCode,
+        'watcher_response' => $watcherResponse,
+        'error_detail'     => $errorDetail,
+        'alerts'           => $alerts,
+        'open_count'       => count($alerts),
+        'message'          => $triggered
+            ? 'Nachfolger- & EOL-Prüfung wurde erfolgreich über n8n ausgeführt.'
+            : ('n8n Model-Watcher Webhook aktuell nicht erreichbar (' . ($errorDetail ?: 'nicht konfiguriert') . '). Importieren Sie n8n/chatlytics_model_watcher.json und hinterlegen Sie n8n.model_watcher_webhook_url in env.php.'),
+    ]);
+}
+
+/**
+ * Resolves an open model lifecycle alert via explicit Admin decision.
+ */
+function handleResolveModelAlert(array $data): void
+{
+    $db = getDb();
+    ensureCoreSchemaColumns($db);
+
+    $alertId = (int)($data['id'] ?? $data['alert_id'] ?? 0);
+    $resolution = strtolower(trim((string)($data['resolution'] ?? '')));
+
+    if ($alertId <= 0) {
+        jsonError("Valid alert 'id' is required.", 422);
+    }
+
+    try {
+        $outcome = resolveModelLifecycleAlert($db, $alertId, $resolution);
+    } catch (InvalidArgumentException $e) {
+        jsonError($e->getMessage(), 422);
+    } catch (RuntimeException $e) {
+        jsonError($e->getMessage(), $e->getCode() === 404 ? 404 : 400);
+    }
+
+    $openAlerts = listModelLifecycleAlerts($db, false);
+
+    jsonResponse([
+        'success'         => true,
+        'alert'           => $outcome['alert'],
+        'updated_presets' => $outcome['updated_presets'],
+        'enabled_model'   => $outcome['enabled_model'],
+        'alerts'          => $openAlerts,
+        'open_count'      => count($openAlerts),
+        'presets'         => getModelPresetsCatalog($db, false),
+        'models'          => getAdminModelsCatalog($db, false),
+        'message'         => $resolution === 'replace_in_presets'
+            ? 'Nachfolgemodell freigegeben und in betroffenen Analyse-Sets ersetzt (bestehende Tracking-Profile bleiben unverändert).'
+            : ($resolution === 'enable_model_only'
+                ? 'Nachfolgemodell im Katalog freigegeben.'
+                : 'Hinweis als ignoriert markiert.'),
+    ]);
+}
+

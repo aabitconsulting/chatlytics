@@ -702,7 +702,7 @@ function resolveTargetLlmSpec(
         } elseif ($provLower === 'gemini' || $provLower === 'google') {
             $provider = 'google';
             $stripped = str_starts_with($modelTrimLower, 'models/') ? substr($modelTrim, 7) : $modelTrim;
-            $model = $stripped !== '' ? $stripped : 'gemini-3.5-flash';
+            $model = $stripped !== '' ? $stripped : 'gemini-4-hydrogen';
         } elseif ($provLower === 'openai') {
             $provider = 'openai';
             $model = $modelTrim !== '' ? $modelTrim : 'gpt-6-luna';
@@ -752,7 +752,7 @@ function resolveTargetLlmSpec(
             $model = $clean;
         } elseif ($lower === 'gemini' || $lower === 'google') {
             $provider = 'google';
-            $model = 'gemini-3.5-flash';
+            $model = 'gemini-4-hydrogen';
         } elseif (str_starts_with($lower, 'gemini-')) {
             $provider = 'google';
             $model = $clean;
@@ -795,6 +795,12 @@ function resolveTargetLlmSpec(
         } elseif (str_starts_with($lower, 'qwen')) {
             $provider = 'qwen';
             $model = $clean;
+        } elseif (str_starts_with($lower, 'muse-')) {
+            $provider = 'meta';
+            $model = $clean;
+        } elseif (str_starts_with($lower, 'minimax-')) {
+            $provider = 'minimax';
+            $model = $clean;
         } elseif (str_starts_with($lower, 'sonar')) {
             $provider = 'perplexity';
             $model = $clean;
@@ -815,12 +821,17 @@ function resolveTargetLlmSpec(
         $supportsBatchApi = true;
     } else {
         $knownBatchModels = [
-            'openai/gpt-6-luna',
+            'google/gemini-4-hydrogen',
+            'google/gemini-4-neon',
             'google/gemini-3.5-flash',
+            'openai/gpt-6-luna',
+            'openai/gpt-6.1-terra',
+            'openai/gpt-6.2-sol',
+            'anthropic/claude-sonnet-5.5',
+            'anthropic/claude-opus-5.5',
             'mistralai/mistral-medium-3-5',
             'z-ai/glm-5.3',
             'z-ai/glm-5.3-flash',
-            'anthropic/claude-sonnet-5.5',
         ];
         $supportsBatchApi = in_array($canonicalId, $knownBatchModels, true)
             || (in_array($provider, ['openai', 'google', 'anthropic'], true)
@@ -905,7 +916,7 @@ function normalizeTargetLlmToken(string $rawToken): string
  * @param array<int, string> $fallback
  * @return array<int, string>
  */
-function normalizeTargetLlmsList($rawTargetLlms, array $fallback = ['openai/gpt-6-luna', 'google/gemini-3.5-flash']): array
+function normalizeTargetLlmsList($rawTargetLlms, array $fallback = ['google/gemini-4-hydrogen', 'openai/gpt-6-luna']): array
 {
     if (is_string($rawTargetLlms)) {
         $rawTargetLlms = explode(',', $rawTargetLlms);

@@ -19,6 +19,7 @@ import { apiClient } from './api-client.js';
 import { auth } from './auth.js';
 import { configs, getScheduleLabel, getConfigRunBreakdown } from './configs.js';
 import { showToast, setButtonLoading, formatTemplate } from './notifications.js';
+import { createMarkdownAnswerViewer, bindMarkdownCopyDelegation } from './markdown.js';
 
 const ACTIVE_RUN_STORAGE_KEY = 'chatlytics_active_run';
 const RUN_COOLDOWN_MS = 30000;
@@ -2512,7 +2513,16 @@ class DashboardController {
     const answerText = r.status === 'failed'
       ? String(r.error_message || this.tMsg('results.status_failed', 'Fehlgeschlagen'))
       : String(r.llm_answer || '—');
-    block(i18n.t('results.detail_answer', 'Vollständige KI-Antwort'), true).appendChild(pre(answerText));
+    const answerWrap = block(i18n.t('results.detail_answer', 'Vollständige KI-Antwort'), true);
+    if (r.status === 'failed') {
+      answerWrap.appendChild(pre(answerText));
+    } else {
+      answerWrap.appendChild(createMarkdownAnswerViewer(answerText, {
+        copyRich: this.tMsg('results.copy_rich', 'Alles kopieren (formatiert)'),
+        copyMarkdown: this.tMsg('results.copy_markdown', 'Als Markdown (.md) kopieren'),
+        toolbarLabel: this.tMsg('results.copy_toolbar_label', 'KI-Antwort kopieren')
+      }));
+    }
 
     const telemetry = block(i18n.t('results.detail_telemetry', 'Gateway-Korrelation & Region'));
     const dl = document.createElement('dl');
@@ -2916,6 +2926,21 @@ class DashboardController {
 
     document.getElementById('result-detail-close')?.addEventListener('click', () => this.closeResultDetailSheet());
     document.getElementById('result-detail-backdrop')?.addEventListener('click', () => this.closeResultDetailSheet());
+
+    const onAnswerCopied = (mode, ok) => {
+      if (ok) {
+        showToast(
+          mode === 'markdown'
+            ? this.tMsg('results.copied_markdown', 'Als Markdown (.md) in die Zwischenablage kopiert.')
+            : this.tMsg('results.copied_rich', 'Formatierte Antwort in die Zwischenablage kopiert.'),
+          'success'
+        );
+      } else {
+        showToast(this.tMsg('results.copy_failed', 'Kopieren fehlgeschlagen. Bitte manuell markieren.'), 'error');
+      }
+    };
+    bindMarkdownCopyDelegation(document.getElementById('user-results-tbody'), onAnswerCopied);
+    bindMarkdownCopyDelegation(document.getElementById('result-detail-sheet-body'), onAnswerCopied);
 
     if (typeof window !== 'undefined') {
       window.addEventListener?.('keydown', (e) => {

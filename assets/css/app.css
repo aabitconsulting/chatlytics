@@ -6899,3 +6899,493 @@ body.dashboard-body {
     grid-column: 1 / -1;
   }
 }
+
+/* ==========================================================================
+   NEON UI/UX ADMIN LOGIC: Markdown Protocol Viewer, Copy Mini-Icons & Model Alerts
+   ========================================================================== */
+
+.md-answer-box {
+  position: relative;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.md-copy-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px;
+  border-radius: 8px;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-default);
+  z-index: 2;
+}
+
+.md-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.md-copy-btn:hover,
+.md-copy-btn:focus-visible {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+.md-copy-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+
+.md-copy-btn.is-copied {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-color: var(--color-success-border);
+}
+
+.md-prose {
+  padding-right: 84px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.62;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.md-prose > *:first-child {
+  margin-top: 0;
+}
+
+.md-prose > *:last-child {
+  margin-bottom: 0;
+}
+
+.md-heading {
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin: 1rem 0 0.45rem;
+}
+
+.md-h1 {
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: 0.3rem;
+}
+
+.md-h2 {
+  font-size: 1.02rem;
+}
+
+.md-h3,
+.md-h4 {
+  font-size: 0.94rem;
+}
+
+.md-paragraph {
+  margin: 0.55rem 0;
+}
+
+.md-list {
+  margin: 0.55rem 0;
+  padding-left: 1.35rem;
+  list-style-type: disc;
+}
+
+.md-list-ordered {
+  list-style-type: decimal;
+}
+
+.md-list li {
+  margin: 0.28rem 0;
+}
+
+.md-blockquote {
+  margin: 0.7rem 0;
+  padding: 0.45rem 0.85rem;
+  border-left: 3px solid var(--color-primary);
+  background-color: var(--bg-surface-subtle);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+.md-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  padding: 0.12em 0.38em;
+  border-radius: 5px;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-default);
+}
+
+.md-code-block {
+  margin: 0.75rem 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-default);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.md-hr {
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  margin: 0.9rem 0;
+}
+
+.md-link {
+  color: var(--color-primary-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md-link:hover {
+  color: var(--color-primary-hover);
+}
+
+.md-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.md-table th,
+.md-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-default);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-table thead th {
+  background-color: var(--bg-surface-subtle);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.md-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Expandable AI Answer Rows inside Admin Run & Token Inspector Modal */
+.admin-token-row {
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+
+.admin-token-row:hover,
+.admin-token-row.is-open {
+  background-color: var(--bg-surface-subtle);
+}
+
+.admin-token-date-cell {
+  white-space: nowrap;
+}
+
+.admin-token-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.admin-token-answer-row td {
+  background-color: var(--bg-surface-subtle);
+  padding: 12px 14px;
+}
+
+.admin-token-answer-panel {
+  min-width: 0;
+}
+
+/* Admin Model Lifecycle Alerts Banner & Actionable Panel */
+.admin-alerts-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-warning-border);
+  background-color: var(--color-warning-bg);
+  color: var(--text-primary);
+}
+
+.admin-alerts-banner.is-critical {
+  border-color: var(--color-error-border);
+  background-color: var(--color-error-bg);
+}
+
+.admin-alerts-banner[hidden] {
+  display: none !important;
+}
+
+.admin-alerts-banner-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-alerts-banner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--color-warning);
+  flex-shrink: 0;
+}
+
+.admin-alerts-banner.is-critical .admin-alerts-banner-dot {
+  background-color: var(--color-error);
+}
+
+.admin-alerts-banner-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  font-size: 0.875rem;
+}
+
+.admin-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background-color: var(--color-error);
+  color: #FFFFFF;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.admin-tab-badge[hidden] {
+  display: none !important;
+}
+
+.admin-model-alerts-panel {
+  margin-bottom: 1.25rem;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background-color: var(--bg-surface-subtle);
+}
+
+.admin-model-alerts-panel[hidden] {
+  display: none !important;
+}
+
+.admin-model-alerts-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.admin-model-alerts-title {
+  margin: 0 0 2px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.admin-model-alerts-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.admin-model-alerts-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.admin-alert-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  border-left-width: 4px;
+  background-color: var(--bg-surface);
+}
+
+.admin-alert-card.is-critical {
+  border-left-color: var(--color-error);
+}
+
+.admin-alert-card.is-warning {
+  border-left-color: var(--color-warning);
+}
+
+.admin-alert-card.is-info {
+  border-left-color: var(--color-primary);
+}
+
+.admin-alert-card .badge-danger {
+  background-color: var(--color-error-bg);
+  color: var(--color-error-text);
+  border: 1px solid var(--color-error-border);
+}
+
+[data-theme="dark"] .admin-alert-card .badge-danger {
+  background-color: rgba(239, 68, 68, 0.18);
+  color: #FCA5A5;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.admin-alert-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-alert-model-transition {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.admin-alert-model-old,
+.admin-alert-model-new {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-default);
+  word-break: break-all;
+}
+
+.admin-alert-model-new {
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+  font-weight: 600;
+}
+
+.admin-alert-arrow {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.admin-alert-reason {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.48;
+  color: var(--text-secondary);
+}
+
+.admin-alert-source-link {
+  color: var(--color-primary-text);
+  text-decoration: underline;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-alert-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-alert-card-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+[data-theme="dark"] .admin-alerts-banner {
+  background-color: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.42);
+}
+
+[data-theme="dark"] .admin-alerts-banner.is-critical {
+  background-color: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+[data-theme="dark"] .admin-alert-model-new {
+  background-color: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #6EE7B7;
+}
+
+@media (max-width: 767px) {
+  .md-copy-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .md-prose {
+    padding-right: 0;
+    padding-top: 46px;
+  }
+
+  .admin-alerts-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-model-alerts-list {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-alert-card-actions .btn {
+    min-height: 44px;
+  }
+}
+
